@@ -1,0 +1,110 @@
+import { useMemo, useState } from 'react';
+import { Meter, MonthPicker, PageHeader } from '../components/bits';
+import { addMonths, allMonths, average, budgetFor, completeMonths, keepBudget, summarise, totalBudget } from '../data/analysis';
+import { GROUPS, KEEP_CATEGORIES, SPEND_CATEGORIES } from '../data/categories';
+import { useStore } from '../data/store';
+import { money, monthName, monthOnly, thisMonth } from '../lib/format';
+
+function BudgetInput({ value, onSave, label }: { value: number; onSave: (n: number) => void; label: string }) {
+  const [text, setText] = useState(String(Math.round(value)));
+  const [focused, setFocused] = useState(false);
+  const shown = focused ? text : String(Math.round(value));
+  return (
+    <span className="money-input">
+      <span aria-hidden>$</span>
+      <input inputMode="numeric" aria-label={`Budget for ${label}`} value={shown}
+        onFocus={() => { setText(String(Math.round(value))); setFocused(true); }}
+        onChange={(e) => setText(e.target.value.replace(/[^\d.]/g, ''))}
+        onBlur={() => { setFocused(false); const n = Number(text || 0); if (n !== Math.round(value)) onSave(n); }}
+        onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }} />
+    </span>
+  );
+}
+
+export function Budget() {
+  const { data, setBudget, updateSettings } = useStore();
+  const months = useMemo(() => {
+    const have = allMonths(data.transactions);
+    const end = addMonths(thisMonth(), 6);
+    const start = have[0] ?? thisMonth();
+    const out: string[] = [];
+    for (let m = start; m <= end; m = addMonths(m, 1)) out.push(m);
+    return out;
+  }, [data.transactions]);
+  const complete = useMemo(() => completeMonths(data), [data]);
+  const [month, setMonth] = useState(() => (complete.at(-1) && complete.at(-1)! >= thisMonth() ? complete.at(-1)! : thisMonth()));
+  const s = summarise(month, data);
+  const base = complete.filter((m) => m < month).slice(-3).map((m) => summarise(m, data));
+  const keep = keepBudget(data.budgets, month);
+  const total = totalBudget(data.budgets, month) + keep;
+  const income = data.settings.expectedIncome;
+  const left = income - total;
+
+  return (
+    <div>
+      <PageHeader title="Budget" lead="Give every dollar a job. Change a number and it applies from this month onwards; earlier months keep their old budget.">
+        <MonthPicker months={months} value={month} onChange={setMonth} />
+      </PageHeader>
+
+      <section className={`zero ${Math.abs(left) < 1 ? 'is-zero' : left < 0 ? 'is-over' : ''}`} aria-label="Every dollar has a job">
+        <div><span>Take-home pay expected</span><BudgetInput label="expected income" value={income} onSave={(n) => updateSettings({ expectedIncome: n })} /></div>
+        <div><span>Given a job</span><b>{money(total)}</b><small>{money(total - keep)} to spend, {money(keep)} to keep</small></div>
+        <div className="zero-left"><span>{left >= 0 ? 'Left to give a job' : 'Budgeted beyond income'}</span><b>{money(Math.abs(left))}</b></div>
+        <p>{Math.abs(left) < 1 ? 'Every dollar has a job.'
+          : left > 0 ? `Give the remaining ${money(left)} a job: the offset, the uni funds, or savings. Money without a job tends to get spent.`
+          : `The plan spends ${money(-left)} more than you expect to earn in ${monthOnly(month)}. Trim a few categories until this reaches zero.`}</p>
+      </section>
+
+      <section className="budget-group keep-group" aria-labelledby="g-keep">
+        <div className="budget-group-head">
+          <h2 id="g-keep">Kept on purpose</h2>
+          <span>{s.count ? `${money(s.kept)} kept of ${money(keep)} planned` : `${money(keep)} planned`}</span>
+        </div>
+        <div className="budget-rows">
+          {KEEP_CATEGORIES.map((c) => (
+            <div key={c.id} className="budget-row">
+              <div className="budget-name"><b>{c.label}</b>{c.hint && <small>{c.hint}</small>}</div>
+              <BudgetInput label={c.label} value={budgetFor(data.budgets, c.id, month)} onSave={(n) => setBudget(c.id, month, n)} />
+              <div className="budget-spent"><small>{c.id === 'keep-savings' ? `Babylon's tenth of ${money(income)} is ${money(income * 0.1)}` : ''}</small></div>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {GROUPS.map((g) => {
+        const cats = SPEND_CATEGORIES.filter((c) => c.group === g);
+        const groupBudget = cats.reduce((a, c) => a + budgetFor(data.budgets, c.id, month), 0);
+        const groupSpent = cats.reduce((a, c) => a + (s.byCategory[c.id] ?? 0), 0);
+        return (
+          <section key={g} className="budget-group" aria-labelledby={`g-${g}`}>
+            <div className="budget-group-head">
+              <h2 id={`g-${g}`}>{g}</h2>
+              <span>{money(groupSpent)} of {money(groupBudget)}</span>
+            </div>
+            <div className="budget-rows">
+              {cats.map((c) => {
+                const b = budgetFor(data.budgets, c.id, month);
+                const spent = s.byCategory[c.id] ?? 0;
+                const avg = average(base.map((x) => x.byCategoryUsual[c.id] ?? 0));
+                return (
+                  <div key={c.id} className="budget-row">
+                    <div className="budget-name"><b>{c.label}</b>{c.hint && <small>{c.hint}</small>}</div>
+                    <BudgetInput label={c.label} value={b} onSave={(n) => setBudget(c.id, month, n)} />
+                    <div className="budget-spent">
+                      <Meter actual={spent} budget={b} />
+                      <small>
+                        {s.count ? `${money(spent)} spent` : 'No spending loaded'}
+                        {avg > 0 && <>, average {money(avg)}{Math.round(avg) !== Math.round(b) && <button className="link" onClick={() => setBudget(c.id, month, Math.ceil(avg / 10) * 10)}>use</button>}</>}
+                      </small>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </section>
+        );
+      })}
+      <p className="fine">Averages use your last {base.length || 'few'} complete month{base.length === 1 ? '' : 's'}{base.length ? ` (${base.map((b) => monthName(b.month, 'short')).join(', ')})` : ''}, leaving out one-offs.</p>
+    </div>
+  );
+}

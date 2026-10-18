@@ -1,0 +1,33 @@
+export const money = (n: number, opts: { cents?: boolean; sign?: boolean } = {}) => {
+  const v = Math.abs(n);
+  const s = v.toLocaleString('en-AU', { minimumFractionDigits: opts.cents ? 2 : 0, maximumFractionDigits: opts.cents ? 2 : 0 });
+  const sign = n < 0 ? '−' : opts.sign && n > 0 ? '+' : '';
+  return `${sign}$${s}`;
+};
+
+export const pct = (n: number) => `${Math.round(n * 100)}%`;
+
+export const monthName = (m: string, style: 'long' | 'short' = 'long') =>
+  new Date(m + '-01T00:00:00').toLocaleDateString('en-AU', { month: style, year: 'numeric' });
+
+export const monthOnly = (m: string) => new Date(m + '-01T00:00:00').toLocaleDateString('en-AU', { month: 'long' });
+
+export const dayName = (d: string) =>
+  new Date(d + 'T00:00:00').toLocaleDateString('en-AU', { weekday: 'short', day: 'numeric', month: 'short' });
+
+export const longDate = (d: string) =>
+  new Date(d + 'T00:00:00').toLocaleDateString('en-AU', { day: 'numeric', month: 'long', year: 'numeric' });
+
+export const thisMonth = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+};
+
+export function download(name: string, text: string, type = 'application/json') {
+  const blob = new Blob([text], { type });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = name;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
