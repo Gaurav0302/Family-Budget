@@ -28,7 +28,7 @@ export function Login() {
         <label>Password<input type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} required /></label>
         {error && <p className="form-error" role="alert">{error}</p>}
         <button className="btn primary wide" disabled={busy}>{busy ? 'Signing in…' : 'Sign in'}</button>
-        <p className="fine">Forgot your password? In Supabase, open Authentication → Users, click your email and choose “Send password recovery”.</p>
+        <p className="fine">Forgot your password? Sign in to supabase.com, open Authentication → Users and reset it there.</p>
       </form>
     </div>
   );
