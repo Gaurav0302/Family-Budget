@@ -5,9 +5,9 @@ const KEY = 'fb:data';
 function read(): Loaded {
   try {
     const raw = localStorage.getItem(KEY);
-    if (raw) return JSON.parse(raw);
+    if (raw) return { payees: [], ...JSON.parse(raw) };
   } catch { /* storage blocked or corrupt: start empty */ }
-  return { transactions: [], rules: [], budgets: [], coverage: [], settings: null, reviews: [] };
+  return { transactions: [], rules: [], budgets: [], coverage: [], settings: null, reviews: [], payees: [] };
 }
 
 function write(d: Loaded) {
@@ -33,6 +33,7 @@ export const localAdapter: Adapter = {
   async saveSettings(s) { const d = read(); d.settings = s; write(d); },
   async upsertReviews(r) { const d = read(); d.reviews = upsert(d.reviews, r, (x) => x.id); write(d); },
   async deleteReview(id) { const d = read(); d.reviews = d.reviews.filter((r) => r.id !== id); write(d); },
+  async savePayees(p) { const d = read(); d.payees = p; write(d); },
 };
 
 export function clearLocal() { try { localStorage.removeItem(KEY); } catch { /* ignore */ } }

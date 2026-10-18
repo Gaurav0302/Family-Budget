@@ -12,6 +12,7 @@ A modern, easy family budget tool replacing a spreadsheet: one view of every acc
 
 ## Principles
 - Plain English everywhere. Every number explains itself.
+- The payee list decides sorting; the family reviews it, and every import follows it.
 - Transfers between own accounts are never spending. One-offs can be set aside from trends.
 - A month counts only when all core accounts are loaded; partial months are marked.
 - Nothing personal in the public code.
@@ -20,10 +21,12 @@ A modern, easy family budget tool replacing a spreadsheet: one view of every acc
 ```
 src/
   App.tsx, main.tsx, config.ts
-  components/  Shell.tsx (sidebar / phone tab bar), bits.tsx (meter, purse bar, columns chart, badges)
+  components/  Shell.tsx (sidebar / phone tab bar), bits.tsx (meter, purse bar, columns chart, badges),
+               Drill.tsx (payments behind a figure), LineChart.tsx, CategorySelect.tsx
   data/        types, categories, rules, merchant, analysis, review, importers, defaults, store, adapters/,
-               wealth (pay, super, net worth), bills, whatif, settingsMerge
-  screens/     Home, Transactions, Budget, Bills, Review, Reports, Goals, WhatIf, Wealth, More (phone), Import, Settings, Login
+               wealth (pay, super, net worth), bills, whatif, settingsMerge, payees (the payee list)
+  screens/     Home, Transactions, Budget, Bills, Review, Reports, Goals, WhatIf, Wealth, Accounts, Categories,
+               More (phone), Import, Settings, Login
   styles/      app.css (tokens, light + dark)
 tools/         parse_statements.py, prepare-import.ts, review.ts
 supabase/      setup.sql

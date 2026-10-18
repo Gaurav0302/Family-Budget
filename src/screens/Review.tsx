@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Badge, Empty, Info, MonthPicker, PageHeader } from '../components/bits';
+import { DrillLink, drillCategory, drillType, type DrillSpec } from '../components/Drill';
 import { allMonths, completeMonths } from '../data/analysis';
 import { merchantOf } from '../data/merchant';
 import { reviewMonth, reviewText, type Finding, type Severity } from '../data/review';
@@ -29,11 +30,11 @@ function FindingList({ items }: { items: Finding[] }) {
   );
 }
 
-function Split({ label, actual, guide }: { label: string; actual: number; guide: number }) {
+function Split({ label, actual, guide, spec }: { label: string; actual: number; guide: number; spec?: DrillSpec }) {
   const w = (v: number) => `${Math.min(Math.max(v, 0), 1) * 100}%`;
   return (
     <div className="split-row">
-      <span className="split-label">{label}</span>
+      <span className="split-label">{spec ? <DrillLink spec={spec}>{label}</DrillLink> : label}</span>
       <div className="split-track" role="img" aria-label={`${label}: ${pct(actual)} of income, guide ${pct(guide)}`}>
         <div className={`split-fill split-${label.toLowerCase()}`} style={{ width: w(actual) }} />
         <div className="split-guide" style={{ left: w(guide) }} />
@@ -85,14 +86,14 @@ export function Review() {
           ))}
 
           <section className="panel" aria-labelledby="score">
-            <h2 id="score">Category by category</h2>
+            <div className="panel-head"><h2 id="score">Category by category</h2><Info>Tap a category to see its payments and move any that belong somewhere else.</Info></div>
             <div className="table-wrap">
               <table className="score">
                 <thead><tr><th>Category</th><th>Budget</th><th>Spent</th><th>Recent average</th><th>Difference</th></tr></thead>
                 <tbody>
                   {r.scorecard.map((row) => (
                     <tr key={row.category} className={`st-${row.status}`}>
-                      <th scope="row">{row.label}</th>
+                      <th scope="row"><DrillLink spec={drillCategory(month, row.category)}>{row.label}</DrillLink></th>
                       <td>{row.budget ? money(row.budget) : <span className="muted">none</span>}</td>
                       <td>{money(row.usual)}{row.actual !== row.usual && <small className="muted"> +{money(row.actual - row.usual)} one-off</small>}</td>
                       <td>{row.average ? money(row.average) : <span className="muted">–</span>}</td>
@@ -138,9 +139,9 @@ export function Review() {
         <aside className="review-side">
           <section className="panel" aria-labelledby="split">
             <h2 id="split">Needs, wants and kept</h2>
-            <Info>The 50/30/20 guide: about half of take-home pay on needs, no more than 30% on wants, and at least 20% kept.</Info>
-            <Split label="Needs" actual={r.split.needs} guide={0.5} />
-            <Split label="Wants" actual={r.split.wants} guide={0.3} />
+            <Info>The 50/30/20 guide: about half of take-home pay on needs, no more than 30% on wants, and at least 20% kept. Tap needs or wants to see what's in them.</Info>
+            <Split label="Needs" actual={r.split.needs} guide={0.5} spec={drillType(month, 'need')} />
+            <Split label="Wants" actual={r.split.wants} guide={0.3} spec={drillType(month, 'want')} />
             <Split label="Kept" actual={r.split.kept} guide={0.2} />
           </section>
 

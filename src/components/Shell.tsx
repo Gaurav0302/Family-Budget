@@ -1,7 +1,8 @@
-import { CalendarClock, FileText, Home, LayoutGrid, Loader2, Mountain, ReceiptText, Scale, Settings, Sparkles, Upload, Wallet, Landmark } from 'lucide-react';
+import { CalendarClock, FileText, Home, LayoutGrid, Loader2, Mountain, ReceiptText, Scale, Settings, Sparkles, Upload, Wallet, Landmark, Tags, CreditCard } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { NavLink } from 'react-router-dom';
 import { useStore } from '../data/store';
+import { DrillProvider } from './Drill';
 
 export const NAV = [
   { section: '', items: [
@@ -21,7 +22,9 @@ export const NAV = [
   ] },
   { section: 'Tools', items: [
     { to: '/import', label: 'Add statements', Icon: Upload, hint: 'Bring in new transactions' },
-    { to: '/settings', label: 'Settings', Icon: Settings, hint: 'Accounts, categories, backup' },
+    { to: '/categories', label: 'Categories & payees', Icon: Tags, hint: 'Where each payee is sorted' },
+    { to: '/accounts', label: 'Accounts', Icon: CreditCard, hint: 'Bank accounts, cards, offsets' },
+    { to: '/settings', label: 'Settings', Icon: Settings, hint: 'Look, logins, backup' },
   ] },
 ];
 const TABS = [NAV[0].items[0], NAV[0].items[1], NAV[0].items[2], NAV[1].items[0], { to: '/more', label: 'More', Icon: LayoutGrid, hint: '' }];
@@ -64,7 +67,7 @@ export function Shell({ children }: { children: ReactNode }) {
         </div>
       </header>
 
-      <main id="main" className="main">{children}</main>
+      <main id="main" className="main"><DrillProvider>{children}</DrillProvider></main>
 
       <nav className="tabbar" aria-label="Main">
         {TABS.map(({ to, label, Icon }) => (

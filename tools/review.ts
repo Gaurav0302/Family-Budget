@@ -9,7 +9,7 @@ import { completeMonths } from '../src/data/analysis';
 import { mergeCoverage } from '../src/data/importers';
 import { DEFAULT_BUDGETS, DEFAULT_SETTINGS } from '../src/data/defaults';
 import { reviewMonth, reviewText } from '../src/data/review';
-import { applyRules } from '../src/data/rules';
+import { indexPayees, sortTransaction } from '../src/data/payees';
 import type { Data, DataFile } from '../src/data/types';
 
 const args = process.argv.slice(2);
@@ -26,13 +26,15 @@ const f: DataFile = {
   budgets: files.flatMap((x) => x.budgets ?? []),
   rules: files.flatMap((x) => x.rules ?? []).filter((r) => (ruleIds.has(r.id) ? false : (ruleIds.add(r.id), true))),
   reviews: files.flatMap((x) => x.reviews ?? []),
+  payees: files.flatMap((x) => x.payees ?? []).filter((p, i, a) => a.findIndex((q) => q.id === p.id) === i),
   settings: Object.assign({}, ...files.map((x) => x.settings ?? {}), { balances: files.flatMap((x) => x.settings?.balances ?? []) }),
 };
 const settings = { ...DEFAULT_SETTINGS, ...(f.settings ?? {}), home: { ...DEFAULT_SETTINGS.home, ...(f.settings?.home ?? {}) } };
 const rules = (f.rules ?? []).map((r) => ({ ...r, user: true }));
 const data: Data = {
-  transactions: applyRules(f.transactions ?? [], rules, settings),
-  rules, budgets: f.budgets?.length ? f.budgets : DEFAULT_BUDGETS, coverage: f.coverage ?? [], settings, reviews: f.reviews ?? [],
+  // Sort with the family's payee list (from the backup), as the app does.
+  transactions: (f.transactions ?? []).map((t) => { const { payee: _p, ...x } = sortTransaction(t, indexPayees(f.payees ?? []), rules, settings); return { ...t, ...x }; }),
+  rules, budgets: f.budgets?.length ? f.budgets : DEFAULT_BUDGETS, coverage: f.coverage ?? [], settings, reviews: f.reviews ?? [], payees: f.payees ?? [],
 };
 const m = month ?? completeMonths(data).at(-1);
 if (!m) { console.error('No complete month in this file.'); process.exit(1); }

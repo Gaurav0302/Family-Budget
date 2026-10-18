@@ -24,7 +24,6 @@ const KNOWN: [RegExp, string][] = [
   [/TELSTRA/i, 'Telstra'],
   [/RACV/i, 'RACV'],
   [/Linkt/i, 'Linkt tolls'],
-  [/^Salary\b/i, 'Pay'],
   [/Credit Interest|^Interest/i, 'Interest'],
   [/self mq save|Macquarie/i, 'To Macquarie savings'],
   [/self save/i, 'To savings'],
@@ -36,6 +35,10 @@ const titleCase = (s: string) => s.toLowerCase().replace(/(^|[\s(/&-])([a-z])/g,
 export function merchantOf(description: string): string {
   for (const [re, name] of KNOWN) if (re.test(description)) return name;
   let s = description.split(' | ')[0];
+  const salary = s.match(/^Salary\s+(.+)$/i);
+  if (salary) return `Pay: ${titleCase(salary[1].replace(/\s+\d.*$/, ''))}`;
+  const imt = s.match(/^IMT\s+(?:\d+\s+)?(.+)$/i);
+  if (imt) return `${titleCase(imt[1])} (overseas transfer)`;
   const paypal = s.match(/^PayPal: (.*?)( Pty\.? Limited| Pty Ltd| Limited| Corporation| Ireland Ltd| Group)?( \(US\$.*\))?$/i);
   if (paypal) return paypal[1];
   const transfer = s.match(/^(?:Fast )?Transfer (?:To|From) (?:- )?(.+)$/i);

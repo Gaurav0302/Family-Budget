@@ -7,16 +7,18 @@
  *     --balance r-saver=2026-09-30:116002.43 \
  *     --household private/household.json   (accounts, budget and the family's own sorting rules — never commit it)
  *     --review 2026-10:review.md            (the monthly note, shown on the Review page)
+ *     (month-end balances before each closing balance are worked out from the transactions)
+ *     --payees backup.json                  (sort with the family's payee list from their latest backup)
  *
  * Prints a short month-by-month summary so you can sanity-check the numbers.
  */
 import { readFileSync, writeFileSync } from 'node:fs';
 import type { Review } from '../src/data/types';
 import { DEFAULT_SETTINGS } from '../src/data/defaults';
-import { applyRules } from '../src/data/rules';
+import { indexPayees, sortTransaction } from '../src/data/payees';
 import { tidyDescription } from '../src/data/merchant';
-import { allMonths, summarise } from '../src/data/analysis';
-import type { Balance, BudgetLine, Coverage, DataFile, Rule, Settings, Transaction } from '../src/data/types';
+import { allMonths, monthEndBalances, summarise } from '../src/data/analysis';
+import type { Balance, BudgetLine, Coverage, DataFile, Payee, Rule, Settings, Transaction } from '../src/data/types';
 
 const [input, output, ...rest] = process.argv.slice(2);
 if (!input || !output) {
@@ -27,6 +29,7 @@ const coverage: Coverage[] = [];
 const balances: Balance[] = [];
 let cardItemisedFrom = DEFAULT_SETTINGS.cardItemisedFrom;
 const reviews: Review[] = [];
+let payees: Payee[] = [];
 let household: { settings?: Partial<Settings>; budgets?: BudgetLine[]; rules?: Rule[] } = {};
 for (let i = 0; i < rest.length; i += 2) {
   const [flag, value] = [rest[i], rest[i + 1]];
@@ -40,6 +43,7 @@ for (let i = 0; i < rest.length; i += 2) {
     balances.push({ account, date, amount: Number(amount) });
   } else if (flag === '--card-itemised-from') cardItemisedFrom = value;
   else if (flag === '--household') household = JSON.parse(readFileSync(value, 'utf8'));
+  else if (flag === '--payees') payees = (JSON.parse(readFileSync(value, 'utf8')) as DataFile).payees ?? [];
   else if (flag === '--review') {
     const [month, path] = value.split(/:(.*)/s);
     const body = readFileSync(path, 'utf8').trim();
@@ -53,12 +57,17 @@ const txs: Transaction[] = raw.map((r) => ({
   description: tidyDescription(r.desc), category: null, kind: null, source: 'statement',
 }));
 const rules = (household.rules ?? []).map((r) => ({ ...r, user: true }));
-const sorted = applyRules(txs, rules, { cardItemisedFrom });
+const idx = indexPayees(payees);
+const sorted = txs.map((t) => { const { payee: _p, ...x } = sortTransaction(t, idx, rules, { cardItemisedFrom }, true); return { ...t, ...x }; });
+
+// Each statement's closing balance also gives every earlier month-end balance it covers.
+const allBalances = [...(household.settings?.balances ?? []), ...balances, ...monthEndBalances(sorted, coverage, balances)]
+  .filter((b, i, a) => a.findIndex((x) => x.account === b.account && x.date === b.date) === i);
 
 const file: DataFile = {
   app: 'family-budget', version: 1, exported: new Date().toISOString(),
   transactions: sorted, coverage, ...(reviews.length ? { reviews } : {}),
-  settings: { ...(household.settings ?? {}), cardItemisedFrom, ...(balances.length ? { balances } : {}) },
+  settings: { ...(household.settings ?? {}), cardItemisedFrom, ...(allBalances.length ? { balances: allBalances } : {}) },
   ...(household.budgets ? { budgets: household.budgets } : {}),
   ...(household.rules ? { rules: household.rules } : {}),
 };

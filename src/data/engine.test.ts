@@ -102,7 +102,7 @@ function sample(): Data {
   }
   const transactions = applyRules(assignIds(rows), [], SETTINGS);
   const coverage = ['a-everyday', 'a-card', 'b-everyday'].map((account) => ({ account, from: '2026-07-01', to: '2026-09-30' }));
-  return { transactions, coverage, rules: [], budgets: BUDGETS, reviews: [],
+  return { transactions, coverage, rules: [], budgets: BUDGETS, reviews: [], payees: [],
     settings: { ...SETTINGS, balances: [{ account: 'b-savings', date: '2026-09-30', amount: 100000 }] } };
 }
 

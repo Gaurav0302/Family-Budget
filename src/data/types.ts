@@ -39,6 +39,23 @@ export interface Transaction {
   source?: string | null;
 }
 
+/** Someone the family pays (or is paid by). Every transaction belongs to one, worked out from the bank's wording. */
+export interface Payee {
+  id: string;
+  name: string;
+  category: string;
+  kind: Kind;
+  /** Short merchant names this payee covers (as the app reads them from bank descriptions). */
+  match: string[];
+  /** Extra "description contains" texts, tried first. */
+  patterns?: string[];
+  /** Purpose varies (e.g. money sent overseas): every new payment waits for a person to sort it. */
+  askEachTime?: boolean;
+  /** A person has looked at this payee's category. */
+  checked?: boolean;
+  notes?: string;
+}
+
 export interface Rule {
   id: string;
   /** Case-insensitive text or regular expression matched against the description. */
@@ -67,10 +84,17 @@ export interface Coverage {
 export interface Account {
   key: string;
   name: string;
-  owner: string;
+  owner: string;          // a person's name, or 'Joint'
   type: 'everyday' | 'savings' | 'card' | 'paypal' | 'loan' | 'offset';
   /** Accounts whose spending must be loaded for a month to count as complete. */
   core?: boolean;
+  bank?: string;
+  /** Last four digits, so statements and transfers tie to this account. Never the full number. */
+  last4?: string;
+  openedOn?: string;      // YYYY-MM-DD
+  closedOn?: string;      // YYYY-MM-DD
+  /** Where the money went when this account closed (another account key). */
+  movedTo?: string;
 }
 
 export interface Balance { account: string; date: string; amount: number }
@@ -140,6 +164,10 @@ export interface WealthItem {
   name: string;
   kind: 'home' | 'shares' | 'crypto' | 'other' | 'loan' | 'debt';
   owner?: string;
+  /** When it was bought or the debt started. Before this date it counts as zero; with no date the first value counts back to the start. */
+  ownedSince?: string;
+  /** Sold or paid off: counts as zero from this date. */
+  endedOn?: string;
   values: { date: string; amount: number }[];
 }
 
@@ -163,6 +191,7 @@ export interface Data {
   coverage: Coverage[];
   settings: Settings;
   reviews: Review[];
+  payees: Payee[];
 }
 
 /** The file format used for imports, backups and agent hand-offs. */
@@ -176,4 +205,5 @@ export interface DataFile {
   budgets?: BudgetLine[];
   rules?: Rule[];
   settings?: Partial<Settings>;
+  payees?: Payee[];
 }

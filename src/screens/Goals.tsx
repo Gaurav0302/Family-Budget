@@ -1,5 +1,6 @@
 import { ExternalLink } from 'lucide-react';
 import { useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { PageHeader } from '../components/bits';
 import { average, budgetFor, cashOnHand, completeMonths, monthOf, summarise } from '../data/analysis';
 import { reviewMonth } from '../data/review';
@@ -41,7 +42,7 @@ export function Goals() {
   const [amt, setAmt] = useState('');
   const today = new Date().toISOString().slice(0, 10);
 
-  const latest = s.accounts.map((a) => {
+  const latest = s.accounts.filter((a) => !a.closedOn && a.type !== 'loan').map((a) => {
     const b = s.balances.filter((x) => x.account === a.key).sort((x, y) => y.date.localeCompare(x.date))[0];
     return { a, b };
   }).filter((x) => x.b);
@@ -84,11 +85,11 @@ export function Goals() {
             updateSettings({ balances: [...s.balances, { account: acct, date: today, amount: Number(amt) }] });
             setAmt('');
           }}>
-            <select value={acct} onChange={(e) => setAcct(e.target.value)} aria-label="Account">{s.accounts.map((a) => <option key={a.key} value={a.key}>{a.name}</option>)}</select>
+            <select value={acct} onChange={(e) => setAcct(e.target.value)} aria-label="Account">{s.accounts.filter((a) => !a.closedOn && a.type !== 'loan').map((a) => <option key={a.key} value={a.key}>{a.name}</option>)}</select>
             <span className="money-input"><span aria-hidden>$</span><input inputMode="decimal" aria-label="Balance today" placeholder="Balance today" value={amt} onChange={(e) => setAmt(e.target.value.replace(/[^\d.]/g, ''))} /></span>
             <button className="btn small">Update balance</button>
           </form>
-          <p className="fine">After settlement, update these and add the offset account in Settings.</p>
+          <p className="fine">After settlement, add the offset account and close the old savings on <Link to="/accounts">Accounts</Link>.</p>
         </section>
 
         <section className="panel" aria-labelledby="uni">

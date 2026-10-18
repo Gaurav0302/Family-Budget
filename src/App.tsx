@@ -2,7 +2,9 @@ import { useEffect } from 'react';
 import { HashRouter, Route, Routes } from 'react-router-dom';
 import { Shell } from './components/Shell';
 import { StoreProvider, useStore } from './data/store';
+import { Accounts } from './screens/Accounts';
 import { Bills } from './screens/Bills';
+import { Categories } from './screens/Categories';
 import { Budget } from './screens/Budget';
 import { Goals } from './screens/Goals';
 import { HomeScreen } from './screens/Home';
@@ -49,6 +51,8 @@ function Gate() {
         <Route path="/more" element={<More />} />
         <Route path="/import" element={<Import />} />
         <Route path="/settings" element={<SettingsScreen />} />
+        <Route path="/categories" element={<Categories />} />
+        <Route path="/accounts" element={<Accounts />} />
         <Route path="*" element={<HomeScreen />} />
       </Routes>
     </Shell>

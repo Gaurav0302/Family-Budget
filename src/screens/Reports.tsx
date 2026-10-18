@@ -1,23 +1,24 @@
-import { Printer, Trash2 } from 'lucide-react';
+import { ChevronRight, Printer, Trash2 } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Badge, Info, MonthPicker, PageHeader, Tabs } from '../components/bits';
-import { addMonths, allMonths, budgetFor, completeMonths, monthOf, summarise } from '../data/analysis';
-import { findBills, manualBills } from '../data/bills';
-import { CATEGORY, GROUPS } from '../data/categories';
+import { Badge, Info, MonthPicker, NumberField, PageHeader, Tabs } from '../components/bits';
+import { DrillLink, drillCategory, drillGroup, drillType } from '../components/Drill';
+import { addMonths, allMonths, average, budgetFor, completeMonths, monthOf, summarise } from '../data/analysis';
+import { CATEGORIES, CATEGORY, GROUPS } from '../data/categories';
 import { reviewMonth } from '../data/review';
 import { useStore } from '../data/store';
-import { financialYear, netWorth, payFor, people } from '../data/wealth';
-import { dayName, money, monthName, monthOnly, pct } from '../lib/format';
+import { expectedIncome, financialYear, netWorth, payFor, people } from '../data/wealth';
+import { money, monthName, monthOnly, pct } from '../lib/format';
 
 const endOf = (m: string) => { const [y, mo] = m.split('-').map(Number); return `${m}-${String(new Date(Date.UTC(y, mo, 0)).getUTCDate()).padStart(2, '0')}`; };
 
 function MoneyMeeting() {
-  const { data, updateSettings } = useStore();
+  const { data, updateSettings, setBudget } = useStore();
   const months = useMemo(() => allMonths(data.transactions), [data.transactions]);
   const complete = useMemo(() => completeMonths(data), [data]);
   const [month, setMonth] = useState(complete.at(-1) ?? months.at(-1) ?? '');
   const [text, setText] = useState('');
+  const [openGroups, setOpenGroups] = useState<Set<string>>(new Set());
   if (!month) return <p className="muted">Add statements first.</p>;
   const r = reviewMonth(data, month);
   const s = r.summary;
@@ -26,14 +27,27 @@ function MoneyMeeting() {
   const lastActions = actions.filter((a) => a.month === prev);
   const nextActions = actions.filter((a) => a.month === month);
   const top = r.findings.filter((f) => f.severity === 'act' || f.severity === 'watch').slice(0, 5);
-  const cats = Object.entries(s.byCategory).filter(([, v]) => v > 0).sort((a, b) => b[1] - a[1]).slice(0, 8);
   const nextMonth = addMonths(month, 1);
-  const bills = [...findBills(data.transactions, `${nextMonth}-01`), ...manualBills(data.settings.bills ?? [], `${nextMonth}-01`)]
-    .filter((b) => monthOf(b.next) === nextMonth).sort((a, b) => a.next.localeCompare(b.next));
   const nwNow = netWorth(data.settings, endOf(month)).total;
   const before = netWorth(data.settings, endOf(prev));
   const nwBefore = before.cash > 0 ? before.total : 0;   // only compare when last month's bank balances are known
   const setActions = (list: typeof actions) => updateSettings({ actions: list });
+
+  // "Usual" is the average of the three complete months before this one.
+  const usualMonths = complete.filter((m) => m < month).slice(-3);
+  const usualSums = usualMonths.map((m) => summarise(m, data));
+  const usual = (c: string) => average(usualSums.map((x) => x.byCategory[c] ?? 0));
+  const groups = GROUPS.map((g) => {
+    const cats = CATEGORIES.filter((c) => !c.system && c.group === g)
+      .map((c) => ({ id: c.id, label: c.label, spent: s.byCategory[c.id] ?? 0, budget: budgetFor(data.budgets, c.id, month), usual: usual(c.id), next: budgetFor(data.budgets, c.id, nextMonth) }))
+      .filter((c) => c.spent || c.budget || c.usual || c.next);
+    const sum = (k: 'spent' | 'budget' | 'usual' | 'next') => cats.reduce((a, c) => a + c[k], 0);
+    return { g, cats, spent: sum('spent'), budget: sum('budget'), usual: sum('usual'), next: sum('next') };
+  }).filter((x) => x.cats.length).sort((a, b) => b.spent - a.spent);
+  const tot = (k: 'spent' | 'budget' | 'usual' | 'next') => groups.reduce((a, g) => a + g[k], 0);
+  const toggle = (g: string) => setOpenGroups((o) => { const n = new Set(o); if (n.has(g)) n.delete(g); else n.add(g); return n; });
+  const diff = (spent: number, budget: number) => budget ? <span className={spent > budget * 1.05 ? 'bad' : 'good'}>{money(budget - spent, { sign: true })}</span> : '–';
+  const share = (n: number) => (s.income ? pct(n / s.income) : '–');
 
   return (
     <div className="report">
@@ -51,6 +65,15 @@ function MoneyMeeting() {
         <div><span>Kept</span><b>{money(s.kept)} ({pct(s.keptRate)})</b></div>
         {nwNow !== 0 && <div><span>Net worth</span><b>{money(nwNow)}</b><small>{nwBefore ? `${money(nwNow - nwBefore, { sign: true })} on last month` : ''}</small></div>}
       </div>
+
+      <section className="report-sec">
+        <h3>Needs, wants and kept <Info>The 50/30/20 guide: about half of take-home pay on needs, under 30% on wants, at least 20% kept. Tap needs or wants to see every payment in it and fix any that are in the wrong place.</Info></h3>
+        <div className="split-tiles">
+          <DrillLink spec={drillType(month, 'need')} className="tile"><span>Needs</span><b>{money(s.needs)}</b><small>{share(s.needs)} of pay · aim 50%</small></DrillLink>
+          <DrillLink spec={drillType(month, 'want')} className="tile"><span>Wants</span><b>{money(s.wants)}</b><small>{share(s.wants)} of pay · aim 30%</small></DrillLink>
+          <div className="tile"><span>Kept</span><b>{money(s.kept)}</b><small>{share(s.kept)} of pay · aim 20%</small></div>
+        </div>
+      </section>
 
       {lastActions.length > 0 && (
         <section className="report-sec">
@@ -71,20 +94,40 @@ function MoneyMeeting() {
       </section>
 
       <section className="report-sec">
-        <h3>Where it went</h3>
-        <table className="score compact">
-          <thead><tr><th>Category</th><th>Spent</th><th>Budget</th></tr></thead>
-          <tbody>{cats.map(([c, v]) => { const b = budgetFor(data.budgets, c, month); return (
-            <tr key={c} className={b && v > b * 1.1 ? 'st-over' : ''}><th scope="row">{CATEGORY[c]?.label ?? c}</th><td>{money(v)}</td><td>{b ? money(b) : '–'}</td></tr>); })}</tbody>
-        </table>
+        <h3>Budget and next month's targets <Info>Tap an area to open its categories, and a category or amount to check what's in it. “Usual” is the average of the last {usualMonths.length || 3} complete months. Set {monthOnly(nextMonth)}'s target in the last column: it becomes the budget from then on.</Info></h3>
+        <div className="table-wrap">
+          <table className="score meeting">
+            <thead><tr><th>Area</th><th>Budget</th><th>Spent</th><th>Left</th><th className="hide-sm">Usual</th><th>{monthOnly(nextMonth)} target</th></tr></thead>
+            <tbody>
+              {groups.map((g) => {
+                const isOpen = openGroups.has(g.g);
+                return [
+                  <tr key={g.g} className="grp-row">
+                    <th scope="row"><button className="grp-toggle" aria-expanded={isOpen} onClick={() => toggle(g.g)}><ChevronRight size={15} aria-hidden className={isOpen ? 'rot' : ''} />{g.g}</button></th>
+                    <td>{g.budget ? money(g.budget) : '–'}</td>
+                    <td><DrillLink spec={drillGroup(month, g.g)}>{money(g.spent)}</DrillLink></td>
+                    <td>{diff(g.spent, g.budget)}</td>
+                    <td className="hide-sm">{money(g.usual)}</td>
+                    <td>{g.next ? money(g.next) : '–'}</td>
+                  </tr>,
+                  ...g.cats.map((c) => (
+                    <tr key={c.id} className={`cat-sub ${isOpen ? '' : 'is-folded'}`}>
+                      <th scope="row"><DrillLink spec={drillCategory(month, c.id)}>{c.label}</DrillLink></th>
+                      <td>{c.budget ? money(c.budget) : '–'}</td>
+                      <td><DrillLink spec={drillCategory(month, c.id)}>{money(c.spent)}</DrillLink></td>
+                      <td>{diff(c.spent, c.budget)}</td>
+                      <td className="hide-sm">{money(c.usual)}</td>
+                      <td><NumberField label={`${c.label} target for ${monthOnly(nextMonth)}`} width="5.5em" value={c.next} onSave={(n) => setBudget(c.id, nextMonth, n)} /></td>
+                    </tr>
+                  )),
+                ];
+              })}
+            </tbody>
+            <tfoot><tr><th scope="row">Total</th><td>{money(tot('budget'))}</td><td>{money(tot('spent'))}</td><td>{diff(tot('spent'), tot('budget'))}</td><td className="hide-sm">{money(tot('usual'))}</td><td>{money(tot('next'))}</td></tr></tfoot>
+          </table>
+        </div>
+        <p className="fine no-print">{tot('next') > 0 && s.income > 0 && <>Next month's targets add up to {money(tot('next'))}, leaving about {money(expectedIncome(data.settings, nextMonth) - tot('next'))} of expected pay to keep.</>}</p>
       </section>
-
-      {bills.length > 0 && (
-        <section className="report-sec">
-          <h3>Bills due in {monthOnly(nextMonth)}</h3>
-          <ul className="bill-list">{bills.map((b) => <li key={b.key}><span className="bill-when">{dayName(b.next)}</span><span className="bill-what"><b>{b.name}</b></span><span className="bill-amt">{b.varies ? 'about ' : ''}{money(b.amount)}</span></li>)}</ul>
-        </section>
-      )}
 
       <section className="report-sec">
         <h3>What we'll do in {monthOnly(nextMonth)}</h3>

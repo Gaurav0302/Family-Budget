@@ -1,4 +1,4 @@
-import type { BudgetLine, Coverage, Review, Rule, Settings, Transaction } from '../types';
+import type { BudgetLine, Coverage, Payee, Review, Rule, Settings, Transaction } from '../types';
 
 export interface Loaded {
   transactions: Transaction[];
@@ -7,6 +7,7 @@ export interface Loaded {
   coverage: Coverage[];
   settings: Settings | null;
   reviews: Review[];
+  payees: Payee[];
 }
 
 /** Where the family's data is kept: Supabase (shared, every device) or this browser only (demo). */
@@ -22,4 +23,5 @@ export interface Adapter {
   saveSettings(s: Settings): Promise<void>;
   upsertReviews(r: Review[]): Promise<void>;
   deleteReview(id: string): Promise<void>;
+  savePayees(p: Payee[]): Promise<void>;
 }

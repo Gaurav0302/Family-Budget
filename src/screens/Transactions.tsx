@@ -1,68 +1,45 @@
 import { X } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { Empty, Info, PageHeader } from '../components/bits';
 import { allMonths, monthOf } from '../data/analysis';
-import { CATEGORIES, CATEGORY, GROUPS, label } from '../data/categories';
+import { CATEGORIES, CATEGORY, label } from '../data/categories';
+import { CategorySelect } from '../components/CategorySelect';
+import { findPayee, kindForCategory } from '../data/payees';
 import { merchantOf } from '../data/merchant';
-import { ruleMatches } from '../data/rules';
 import { useStore } from '../data/store';
-import type { Kind, Transaction } from '../data/types';
+import type { Transaction } from '../data/types';
 import { dayName, money, monthName } from '../lib/format';
 
-const kindFor = (category: string): Kind =>
-  ['salary', 'interest', 'other-income'].includes(category) ? 'income'
-  : ['own-transfer', 'card-payment'].includes(category) ? 'transfer'
-  : category === 'shares' ? 'invest' : 'spend';
-
-export function CategorySelect({ value, onChange, id }: { value: string; onChange: (v: string) => void; id?: string }) {
-  const groups = [...GROUPS, 'Money in', 'Moving money', 'Investing'];
-  return (
-    <select id={id} value={value} onChange={(e) => onChange(e.target.value)}>
-      {groups.map((g) => (
-        <optgroup key={g} label={g}>
-          {CATEGORIES.filter((c) => c.group === g).map((c) => <option key={c.id} value={c.id}>{c.label}</option>)}
-        </optgroup>
-      ))}
-    </select>
-  );
-}
-
-function suggestedPattern(t: Transaction): string {
-  const first = t.description.split(' | ')[0].replace(/\(matched by amount\)/, '').replace(/\(US\$.*\)/, '');
-  return first.replace(/^Direct Debit \d+ /i, '').replace(/\s+\d[\d\s]*$/, '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&').trim().slice(0, 40);
-}
-
 function Editor({ tx, onClose }: { tx: Transaction; onClose: () => void }) {
-  const { data, updateTransaction, addRule } = useStore();
+  const { data, updateTransaction, setPayee, payeeIdx } = useStore();
+  const payee = findPayee(tx, payeeIdx);
   const [category, setCategory] = useState(tx.category ?? 'other');
   const [note, setNote] = useState(tx.note ?? '');
   const [oneOff, setOneOff] = useState(!!tx.oneOff);
-  const [always, setAlways] = useState(!!tx.needsReview);
-  const [pattern, setPattern] = useState(suggestedPattern(tx));
+  const [allOfPayee, setAllOfPayee] = useState(!!tx.needsReview && !payee?.askEachTime);
   const [done, setDone] = useState<string | null>(null);
-  const matches = useMemo(() => {
-    if (!always || !pattern.trim()) return 0;
-    return data.transactions.filter((t) => !t.manual && ruleMatches({ id: '', pattern, category, kind: 'spend' }, t)).length;
-  }, [always, pattern, category, data.transactions]);
+  const count = payee ? data.transactions.filter((t) => findPayee(t, payeeIdx)?.id === payee.id).length : 0;
   const account = data.settings.accounts.find((a) => a.key === tx.account)?.name ?? tx.account;
 
   async function save() {
-    await updateTransaction(tx.id, { category, kind: kindFor(category), note: note || null, oneOff });
     let msg = 'Saved.';
-    if (always && pattern.trim()) {
-      const n = await addRule({ pattern: pattern.trim(), category, kind: kindFor(category) });
-      msg = `Saved. ${n} other transaction${n === 1 ? '' : 's'} sorted the same way.`;
+    if (allOfPayee && payee) {
+      const n = await setPayee(payee.id, { category, kind: kindForCategory(category), checked: true }, true);
+      msg = `Saved. ${payee.name} now goes to ${label(category)}; ${n} payment${n === 1 ? '' : 's'} moved.`;
+      if (note !== (tx.note ?? '') || oneOff !== !!tx.oneOff) await updateTransaction(tx.id, { note: note || null, oneOff });
+    } else {
+      await updateTransaction(tx.id, { category, kind: kindForCategory(category), note: note || null, oneOff });
     }
     setDone(msg);
-    setTimeout(onClose, 900);
+    setTimeout(onClose, 1100);
   }
 
   return (
     <div className="sheet-wrap" role="dialog" aria-modal="true" aria-labelledby="ed-title" onClick={onClose}>
       <div className="sheet" onClick={(e) => e.stopPropagation()}>
         <div className="sheet-head">
-          <h2 id="ed-title">{merchantOf(tx.description)}</h2>
+          <h2 id="ed-title">{payee?.name ?? merchantOf(tx.description)}</h2>
           <button className="icon-btn" onClick={onClose} aria-label="Close"><X size={20} /></button>
         </div>
         <p className={`sheet-amount ${tx.amount > 0 ? 'in' : ''}`}>{money(tx.amount, { cents: true, sign: true })}</p>
@@ -73,20 +50,17 @@ function Editor({ tx, onClose }: { tx: Transaction; onClose: () => void }) {
         </dl>
         <label htmlFor="cat">Category</label>
         <CategorySelect id="cat" value={category} onChange={setCategory} />
+        {payee && (
+          <label className="check"><input type="checkbox" checked={allOfPayee} onChange={(e) => setAllOfPayee(e.target.checked)} />
+            <span>Use this for all {count} {payee.name} payments, and future ones
+              <small>{payee.askEachTime ? 'This payee is set to "ask me each time", so leave this unticked to sort just this one.' : 'Untick to change just this payment.'}</small></span></label>
+        )}
         <label className="check"><input type="checkbox" checked={oneOff} onChange={(e) => setOneOff(e.target.checked)} />
           <span>One-off <small>Leave it out of trends and budget checks (e.g. a visa fee or a big repair)</small></span></label>
-        <label className="check"><input type="checkbox" checked={always} onChange={(e) => setAlways(e.target.checked)} />
-          <span>Always sort similar transactions as {label(category)}</span></label>
-        {always && (
-          <div className="rule-box">
-            <label htmlFor="pat">Match descriptions containing</label>
-            <input id="pat" value={pattern} onChange={(e) => setPattern(e.target.value)} />
-            <p className="fine">{matches} transaction{matches === 1 ? '' : 's'} match. Ones you've sorted by hand won't change.</p>
-          </div>
-        )}
         <label htmlFor="note">Note</label>
         <textarea id="note" rows={2} value={note} onChange={(e) => setNote(e.target.value)} placeholder="What was this for?" />
         <div className="sheet-actions">
+          {payee && !done && <Link className="btn small ghost" to={`/categories?tab=payees&payee=${payee.id}`} onClick={onClose}>Edit payee</Link>}
           {done ? <p className="ok" role="status">{done}</p> : <>
             <button className="btn" onClick={onClose}>Cancel</button>
             <button className="btn primary" onClick={save}>Save</button>
@@ -98,7 +72,7 @@ function Editor({ tx, onClose }: { tx: Transaction; onClose: () => void }) {
 }
 
 export function Transactions() {
-  const { data } = useStore();
+  const { data, payeeIdx } = useStore();
   const [params, setParams] = useSearchParams();
   const month = params.get('month') ?? 'all';
   const category = params.get('category') ?? 'all';
@@ -154,7 +128,7 @@ export function Transactions() {
             <button key={t.id} role="listitem" className={`tx ${t.needsReview ? 'needs' : ''} kind-${t.kind}`} onClick={() => setEditing(t)}>
               <span className="tx-date">{dayName(t.date)}</span>
               <span className="tx-what">
-                <b>{merchantOf(t.description)}</b>
+                <b>{findPayee(t, payeeIdx)?.name ?? merchantOf(t.description)}</b>
                 <small>{accountName(t.account)}{t.note ? ` – ${t.note}` : ''}</small>
               </span>
               <span className="tx-cat">

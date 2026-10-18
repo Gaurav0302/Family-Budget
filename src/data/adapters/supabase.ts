@@ -1,6 +1,6 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { SUPABASE_KEY, SUPABASE_URL } from '../../config';
-import type { BudgetLine, Coverage, Kind, Review, Rule, Settings, Transaction } from '../types';
+import type { BudgetLine, Coverage, Kind, Payee, Review, Rule, Settings, Transaction } from '../types';
 import type { Adapter, Loaded } from './adapter';
 
 let client: SupabaseClient | null = null;
@@ -54,6 +54,8 @@ export const supabaseAdapter: Adapter = {
       coverage: coverage.map((c) => ({ account: c.account, from: c.from_date, to: c.to_date })),
       settings: (settings.find((s) => s.key === 'settings')?.value as Settings) ?? null,
       reviews: reviews.map((r) => ({ id: r.id, month: r.month, title: r.title, body: r.body, author: r.author, created: r.created })),
+      // The payee list is kept as its own record in the settings table.
+      payees: (settings.find((s) => s.key === 'payees')?.value as Payee[]) ?? [],
     };
   },
   async upsertTransactions(txs) {
@@ -80,4 +82,7 @@ export const supabaseAdapter: Adapter = {
     await check(supabase().from('reviews').upsert(r.map((x) => ({ id: x.id, month: x.month, title: x.title, body: x.body, author: x.author, created: x.created }))));
   },
   async deleteReview(id) { await check(supabase().from('reviews').delete().eq('id', id)); },
+  async savePayees(p) {
+    await check(supabase().from('settings').upsert({ key: 'payees', value: p, updated_at: new Date().toISOString() }));
+  },
 };

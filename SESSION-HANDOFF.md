@@ -1,25 +1,24 @@
 # SESSION-HANDOFF.md
 
-## Current status (18 Oct 2026, evening)
-Second build pushed: Bills, Reports, What if, Wealth (net worth, income & super), alert banners, kids categories, custom categories. Waiting on the user to add the update file and confirm the live site and login work.
+## Current status (19 Oct 2026)
+Third build pushed: payee list, Categories & payees page, drill-downs, Accounts page, Wealth fixes (owned-since, editable history, line chart) and the money meeting redesign (D13–D16). Waiting on the user to add the 19 Oct update file and check their payees.
 
 ## Done
-- 18 Oct 2026: Built all seven pages, review engine, importers, Supabase storage, publish + keep-awake workflows, tests (17 passing), phone/tablet/desktop + dark mode checked with screenshots.
-- 18 Oct 2026: Prepared the Feb–Oct 2026 history file from the PDFs (627 transactions, every account reconciles to its balances). Delivered to the user privately, not committed.
-- 18 Oct 2026: Moved every household detail out of the code into a private household file (D7).
+- 18 Oct 2026: All core pages, review engine, importers, Supabase storage, workflows; history Feb–Oct 2026 (627 transactions, reconciled to the cent). Household details kept out of the code (D7).
+- 18 Oct 2026: Bills, Reports, What if, Wealth, alert banners, kids and custom categories.
+- 19 Oct 2026: Payees (built automatically from existing transactions the first time the app loads; all start as "to check"). Drill-downs on Home, Review, Budget, money meeting. Accounts page. Wealth owned-since and line chart. Update file "Family Purse - update 19 Oct 2026" (private): account last 4 digits and banks, house and loan from settlement, 25 month-end balances worked back from statements so the chart starts June 2026. `prepare-import` now does that back-calculation itself.
 
 ## Next
-0. User: Add statements → the update file (after the history file). Then Wealth → Income & super: current super balances and fund names.
-1. User: Settings → Pages → Source: GitHub Actions; open the site; sign in; Add statements → history file.
-2. User: sort the ~12 items under "Needs your input"; check the starting budget.
-3. Next session: October statements → first monthly routine (AGENT-RUNBOOK.md).
+1. User: Add statements → the 19 Oct update file → Apply update.
+2. User: Categories & payees → Payees → To check: fix any wrong category, then "Looks right" (or tick all). Create a category like "India home upkeep" and move the money-to-India payee if that's what it is.
+3. User: Wealth → tap the India house and shares: "Before our records start" is the default; set a date only if bought recently.
+4. Next session: October statements → monthly routine (AGENT-RUNBOOK.md), using `--payees` with the user's latest backup.
 
 ## Known issues
-- This workspace can't reach supabase.co, so the live login and database writes were not tested from here; the user's first sign-in is the real test.
-- Subscriptions seen only once (for example a new monthly one) are treated as yearly until a second payment appears.
-- Fonts load from Google Fonts; offline they fall back to system fonts.
+- The workspace can't reach supabase.co; Supabase saving of the payee list (settings key `payees`) is untested from here. First real use is the test.
+- Money meeting table scrolls sideways on a narrow phone (contained inside the table, page doesn't overflow).
+- Changing a payee's "description contains" wording re-sorts payments that now match it, but not ones that stop matching (they keep their category until changed).
+- Subscriptions seen only once are treated as yearly until a second payment appears.
 
 ## Got wrong this session
-- Quoted the post-settlement surplus as ~$2,700 first; using all three full months it's ~$1,560 (9%). Use full-month averages, and say when a figure is a range.
-- Wrote personal details (school names, friends, address) into public code at first; caught before pushing and moved to a private file. Check the privacy test covers any new personal words.
-- First commit used the user's personal email as author; rewritten to the GitHub noreply address.
+- The drill-down sheet stayed open after moving to another page; fixed by closing it on navigation and Escape. Test flows across pages, not just one page.

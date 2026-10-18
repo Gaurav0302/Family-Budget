@@ -51,7 +51,20 @@ Status: ✅ done · ⬜ to do · 🔄 in progress · ❌ blocked · 🚫 dropped
 - ⬜ User confirms car rego, insurance renewal dates as manual bills
 - ⬜ Each July: update super cap and tax tables in wealth.ts
 
+## Phase 6c — Grip on categories (approved 19 Oct 2026)
+- ✅ 19 Oct 2026 — Payee list: built from history, To check / Ask each time filters, change all past or only new, combine payees, "description contains" wording (D13)
+- ✅ 19 Oct 2026 — Categories & payees page: categories by area with their payees, add/hide categories
+- ✅ 19 Oct 2026 — Drill-downs from Home, Review, Budget and the money meeting; move a payee or one payment (D16)
+- ✅ 19 Oct 2026 — Money meeting: needs/wants/kept tiles, budget-and-targets table by area, next month's targets (D16)
+- ✅ 19 Oct 2026 — Accounts page: bank, last 4, opened/closed, money moved to, balance history (D15)
+- ✅ 19 Oct 2026 — Wealth: owned-since, edit/delete values and items, line chart (D14); month-end balances worked back from statements
+- ✅ 19 Oct 2026 — Tests (36), phone overflow check on new pages
+- ⬜ User adds the 19 Oct update file, then checks payees under Categories & payees → Payees → To check
+- ⬜ User sets "owned since" for anything added on the Wealth page that isn't long-held (default: before records)
+- ⬜ After settlement: add the offset account(s), close the old savings with "money moved to"
+
 ## Phase 7 — Polish
 - ✅ 18 Oct 2026 — Tests (17), phone overflow check on every page, dark mode
+- ⬜ Money meeting table scrolls sideways on narrow phones; consider a stacked phone layout
 - ⬜ Install-to-home-screen (web app manifest + icons)
 - ⬜ PayPal CSV import in the app; PDF import in the app

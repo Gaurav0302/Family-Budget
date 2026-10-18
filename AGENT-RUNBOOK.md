@@ -15,7 +15,7 @@ pdftotext -layout statement.pdf private/statement.txt
 python3 tools/parse_statements.py private/parsed.json ACCOUNT:FORMAT:private/statement.txt [...]
 ```
 Formats: `cba_summary` (CommBank "Transaction Summary" letters and the credit card), `cba_statement` (formal CommBank statements), `macquarie`, `paypal` (only used to name the merchant behind PayPal debits).
-Account keys are in `household.json` → `settings.accounts`.
+Account keys are in `household.json` → `settings.accounts`. Match each statement to its account by the last 4 digits (`last4`); if a statement's last 4 isn't there, it's a new account: ask the user, then add it on the Accounts page.
 
 **Check every account reconciles**: the sum of parsed amounts must equal closing minus opening balance. Don't continue until it does.
 
@@ -23,7 +23,8 @@ Account keys are in `household.json` → `settings.accounts`.
 npm run prepare-import -- private/parsed.json private/import.json \
   --household private/household.json \
   --coverage ACCOUNT=YYYY-MM-DD..YYYY-MM-DD   # one per statement: the period it covers
-  --balance ACCOUNT=YYYY-MM-DD:CLOSING        # closing balance of EVERY account at month end (net worth uses these)
+  --balance ACCOUNT=YYYY-MM-DD:CLOSING        # closing balance of EVERY account (earlier month-ends are worked out from it)
+  --payees private/backup.json                # sort with the family's payee list, so imports follow their choices
 ```
 The printout shows each month as complete or partial, with income, spending and money kept.
 
@@ -44,7 +45,7 @@ Then rebuild the file with the note attached: add `--review YYYY-MM:private/revi
 ## 4. Deliver
 - Send `private/import.json` to the user with step-by-step: app → Add statements → choose the file → Add.
 - Or, if the Supabase connector is on, upsert the rows into `transactions`, `coverage` and `reviews` (column names in `supabase/setup.sql`).
-- Remind them to sort anything under "Needs your input" and to download a fresh backup.
+- Remind them to sort anything under "Needs your input" (and new payees under Categories & payees → To check) and to download a fresh backup.
 - Update `SESSION-HANDOFF.md` and `BACKLOG.md` (here) and the Project docs if household facts changed.
 
 ## Settings in data files

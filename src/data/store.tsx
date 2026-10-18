@@ -7,9 +7,10 @@ import { supabase, supabaseAdapter } from './adapters/supabase';
 import { DEFAULT_BUDGETS, DEFAULT_SETTINGS } from './defaults';
 import { mergeCoverage, splitNew, type ParsedImport } from './importers';
 import { applyCustomCategories } from './categories';
-import { applyRules, categorise, RULES_VERSION } from './rules';
+import { categorise, RULES_VERSION } from './rules';
+import { indexPayees, payeesFor, sortTransaction, type PayeeIndex } from './payees';
 import { mergeSettings } from './settingsMerge';
-import type { BudgetLine, Data, DataFile, Review, Rule, Settings, Transaction } from './types';
+import type { BudgetLine, Data, DataFile, Payee, Review, Rule, Settings, Transaction } from './types';
 
 interface Store {
   data: Data;
@@ -32,9 +33,16 @@ interface Store {
   deleteReview(id: string): Promise<void>;
   backup(): DataFile;
   resetLocal(): Promise<void>;
+  /** Fast lookup of each transaction's payee. */
+  payeeIdx: PayeeIndex;
+  /** Change a payee. With applyPast, its earlier transactions (not sorted by hand) move too. Returns how many moved. */
+  setPayee(id: string, patch: Partial<Payee>, applyPast: boolean): Promise<number>;
+  /** Fold one payee into another (same shop, different bank wording). */
+  mergePayees(fromId: string, intoId: string): Promise<number>;
+  markChecked(ids: string[]): Promise<void>;
 }
 
-const empty: Data = { transactions: [], rules: [], budgets: DEFAULT_BUDGETS, coverage: [], settings: DEFAULT_SETTINGS, reviews: [] };
+const empty: Data = { transactions: [], rules: [], budgets: DEFAULT_BUDGETS, coverage: [], settings: DEFAULT_SETTINGS, reviews: [], payees: [] };
 const Ctx = createContext<Store | null>(null);
 
 export function useStore(): Store {
@@ -74,22 +82,37 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       const budgets = l.budgets.length ? l.budgets : DEFAULT_BUDGETS;
       const userRules = l.rules.map((r) => ({ ...r, user: true }));
       applyCustomCategories(settings.customCategories, settings.hiddenCategories);
+      let payees = l.payees ?? [];
       // New built-in rules: re-sort everything nobody sorted by hand. Otherwise only sort what has no category yet.
       const resortAll = (settings.rulesVersion ?? 1) < RULES_VERSION;
       const unsorted = l.transactions.filter((t) => resortAll ? !t.manual : !t.category || !t.kind);
       let transactions = l.transactions;
       if (unsorted.length) {
+        const idx = indexPayees(payees);
         const before = new Map(unsorted.map((t) => [t.id, `${t.category}|${t.kind}|${t.needsReview}`]));
-        const fixed = applyRules(unsorted, userRules, settings).filter((t) => before.get(t.id) !== `${t.category}|${t.kind}|${t.needsReview}`);
+        const fixed = unsorted.map((t) => { const { payee: _p, ...x } = sortTransaction(t, idx, userRules, settings); return { ...t, ...x }; })
+          .filter((t) => before.get(t.id) !== `${t.category}|${t.kind}|${t.needsReview}`);
         const byId = new Map(fixed.map((t) => [t.id, t]));
         transactions = l.transactions.map((t) => byId.get(t.id) ?? t);
         if (fixed.length) await adapter.upsertTransactions(fixed);
       }
-      if (resortAll) { settings.rulesVersion = RULES_VERSION; await adapter.saveSettings(settings); }
+      // Every transaction gets a payee. The first time, this builds the whole list from the existing categories.
+      const added = payeesFor(transactions, payees);
+      if (added.length) { payees = [...payees, ...added]; await adapter.savePayees(payees); }
+      // Things dated in the future (a house at settlement) must keep that start date once the date has passed.
+      const today = new Date().toISOString().slice(0, 10);
+      let fixWealth = false;
+      settings.wealth = (settings.wealth ?? []).map((w) => {
+        const first = [...w.values].sort((a, b) => a.date.localeCompare(b.date))[0];
+        if (!w.ownedSince && first && first.date > today) { fixWealth = true; return { ...w, ownedSince: first.date }; }
+        return w;
+      });
+      if (resortAll) settings.rulesVersion = RULES_VERSION;
+      if (resortAll || fixWealth) await adapter.saveSettings(settings);
       if (!l.budgets.length) await adapter.upsertBudgets(DEFAULT_BUDGETS);
       if (!l.settings) await adapter.saveSettings(settings);
       transactions.sort((a, b) => b.date.localeCompare(a.date) || a.id.localeCompare(b.id));
-      setData({ transactions, rules: userRules, budgets, coverage: l.coverage, settings, reviews: l.reviews });
+      setData({ transactions, rules: userRules, budgets, coverage: l.coverage, settings, reviews: l.reviews, payees });
       setStatus('ready');
       setError(null);
     } catch (e: any) {
@@ -112,8 +135,28 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     return () => sub.subscription.unsubscribe();
   }, [adapter, load]);
 
+  const payeeIdx = useMemo(() => indexPayees(data.payees), [data.payees]);
+
+  /** Re-sort transactions (not sorted by hand) that belong to the given payees, after a payee changed. */
+  const resortFor = (txs: Transaction[], payees: Payee[], ids: Set<string>, settings: Settings, rules: Rule[]) => {
+    const idx = indexPayees(payees);
+    const changed: Transaction[] = [];
+    const all = txs.map((t) => {
+      if (t.manual) return t;
+      const s = sortTransaction(t, idx, rules, settings);
+      if (!s.payee || !ids.has(s.payee.id)) return t;
+      // A person just decided this payee's category, so its transactions no longer need input (unless it's still 'not sure').
+      const needsReview = s.category === 'other' || s.category === 'other-income';
+      if (s.category === t.category && s.kind === t.kind && needsReview === !!t.needsReview) return t;
+      const n = { ...t, category: s.category, kind: s.kind, needsReview };
+      changed.push(n);
+      return n;
+    });
+    return { all, changed };
+  };
+
   const store = useMemo<Store>(() => ({
-    data, status, error, mode: adapter.kind, email, saving,
+    data, status, error, mode: adapter.kind, email, saving, payeeIdx,
     async signIn(e, password) {
       const { error } = await supabase().auth.signInWithPassword({ email: e.trim(), password });
       return error ? (error.message.includes('Invalid') ? 'That email and password don\'t match. Check them and try again.' : error.message) : null;
@@ -162,21 +205,28 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       const d = dataRef.current;
       const settings = p.file?.settings ? withDefaults(mergeSettings(d.settings, p.file.settings)) : d.settings;
       applyCustomCategories(settings.customCategories, settings.hiddenCategories);
-      // Rules in a file replace rules with the same id, then everything nobody sorted by hand is re-sorted.
+      // Rules and payees in a file: rules with the same id are replaced; payees the family already has are kept as they are.
       const incomingRules = (p.file?.rules ?? []).map((r) => ({ ...r, user: true }));
       const rules = [...incomingRules, ...d.rules.filter((r) => !incomingRules.some((x) => x.id === r.id))];
-      const resorted = incomingRules.length
-        ? d.transactions.filter((t) => !t.manual).map((t) => ({ t, n: { ...t, ...categorise(t, rules, settings) } }))
+      let payees = [...d.payees, ...(p.file?.payees ?? []).filter((x) => !d.payees.some((y) => y.id === x.id))];
+      const idx = indexPayees(payees);
+      const resorted = incomingRules.length || payees.length !== d.payees.length
+        ? d.transactions.filter((t) => !t.manual).map((t) => { const { payee: _p, ...x } = sortTransaction(t, idx, rules, settings); return { t, n: { ...t, ...x } }; })
           .filter(({ t, n }) => t.category !== n.category || t.kind !== n.kind || !!t.needsReview !== n.needsReview).map(({ n }) => n)
         : [];
-      const sorted = applyRules(p.transactions.map((t) => (t.category && t.kind ? t : { ...t, category: null, kind: null })), rules, settings)
-        .map((t, i) => (p.transactions[i].manual ? p.transactions[i] : t));
+      const sorted = p.transactions.map((t) => {
+        if (t.manual) return t;
+        const { payee: _p, ...x } = sortTransaction({ ...t, category: null, kind: null }, idx, rules, settings, true);
+        return { ...t, ...x };
+      });
+      payees = [...payees, ...payeesFor(sorted, payees)];
       const { fresh, duplicates } = splitNew(d.transactions, sorted);
       const coverage = mergeCoverage([...d.coverage, ...p.coverage]);
       const reviews = p.file?.reviews ?? [];
       const budgets = p.file?.budgets ?? [];
       await guard(async () => {
         if (incomingRules.length) await adapter.upsertRules(incomingRules);
+        if (payees.length !== d.payees.length) await adapter.savePayees(payees);
         if (fresh.length || resorted.length) await adapter.upsertTransactions([...fresh, ...resorted]);
         await adapter.replaceCoverage(coverage);
         if (reviews.length) await adapter.upsertReviews(reviews);
@@ -194,10 +244,40 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       setData((d) => ({ ...d, reviews: d.reviews.filter((x) => x.id !== id) }));
       await guard(() => adapter.deleteReview(id));
     },
+    async setPayee(id, patch, applyPast) {
+      const d = dataRef.current;
+      const payees = d.payees.map((p) => (p.id === id ? { ...p, ...patch } : p));
+      let changed: Transaction[] = [];
+      let transactions = d.transactions;
+      if (applyPast && (patch.category || patch.kind || patch.patterns)) {
+        ({ all: transactions, changed } = resortFor(d.transactions, payees, new Set([id]), d.settings, d.rules));
+      }
+      setData({ ...d, payees, transactions });
+      await guard(async () => { await adapter.savePayees(payees); if (changed.length) await adapter.upsertTransactions(changed); });
+      return changed.length;
+    },
+    async markChecked(ids) {
+      const d = dataRef.current;
+      const set = new Set(ids);
+      const payees = d.payees.map((p) => (set.has(p.id) ? { ...p, checked: true } : p));
+      setData({ ...d, payees });
+      await guard(() => adapter.savePayees(payees));
+    },
+    async mergePayees(fromId, intoId) {
+      const d = dataRef.current;
+      const from = d.payees.find((p) => p.id === fromId), into = d.payees.find((p) => p.id === intoId);
+      if (!from || !into || from.id === into.id) return 0;
+      const merged: Payee = { ...into, match: [...new Set([...into.match, ...from.match])], patterns: [...new Set([...(into.patterns ?? []), ...(from.patterns ?? [])])] };
+      const payees = d.payees.filter((p) => p.id !== fromId).map((p) => (p.id === intoId ? merged : p));
+      const { all, changed } = resortFor(d.transactions, payees, new Set([intoId]), d.settings, d.rules);
+      setData({ ...d, payees, transactions: all });
+      await guard(async () => { await adapter.savePayees(payees); if (changed.length) await adapter.upsertTransactions(changed); });
+      return changed.length;
+    },
     backup() {
       const d = dataRef.current;
       return { app: 'family-budget', version: 1, exported: new Date().toISOString(),
-        transactions: d.transactions, coverage: d.coverage, reviews: d.reviews, budgets: d.budgets, rules: d.rules, settings: d.settings };
+        transactions: d.transactions, coverage: d.coverage, reviews: d.reviews, budgets: d.budgets, rules: d.rules, settings: d.settings, payees: d.payees };
     },
     async resetLocal() {
       if (adapter.kind !== 'local') return;
@@ -205,7 +285,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       clearLocal();
       await load();
     },
-  }), [data, status, error, adapter, email, saving, guard, load]);
+  }), [data, status, error, adapter, email, saving, guard, load, payeeIdx]);
 
   return <Ctx.Provider value={store}>{children}</Ctx.Provider>;
 }

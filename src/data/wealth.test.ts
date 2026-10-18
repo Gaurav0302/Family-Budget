@@ -42,9 +42,13 @@ describe('net worth', () => {
   it('adds cash, super and assets and takes off debts, as known on a date', () => {
     const s: Settings = { ...S, balances: [{ account: 'a', date: '2026-09-30', amount: 20000 }],
       superBalances: [{ person: 'Alex', date: '2026-06-30', amount: 150000 }],
-      wealth: [{ id: 'h', name: 'Home', kind: 'home', values: [{ date: '2026-12-09', amount: 1000000 }] }, { id: 'l', name: 'Loan', kind: 'loan', values: [{ date: '2026-12-09', amount: 900000 }] }] };
-    expect(netWorth(s, '2026-10-31').total).toBe(170000);
-    expect(netWorth(s, '2026-12-31').total).toBe(270000);
+      wealth: [{ id: 'h', name: 'Home', kind: 'home', ownedSince: '2026-12-09', values: [{ date: '2026-12-09', amount: 1000000 }] },
+        { id: 'l', name: 'Loan', kind: 'loan', ownedSince: '2026-12-09', values: [{ date: '2026-12-09', amount: 900000 }] },
+        { id: 'o', name: 'Overseas flat', kind: 'home', values: [{ date: '2026-10-01', amount: 50000 }] }] };
+    expect(netWorth(s, '2026-10-31').total).toBe(220000);
+    expect(netWorth(s, '2026-12-31').total).toBe(320000);
+    // Something owned before records began counts in earlier months too, so adding it doesn't look like a jump.
+    expect(netWorth(s, '2026-07-31').total).toBe(200000);
   });
 });
 

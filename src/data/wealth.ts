@@ -1,5 +1,5 @@
 import { monthOf } from './analysis';
-import type { Data, Every, PayEntry, Settings, Transaction } from './types';
+import type { Data, Every, PayEntry, Settings, Transaction, WealthItem } from './types';
 
 export const PER_MONTH: Record<Every, number> = { week: 52 / 12, fortnight: 26 / 12, month: 1, quarter: 1 / 3, year: 1 / 12 };
 export const PER_YEAR: Record<Every, number> = { week: 52, fortnight: 26, month: 12, quarter: 4, year: 1 };
@@ -64,12 +64,29 @@ export function superRoom(p: PayEntry, month: string): SuperRoom {
     costPer1000: Math.round(1000 * (1 - rate)), taxSavedPer1000: Math.round(1000 * (rate - 0.15)) };
 }
 
+/** Latest super balance on or before a date. Before the first recorded balance, the first one counts (super was there all along). */
 export function latestSuper(s: Settings, person: string, upTo = '9999-12-31') {
-  return (s.superBalances ?? []).filter((b) => b.person === person && b.date <= upTo).sort((a, b) => b.date.localeCompare(a.date))[0];
+  const list = (s.superBalances ?? []).filter((b) => b.person === person).sort((a, b) => b.date.localeCompare(a.date));
+  return list.find((b) => b.date <= upTo) ?? list[list.length - 1];
 }
 
-const latestValue = (values: { date: string; amount: number }[], upTo: string) =>
-  values.filter((v) => v.date <= upTo).sort((a, b) => b.date.localeCompare(a.date))[0];
+const today = () => new Date().toISOString().slice(0, 10);
+
+/** When an item started counting. With no date set: from its first value if that's in the future (e.g. a house at settlement),
+ *  otherwise from the very beginning, because things like an overseas house or old shares were owned before records began. */
+export function ownedSinceOf(w: WealthItem): string {
+  if (w.ownedSince) return w.ownedSince;
+  const first = [...w.values].sort((a, b) => a.date.localeCompare(b.date))[0];
+  return first && first.date > today() ? first.date : '0000-01-01';
+}
+
+/** An item's value on a date: zero before it was owned or after it ended; otherwise the latest value, or the first one carried back. */
+export function valueOn(w: WealthItem, date: string): { amount: number; date?: string } | null {
+  if (date < ownedSinceOf(w) || (w.endedOn && date >= w.endedOn)) return null;
+  const sorted = [...w.values].sort((a, b) => b.date.localeCompare(a.date));
+  const v = sorted.find((x) => x.date <= date) ?? sorted[sorted.length - 1];
+  return v ? { amount: v.amount, date: v.date } : null;
+}
 
 export interface NetWorth { date: string; cash: number; super: number; assets: number; debts: number; total: number; parts: { name: string; amount: number; kind: string; date?: string }[] }
 
@@ -78,7 +95,7 @@ export function netWorth(s: Settings, date: string): NetWorth {
   const parts: NetWorth['parts'] = [];
   let cash = 0;
   for (const a of s.accounts) {
-    if (a.type === 'loan') continue;
+    if (a.type === 'loan' || (a.closedOn && a.closedOn <= date) || (a.openedOn && a.openedOn > date)) continue;
     const b = s.balances.filter((x) => x.account === a.key && x.date <= date).sort((x, y) => y.date.localeCompare(x.date))[0];
     if (b) { cash += b.amount; parts.push({ name: a.name, amount: b.amount, kind: 'cash', date: b.date }); }
   }
@@ -89,7 +106,7 @@ export function netWorth(s: Settings, date: string): NetWorth {
   }
   let assets = 0, debts = 0;
   for (const w of s.wealth ?? []) {
-    const v = latestValue(w.values, date);
+    const v = valueOn(w, date);
     if (!v) continue;
     const debt = w.kind === 'loan' || w.kind === 'debt';
     if (debt) debts += v.amount; else assets += v.amount;

@@ -60,7 +60,7 @@ export function Meter({ actual, budget }: { actual: number; budget: number }) {
 }
 
 /** The month's income split into needs, wants and what was kept, with Babylon's one-in-ten line. */
-export function PurseBar({ income, needs, wants, kept }: { income: number; needs: number; wants: number; kept: number }) {
+export function PurseBar({ income, needs, wants, kept, onOpen }: { income: number; needs: number; wants: number; kept: number; onOpen?: (type: 'need' | 'want') => void }) {
   const total = Math.max(income, needs + wants, 1);
   const seg = (v: number) => `${(Math.max(v, 0) / total) * 100}%`;
   const short = kept < 0;
@@ -73,8 +73,13 @@ export function PurseBar({ income, needs, wants, kept }: { income: number; needs
         {income > 0 && <span className="purse-mark" style={{ left: '90%' }} title="Babylon's rule: keep at least one in every ten" />}
       </div>
       <figcaption>
-        <span><i className="dot dot-needs" />Needs {pct(needs / (income || 1))}</span>
-        <span><i className="dot dot-wants" />Wants {pct(wants / (income || 1))}</span>
+        {onOpen ? <>
+          <button type="button" className="drill-link" onClick={() => onOpen('need')}><i className="dot dot-needs" />Needs {pct(needs / (income || 1))}</button>
+          <button type="button" className="drill-link" onClick={() => onOpen('want')}><i className="dot dot-wants" />Wants {pct(wants / (income || 1))}</button>
+        </> : <>
+          <span><i className="dot dot-needs" />Needs {pct(needs / (income || 1))}</span>
+          <span><i className="dot dot-wants" />Wants {pct(wants / (income || 1))}</span>
+        </>}
         <span><i className="dot dot-kept" />Kept {pct(kept / (income || 1))}</span>
         <span className="purse-legend-mark">The line marks Babylon's tenth: keep everything to its right.</span>
       </figcaption>

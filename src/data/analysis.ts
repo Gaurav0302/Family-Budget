@@ -30,7 +30,8 @@ const shiftDays = (date: string, days: number) => {
 /** A month is complete when every core account's statements cover it (2 days' slack at each end). */
 export function monthCoverage(month: string, coverage: Coverage[], settings: Settings) {
   const start = `${month}-01`, end = lastDay(month);
-  const core = settings.accounts.filter((a) => a.core);
+  // Only accounts that were open during the month need to be loaded.
+  const core = settings.accounts.filter((a) => a.core && (!a.openedOn || a.openedOn <= end) && (!a.closedOn || a.closedOn >= start));
   const missing = core.filter((a) => !coverage.some((c) => c.account === a.key && c.from <= shiftDays(start, 2) && c.to >= shiftDays(end, -2)));
   return { complete: missing.length === 0, missing: missing.map((a) => a.name) };
 }
@@ -152,11 +153,32 @@ export function findRecurring(txs: Transaction[], upTo?: string, categories: str
 
 export function cashOnHand(settings: Settings): { total: number; asOf: string | null } {
   const latest = new Map<string, { date: string; amount: number }>();
+  const live = new Set(settings.accounts.filter((a) => a.type !== 'loan' && !a.closedOn).map((a) => a.key));
   for (const b of settings.balances) {
+    if (!live.has(b.account)) continue;
     const cur = latest.get(b.account);
     if (!cur || b.date > cur.date) latest.set(b.account, b);
   }
   let total = 0, asOf: string | null = null;
   for (const b of latest.values()) { total += b.amount; if (!asOf || b.date > asOf) asOf = b.date; }
   return { total, asOf };
+}
+
+/** Work out each month-end balance from a known closing balance and the transactions in between,
+ *  as far back as the statements cover. Net worth then has a cash figure for every month, not just the latest. */
+export function monthEndBalances(txs: Transaction[], coverage: Coverage[], known: { account: string; date: string; amount: number }[]) {
+  const out: { account: string; date: string; amount: number }[] = [];
+  for (const k of known) {
+    const from = coverage.filter((c) => c.account === k.account && c.to >= k.date.slice(0, 7) + '-01').map((c) => c.from).sort()[0];
+    if (!from) continue;
+    const start = shiftDays(from, -1);
+    for (let m = monthOf(start); ; m = addMonths(m, 1)) {
+      const end = lastDay(m);
+      if (end >= k.date) break;
+      if (end < start) continue;
+      const after = txs.filter((t) => t.account === k.account && t.date > end && t.date <= k.date).reduce((a, t) => a + t.amount, 0);
+      out.push({ account: k.account, date: end, amount: Math.round((k.amount - after) * 100) / 100 });
+    }
+  }
+  return out;
 }

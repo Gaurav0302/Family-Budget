@@ -529,3 +529,128 @@ a.on-dark { color: var(--euc-ink); }
   .whatif-sticky { order: 1; }
   .whatif-result { order: 2; }
 }
+
+/* ---- Drill-downs: tap a figure to see what's in it ---- */
+.drill-link { background: none; border: 0; padding: 0; font: inherit; color: inherit; cursor: pointer; text-align: inherit; text-decoration: underline; text-decoration-color: color-mix(in srgb, var(--euc) 45%, transparent); text-decoration-thickness: 1.5px; text-underline-offset: 3px; }
+.drill-link:hover { color: var(--euc); text-decoration-color: var(--euc); }
+button.cat-row { width: 100%; background: none; border: 0; font: inherit; text-align: left; cursor: pointer; }
+.purse figcaption .drill-link { display: inline-flex; align-items: center; gap: 6px; }
+.drill { max-width: 640px; }
+.drill-total { margin: 6px 0 12px; }
+.drill-groups { display: grid; gap: 8px; margin-bottom: 14px; }
+.drill-group { border: 1px solid var(--line-2); border-radius: 12px; background: var(--card-2); }
+.drill-group > summary { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 10px 12px; cursor: pointer; list-style: none; }
+.drill-group > summary::-webkit-details-marker { display: none; }
+.dg-name { min-width: 0; }
+.dg-name b { display: block; overflow-wrap: anywhere; }
+.dg-name small, .dg-date small { display: block; color: var(--muted); font-size: 0.8rem; }
+.dg-total { font-variant-numeric: tabular-nums; font-weight: 700; white-space: nowrap; }
+.dg-payee { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 8px 12px; border-top: 1px solid var(--line-2); font-size: 0.9rem; }
+.dg-list { list-style: none; margin: 0; padding: 0 12px 6px; }
+.dg-list li { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 12px; align-items: center; padding: 8px 0; border-top: 1px solid var(--line-2); }
+.dg-list li > :nth-child(3) { grid-column: 1 / -1; }
+.dg-amt { text-align: right; font-variant-numeric: tabular-nums; }
+@media (min-width: 560px) { .dg-list li { grid-template-columns: minmax(0, 1fr) auto minmax(0, 13em); } .dg-list li > :nth-child(3) { grid-column: auto; } }
+.select-small { font-size: 0.88rem; padding: 4px 8px; min-height: 34px; max-width: 100%; }
+.sheet .select-small { width: auto; }
+
+/* ---- Categories & payees ---- */
+.confirm { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 10px 12px; margin-top: 8px; background: var(--brass-soft); border-radius: 10px; }
+.payee-list { list-style: none; padding: 0; margin: 0; display: grid; gap: 0; }
+.payee-list > li { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px 12px; align-items: center; padding: 10px 4px; border-bottom: 1px solid var(--line-2); }
+.payee-list > li > :nth-child(n+2) { justify-self: start; }
+@media (min-width: 760px) { .payee-list > li { grid-template-columns: minmax(0, 1fr) minmax(0, 15em) auto; } }
+.payee-list > li.unchecked { border-left: 3px solid var(--brass); padding-left: 10px; }
+.payee-name { background: none; border: 0; padding: 0; font: inherit; color: inherit; text-align: left; cursor: pointer; min-width: 0; }
+.payee-name b { display: block; overflow-wrap: anywhere; }
+.payee-name small { display: block; color: var(--muted); font-size: 0.82rem; }
+.payee-name:hover b { color: var(--euc); }
+.chips { list-style: none; padding: 0; margin: 8px 0; display: flex; flex-wrap: wrap; gap: 6px; }
+.chip-static { display: inline-flex; align-items: center; gap: 4px; border: 1px solid var(--line); border-radius: 999px; padding: 3px 10px; font-size: 0.85rem; background: var(--card-2); overflow-wrap: anywhere; }
+.chip-static button { background: none; border: 0; cursor: pointer; color: var(--muted); font-size: 1rem; padding: 0 2px; }
+.chip-btn { border: 1px solid var(--line); background: var(--card); border-radius: 999px; padding: 3px 10px; font: inherit; font-size: 0.82rem; cursor: pointer; color: var(--ink-2); }
+.chip-btn:hover { border-color: var(--euc); color: var(--euc); }
+.categories .wealth-grid { margin-top: 0; }
+.cat-panel h2 small { font-weight: 400; color: var(--muted); font-size: 0.85rem; }
+.cat-rows { list-style: none; padding: 0; margin: 0; }
+.cat-rows > li { padding: 10px 0; border-bottom: 1px solid var(--line-2); }
+.cat-rows > li.is-hidden { opacity: 0.55; }
+.cat-line { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+.cat-line > span:first-child { min-width: 0; }
+.cat-line small { color: var(--muted); }
+.cat-actions { display: inline-flex; align-items: center; gap: 4px; flex: none; }
+.cat-actions .check { margin: 0; }
+.cat-rows .chips { margin: 6px 0 0; }
+.section-title { margin: 24px 0 10px; font-size: 1.1rem; }
+
+/* ---- Accounts ---- */
+.account .acct-head { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+.acct-name { flex: 1 1 auto; min-width: 0; font-family: var(--display); font-size: 1.15rem; font-weight: 700; border: 1px solid transparent; background: transparent; padding: 4px 6px; margin-left: -6px; border-radius: 8px; color: var(--ink); }
+.acct-name:hover, .acct-name:focus { border-color: var(--line); background: var(--card); }
+.account.is-closed { opacity: 0.75; }
+.account .value-list li { padding: 6px 0; }
+.add-account { margin-top: 16px; }
+@media (min-width: 900px) { .accounts .wealth-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+
+/* ---- Wealth items and the net worth chart ---- */
+.value-list.items li { padding: 0; }
+.row-btn { display: flex; justify-content: space-between; align-items: center; gap: 12px; width: 100%; padding: 10px 2px; background: none; border: 0; font: inherit; color: inherit; text-align: left; cursor: pointer; text-decoration: none; }
+.row-btn:hover b { color: var(--euc); }
+.row-btn > span:first-child { min-width: 0; }
+.row-btn .num { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.row-btn svg { color: var(--muted); }
+.stack-form { display: grid; gap: 8px; }
+.stack-form .inline-form { margin-top: 10px; }
+.stack-form > .btn { justify-self: start; }
+.sheet .value-list input[type='date'] { width: auto; }
+.panel-head h2 small { font-family: var(--font); font-size: 0.9rem; font-weight: 700; margin-left: 8px; }
+.good { color: var(--good); }
+.bad { color: var(--bad); }
+.linechart { position: relative; width: 100%; touch-action: pan-y; user-select: none; }
+.linechart svg { display: block; overflow: visible; }
+.lc-grid { stroke: var(--line-2); stroke-width: 1; }
+.lc-zero { stroke: var(--line); stroke-width: 1.5; }
+.lc-axis { fill: var(--muted); font-size: 11px; font-family: var(--font); }
+.lc-area { fill: color-mix(in srgb, var(--euc) 14%, transparent); }
+.lc-line { fill: none; stroke: var(--euc); stroke-width: 2.5; stroke-linejoin: round; stroke-linecap: round; }
+.lc-dot { fill: var(--card); stroke: var(--euc); stroke-width: 1.5; }
+.lc-cross { stroke: var(--brass); stroke-width: 1; stroke-dasharray: 3 3; }
+.lc-focus { fill: var(--brass); stroke: var(--card); stroke-width: 2; }
+.lc-tip { position: absolute; transform: translate(-50%, -100%); margin-top: -6px; background: var(--ink); color: var(--paper); border-radius: 10px; padding: 8px 10px; font-size: 0.82rem; min-width: 160px; pointer-events: none; box-shadow: var(--shadow); z-index: 2; }
+.lc-tip b { display: block; }
+.lc-tip-total { display: block; font-family: var(--display); font-size: 1.1rem; font-weight: 700; color: var(--brass); }
+.lc-tip-row { display: flex; justify-content: space-between; gap: 12px; font-variant-numeric: tabular-nums; }
+
+/* ---- Money meeting ---- */
+.split-tiles { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.tile { display: block; border: 1px solid var(--line-2); background: var(--card-2); border-radius: 12px; padding: 12px; text-decoration: none; min-width: 0; }
+.tile span { display: block; font-size: 0.85rem; color: var(--muted); }
+.tile b { display: block; font-family: var(--display); font-size: 1.3rem; }
+.tile small { display: block; color: var(--muted); font-size: 0.78rem; }
+button.tile { text-align: left; width: 100%; }
+button.tile:hover { border-color: var(--euc); }
+.score.meeting .grp-row th, .score.meeting .grp-row td { font-weight: 700; background: var(--card-2); }
+.grp-toggle { display: inline-flex; align-items: center; gap: 4px; background: none; border: 0; padding: 0; font: inherit; font-weight: 700; color: inherit; cursor: pointer; text-align: left; }
+.grp-toggle svg { transition: transform 0.15s; flex: none; }
+.grp-toggle svg.rot { transform: rotate(90deg); }
+.score.meeting .cat-sub th { padding-left: 28px; }
+.cat-sub.is-folded { display: none; }
+.score.meeting tfoot th, .score.meeting tfoot td { font-weight: 700; border-top: 2px solid var(--line); border-bottom: 0; }
+.score.meeting .money-input input { text-align: right; }
+@media (max-width: 559px) {
+  .hide-sm { display: none; }
+  .split-tiles { gap: 6px; }
+  .tile { padding: 10px 8px; }
+  .tile b { font-size: 1.05rem; }
+  .score.meeting th, .score.meeting td { padding: 6px 4px; font-size: 0.85rem; }
+  .score.meeting .cat-sub th { padding-left: 12px; }
+}
+@media print {
+  .cat-sub.is-folded { display: table-row; }
+  .grp-toggle svg { display: none; }
+  .drill-link { text-decoration: none; }
+  .money-input { border: 0 !important; background: none !important; }
+}
+.account h3.sub { margin-top: 16px; }
+.drill-group > summary { color: var(--ink); font-weight: 400; }
+.drill-group { margin: 0; }

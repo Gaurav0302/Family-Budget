@@ -2,6 +2,7 @@ import { AlertTriangle } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Badge, Empty, Meter, MonthColumns, MonthPicker, PurseBar } from '../components/bits';
+import { drillCategory, drillType, useDrill } from '../components/Drill';
 import { allMonths, budgetFor, completeMonths, summarise } from '../data/analysis';
 import { CATEGORY } from '../data/categories';
 import { reviewMonth } from '../data/review';
@@ -10,6 +11,7 @@ import { longDate, money, monthName, monthOnly, pct } from '../lib/format';
 
 export function HomeScreen() {
   const { data } = useStore();
+  const drill = useDrill();
   const months = useMemo(() => allMonths(data.transactions), [data.transactions]);
   const complete = useMemo(() => completeMonths(data), [data]);
   const completeSet = useMemo(() => new Set(complete), [complete]);
@@ -55,7 +57,7 @@ export function HomeScreen() {
             ? <>In {monthOnly(month)} you kept <span className="num">{money(s.kept)}</span> of the <span className="num">{money(s.income)}</span> that came in.</>
             : <>In {monthOnly(month)} you spent <span className="num">{money(-s.kept)}</span> more than came in.</>}
         </h1>
-        <PurseBar income={s.income} needs={s.needs} wants={s.wants} kept={s.kept} />
+        <PurseBar income={s.income} needs={s.needs} wants={s.wants} kept={s.kept} onOpen={(t) => drill(drillType(month, t))} />
         <p className={`verdict tone-${review.verdict.tone}`}>{review.verdict.text}</p>
       </section>
 
@@ -78,11 +80,11 @@ export function HomeScreen() {
               const b = budgetFor(data.budgets, cat, month);
               return (
                 <li key={cat}>
-                  <Link to={`/transactions?month=${month}&category=${cat}`} className="cat-row">
+                  <button type="button" onClick={() => drill(drillCategory(month, cat))} className="cat-row">
                     <span className="cat-name">{CATEGORY[cat]?.label ?? cat}</span>
                     <span className="cat-num">{money(v)}<small>{b ? ` of ${money(b)}` : ' no budget'}</small></span>
                     <Meter actual={v} budget={b} />
-                  </Link>
+                  </button>
                 </li>
               );
             })}

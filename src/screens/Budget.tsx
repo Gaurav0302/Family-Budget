@@ -6,6 +6,7 @@ import { useStore } from '../data/store';
 import { expectedIncome } from '../data/wealth';
 import { Link } from 'react-router-dom';
 import { Info } from '../components/bits';
+import { DrillLink, drillCategory } from '../components/Drill';
 import { money, monthName, monthOnly, thisMonth } from '../lib/format';
 
 function BudgetInput({ value, onSave, label }: { value: number; onSave: (n: number) => void; label: string }) {
@@ -100,7 +101,7 @@ export function Budget() {
                     <div className="budget-spent">
                       <Meter actual={spent} budget={b} />
                       <small>
-                        {s.count ? `${money(spent)} spent` : 'No spending loaded'}
+                        {s.count ? (spent ? <DrillLink spec={drillCategory(month, c.id)}>{money(spent)} spent</DrillLink> : `${money(spent)} spent`) : 'No spending loaded'}
                         {avg > 0 && <>, average {money(avg)}{Math.round(avg) !== Math.round(b) && <button className="link" onClick={() => setBudget(c.id, month, Math.ceil(avg / 10) * 10)}>use</button>}</>}
                       </small>
                     </div>
