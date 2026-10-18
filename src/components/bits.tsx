@@ -1,5 +1,5 @@
-import { AlertTriangle, CheckCircle2, ChevronLeft, ChevronRight, Info, Eye } from 'lucide-react';
-import type { ReactNode } from 'react';
+import { AlertTriangle, CheckCircle2, ChevronLeft, ChevronRight, Info as InfoIcon, Eye } from 'lucide-react';
+import { useState, type ReactNode } from 'react';
 import type { Severity } from '../data/review';
 import { money, monthName, pct } from '../lib/format';
 
@@ -32,11 +32,11 @@ export function MonthPicker({ months, value, onChange, completeSet }: {
   );
 }
 
-const SEV: Record<Severity, { label: string; Icon: typeof Info }> = {
+const SEV: Record<Severity, { label: string; Icon: typeof InfoIcon }> = {
   act: { label: 'Needs attention', Icon: AlertTriangle },
   watch: { label: 'Keep an eye on', Icon: Eye },
   good: { label: 'On track', Icon: CheckCircle2 },
-  info: { label: 'Good to know', Icon: Info },
+  info: { label: 'Good to know', Icon: InfoIcon },
 };
 
 export function Badge({ severity, short }: { severity: Severity; short?: boolean }) {
@@ -112,4 +112,44 @@ export function MonthColumns({ rows, format = money, target, targetLabel }: {
 
 export function Empty({ title, children }: { title: string; children?: ReactNode }) {
   return <div className="empty"><h3>{title}</h3>{children}</div>;
+}
+
+/** A small "i" button that reveals one short explanation, so pages stay uncluttered. */
+export function Info({ children, label = 'What is this?' }: { children: ReactNode; label?: string }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <span className="info">
+      <button type="button" className="info-btn" aria-expanded={open} aria-label={label} title={label} onClick={() => setOpen(!open)}>i</button>
+      {open && <span className="info-pop" role="note">{children}<button type="button" className="info-close" onClick={() => setOpen(false)} aria-label="Close">×</button></span>}
+    </span>
+  );
+}
+
+export function Tabs<T extends string>({ value, onChange, items }: { value: T; onChange: (v: T) => void; items: { id: T; label: string }[] }) {
+  return (
+    <div className="seg tabs" role="tablist">
+      {items.map((t) => (
+        <button key={t.id} role="tab" aria-selected={value === t.id} className={value === t.id ? 'on' : ''} onClick={() => onChange(t.id)}>{t.label}</button>
+      ))}
+    </div>
+  );
+}
+
+/** Inline number editor: shows the value, saves on Enter or when you click away. */
+export function NumberField({ value, onSave, label, prefix = '$', suffix, width = '7em' }: {
+  value: number; onSave: (n: number) => void; label: string; prefix?: string; suffix?: string; width?: string;
+}) {
+  const [t, setT] = useState<string | null>(null);
+  return (
+    <span className="money-input">
+      {prefix && <span aria-hidden>{prefix}</span>}
+      <input inputMode="decimal" aria-label={label} style={{ width }}
+        value={t ?? (Math.round(value * 100) / 100).toLocaleString('en-AU', { maximumFractionDigits: 2 })}
+        onFocus={() => setT(String(Math.round(value * 100) / 100))}
+        onChange={(e) => setT(e.target.value.replace(/[^\d.]/g, ''))}
+        onBlur={() => { if (t !== null) { const n = Number(t || 0); if (Math.abs(n - value) > 0.001) onSave(n); setT(null); } }}
+        onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }} />
+      {suffix && <span aria-hidden className="suffix">{suffix}</span>}
+    </span>
+  );
 }

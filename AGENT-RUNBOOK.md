@@ -23,7 +23,7 @@ Account keys are in `household.json` → `settings.accounts`.
 npm run prepare-import -- private/parsed.json private/import.json \
   --household private/household.json \
   --coverage ACCOUNT=YYYY-MM-DD..YYYY-MM-DD   # one per statement: the period it covers
-  --balance ACCOUNT=YYYY-MM-DD:CLOSING        # closing balances of savings/everyday accounts
+  --balance ACCOUNT=YYYY-MM-DD:CLOSING        # closing balance of EVERY account at month end (net worth uses these)
 ```
 The printout shows each month as complete or partial, with income, spending and money kept.
 
@@ -36,6 +36,7 @@ Write `private/review.md` from it, in plain English for a non-technical reader:
 - What went well and the habit behind it (specific, no hollow praise).
 - The top three things to change, each with a dollar figure and one concrete action.
 - Progress on Babylon's tenth, the current Ramsey baby step, and anything coming up (bills, settlement).
+- Any pay change the review flags ("pay changed"), and a reminder to update super balances every few months.
 - No "not financial advice" disclaimers.
 
 Then rebuild the file with the note attached: add `--review YYYY-MM:private/review.md` to the prepare-import command.
@@ -45,6 +46,9 @@ Then rebuild the file with the note attached: add `--review YYYY-MM:private/revi
 - Or, if the Supabase connector is on, upsert the rows into `transactions`, `coverage` and `reviews` (column names in `supabase/setup.sql`).
 - Remind them to sort anything under "Needs your input" and to download a fresh backup.
 - Update `SESSION-HANDOFF.md` and `BACKLOG.md` (here) and the Project docs if household facts changed.
+
+## Settings in data files
+Settings in a data file never overwrite what the family changed in the app: lists (balances, pay, super balances, bills, wealth items) are joined, and single values only fill blanks. Rules with the same id replace the old rule and everything not sorted by hand is re-sorted. So a monthly file can safely carry `--household`.
 
 ## Gotchas
 - Money moving between the family's own accounts is a transfer, never spending. Check new account numbers' last four digits against the transfer rules.

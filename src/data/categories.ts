@@ -24,8 +24,12 @@ export const CATEGORIES: Category[] = [
   c('eating-out', 'Cafés & restaurants', 'Food', 'want'),
 
   c('school', 'School fees & costs', 'Kids & school', 'need'),
-  c('kids-activities', 'Kids activities', 'Kids & school', 'want', 'Jiu-jitsu, tennis, piano, singing, scouts, chess'),
-  c('swimming', 'Swimming (classes & memberships)', 'Kids & school', 'want'),
+  c('swimming', 'Swimming lessons & pool', 'Kids & school', 'want'),
+  c('kids-tennis', 'Tennis coaching', 'Kids & school', 'want'),
+  c('kids-martial-arts', 'Martial arts', 'Kids & school', 'want', 'Jiu-jitsu, karate'),
+  c('kids-music', 'Music & singing lessons', 'Kids & school', 'want'),
+  c('kids-scouts', 'Scouts & camps', 'Kids & school', 'want'),
+  c('kids-activities', 'Other kids activities', 'Kids & school', 'want', 'Chess and anything without its own category'),
 
   c('health-insurance', 'Health insurance', 'Health', 'need'),
   c('life-insurance', 'Life & income protection', 'Health', 'need'),
@@ -77,7 +81,26 @@ export const CATEGORIES: Category[] = [
   { id: 'keep-uni', label: 'University funds', group: 'Kept on purpose', type: 'need', system: true, keep: true, hint: 'One fund for each child' },
 ];
 
+const BUILT_IN = [...CATEGORIES];
+
+/** These lists are live: they change in place when the family adds or hides categories (see applyCustomCategories). */
 export const CATEGORY = Object.fromEntries(CATEGORIES.map((x) => [x.id, x])) as Record<string, Category>;
 export const SPEND_CATEGORIES = CATEGORIES.filter((x) => !x.system);
 export const KEEP_CATEGORIES = CATEGORIES.filter((x) => x.keep);
 export const label = (id: string | null | undefined) => (id && CATEGORY[id]?.label) || 'Not sorted';
+
+let applied = '';
+/** Add the family's own categories and hide the ones they don't use. Hidden ones keep their name for old transactions. */
+export function applyCustomCategories(custom: Category[] = [], hidden: string[] = []) {
+  const key = JSON.stringify([custom, hidden]);
+  if (key === applied) return;
+  applied = key;
+  const all = [...BUILT_IN, ...custom.map((x) => ({ ...x, custom: true }))];
+  CATEGORIES.splice(0, CATEGORIES.length, ...all);
+  for (const k of Object.keys(CATEGORY)) delete CATEGORY[k];
+  for (const x of all) CATEGORY[x.id] = x;
+  SPEND_CATEGORIES.splice(0, SPEND_CATEGORIES.length, ...all.filter((x) => !x.system && !hidden.includes(x.id)));
+  KEEP_CATEGORIES.splice(0, KEEP_CATEGORIES.length, ...all.filter((x) => x.keep));
+}
+
+export const isHidden = (id: string, hidden: string[] = []) => hidden.includes(id);

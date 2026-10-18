@@ -3,6 +3,7 @@ import { useMemo, useState } from 'react';
 import { PageHeader } from '../components/bits';
 import { average, budgetFor, cashOnHand, completeMonths, monthOf, summarise } from '../data/analysis';
 import { reviewMonth } from '../data/review';
+import { expectedIncome } from '../data/wealth';
 import { useStore } from '../data/store';
 import type { Settings, UniFund } from '../data/types';
 import { longDate, money } from '../lib/format';
@@ -34,6 +35,7 @@ export function Goals() {
   const houseBills = ['council-rates', 'water', 'home-insurance'].reduce((a, c) => a + budgetFor(data.budgets, c, settle), 0)
     - (last ? budgetFor(data.budgets, 'water', last) : 0);
   const monthly = avgSpend - rent + s.home.repayment + houseBills;
+  const incomeAtSettle = expectedIncome(s, settle);
   const months = monthly > 0 ? cash.total / monthly : 0;
   const [acct, setAcct] = useState(s.accounts.find((a) => a.type === 'savings')?.key ?? s.accounts[0]?.key);
   const [amt, setAmt] = useState('');
@@ -49,7 +51,7 @@ export function Goals() {
 
   return (
     <div className="goals">
-      <PageHeader title="Goals" lead="Where you are on the baby steps, how long your cash would last, the kids' university funds and the house." />
+      <PageHeader title="Goals" />
 
       <div className="goals-grid">
         <section className="panel" aria-labelledby="steps">
@@ -86,7 +88,7 @@ export function Goals() {
             <span className="money-input"><span aria-hidden>$</span><input inputMode="decimal" aria-label="Balance today" placeholder="Balance today" value={amt} onChange={(e) => setAmt(e.target.value.replace(/[^\d.]/g, ''))} /></span>
             <button className="btn small">Update balance</button>
           </form>
-          <p className="fine">Settlement will use a large part of this. Update the balances afterwards and add the offset account in Settings.</p>
+          <p className="fine">After settlement, update these and add the offset account in Settings.</p>
         </section>
 
         <section className="panel" aria-labelledby="uni">
@@ -119,7 +121,7 @@ export function Goals() {
             <label>Interest rate<Num label="Rate" prefix="" value={s.home.rate} onSave={(n) => setHome({ rate: n })} /></label>
             <label>Current lease ends<input type="date" value={s.home.leaseEnds} onChange={(e) => setHome({ leaseEnds: e.target.value })} /></label>
           </div>
-          <p>Repayment is about <b>{s.expectedIncome ? Math.round((s.home.repayment / s.expectedIncome) * 100) : 0}%</b> of take-home pay. With rates, water and insurance, housing comes to about <b>{Math.round((r?.ramsey.housingAfter ?? 0) * 100)}%</b>. Ramsey's guide is 25% or less.</p>
+          <p>Repayment is about <b>{incomeAtSettle ? Math.round((s.home.repayment / incomeAtSettle) * 100) : 0}%</b> of take-home pay. With rates, water and insurance, housing comes to about <b>{Math.round((r?.ramsey.housingAfter ?? 0) * 100)}%</b>. Ramsey's guide is 25% or less.</p>
           <p>A common rule of thumb for upkeep is 1% of the home's value a year: about <b>{money(s.home.value * 0.01 / 12)}</b> a month for repairs and replacements. Add it to the budget under Repairs & maintenance when you're ready.</p>
           {s.home.loanPlannerUrl && <a className="btn" href={s.home.loanPlannerUrl} target="_blank" rel="noreferrer">Open the Loan Planner <ExternalLink size={15} aria-hidden /></a>}
         </section>

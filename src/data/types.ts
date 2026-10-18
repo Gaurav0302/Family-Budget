@@ -19,6 +19,8 @@ export interface Category {
   system?: boolean;
   /** Money kept on purpose (savings, offset, shares, uni funds): budgeted, but not spending. */
   keep?: boolean;
+  /** Added by the family in Settings. */
+  custom?: boolean;
 }
 
 export interface Transaction {
@@ -95,6 +97,8 @@ export interface Settings {
     leaseEnds: string;
     value: number;
     loanPlannerUrl: string;
+    /** Money expected in the offset on day one (from the Loan Planner). */
+    offsetStart?: number;
   };
   babySteps: Record<string, boolean>;
   /** Super going in each month for both of you (employer + salary sacrifice). */
@@ -102,7 +106,46 @@ export interface Settings {
   /** Gross pay per month for both of you, before tax. */
   grossMonthly: number;
   theme: 'auto' | 'light' | 'dark';
+  /** Pay for each person; the latest entry on or before a month applies to that month. */
+  pay?: PayEntry[];
+  superBalances?: SuperBalance[];
+  /** Things owned or owed besides cash and super (which are filled in automatically). */
+  wealth?: WealthItem[];
+  /** Regular bills added by hand (yearly rego, quarterly rates...). Bills seen in statements are found automatically. */
+  bills?: Bill[];
+  /** Actions agreed at the monthly money meeting. */
+  actions?: Action[];
+  customCategories?: Category[];
+  hiddenCategories?: string[];
+  /** Which version of the built-in rules last sorted the transactions. */
+  rulesVersion?: number;
 }
+
+export type Every = 'week' | 'fortnight' | 'month' | 'quarter' | 'year';
+
+export interface PayEntry {
+  person: string;
+  from: string;              // YYYY-MM
+  grossYearly: number;       // before tax, without super
+  takeHome: number;          // per pay
+  every: Every;              // how often pay arrives
+  superPct: number;          // employer super, e.g. 12
+  salarySacrifice: number;   // extra into super per month, before tax
+}
+
+export interface SuperBalance { person: string; date: string; amount: number; fund?: string }
+
+export interface WealthItem {
+  id: string;
+  name: string;
+  kind: 'home' | 'shares' | 'crypto' | 'other' | 'loan' | 'debt';
+  owner?: string;
+  values: { date: string; amount: number }[];
+}
+
+export interface Bill { id: string; name: string; amount: number; every: Every; next: string; category: string }
+
+export interface Action { id: string; month: string; text: string; done: boolean }
 
 export interface Review {
   id: string;

@@ -1,3 +1,4 @@
+import { AlertTriangle } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Badge, Empty, Meter, MonthColumns, MonthPicker, PurseBar } from '../components/bits';
@@ -23,7 +24,8 @@ export function HomeScreen() {
 
   const review = reviewMonth(data, month);
   const s = review.summary;
-  const attention = review.findings.filter((f) => f.severity === 'act' || f.severity === 'watch').slice(0, 4);
+  const scream = review.findings.filter((f) => f.scream).slice(0, 2);
+  const attention = review.findings.filter((f) => !f.scream && (f.severity === 'act' || f.severity === 'watch')).slice(0, 4);
   const top = Object.entries(s.byCategory).filter(([, v]) => v > 0).sort((a, b) => b[1] - a[1]).slice(0, 8);
   const history = months.slice(-9).map((m) => {
     const x = summarise(m, data);
@@ -38,6 +40,14 @@ export function HomeScreen() {
         <MonthPicker months={months} value={month} onChange={setMonth} completeSet={completeSet} />
         {!s.complete && <p className="partial-note">Not every account is loaded for {monthOnly(month)} yet ({s.missing.join(', ')} missing), so totals are incomplete.</p>}
       </div>
+
+      {scream.length > 0 && (
+        <section className="scream" aria-label="Needs attention now">
+          {scream.map((f) => (
+            <div key={f.id} className="scream-item"><AlertTriangle size={20} aria-hidden /><div><b>{f.title}</b><p>{f.detail}</p></div></div>
+          ))}
+        </section>
+      )}
 
       <section className="hero" aria-labelledby="hero-title">
         <h1 id="hero-title">
@@ -55,7 +65,7 @@ export function HomeScreen() {
           {attention.length ? (
             <ul className="findings">
               {attention.map((f) => (
-                <li key={f.id}><Badge severity={f.severity} short /><div><strong>{f.title}</strong><p>{f.detail}</p></div></li>
+                <li key={f.id}><Badge severity={f.severity} short /><div><strong>{f.title}</strong><p>{f.detail.split(/(?<=\.) /)[0]}</p></div></li>
               ))}
             </ul>
           ) : <p className="muted">Nothing stands out this month.</p>}
@@ -82,7 +92,7 @@ export function HomeScreen() {
         <section className="panel" aria-labelledby="kept">
           <div className="panel-head"><h2 id="kept">Share of income kept</h2></div>
           <MonthColumns rows={history} format={pct} target={0.1} targetLabel="Babylon's tenth" />
-          <p className="fine">Paler columns are months where not every account is loaded yet.</p>
+          <p className="fine">Paler columns: not every account loaded yet.</p>
         </section>
 
         <section className="panel coming" aria-labelledby="up">

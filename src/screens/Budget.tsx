@@ -3,6 +3,9 @@ import { Meter, MonthPicker, PageHeader } from '../components/bits';
 import { addMonths, allMonths, average, budgetFor, completeMonths, keepBudget, summarise, totalBudget } from '../data/analysis';
 import { GROUPS, KEEP_CATEGORIES, SPEND_CATEGORIES } from '../data/categories';
 import { useStore } from '../data/store';
+import { expectedIncome } from '../data/wealth';
+import { Link } from 'react-router-dom';
+import { Info } from '../components/bits';
 import { money, monthName, monthOnly, thisMonth } from '../lib/format';
 
 function BudgetInput({ value, onSave, label }: { value: number; onSave: (n: number) => void; label: string }) {
@@ -37,17 +40,21 @@ export function Budget() {
   const base = complete.filter((m) => m < month).slice(-3).map((m) => summarise(m, data));
   const keep = keepBudget(data.budgets, month);
   const total = totalBudget(data.budgets, month) + keep;
-  const income = data.settings.expectedIncome;
+  const fromPay = (data.settings.pay ?? []).length > 0;
+  const income = expectedIncome(data.settings, month);
   const left = income - total;
 
   return (
     <div>
-      <PageHeader title="Budget" lead="Give every dollar a job. Change a number and it applies from this month onwards; earlier months keep their old budget.">
+      <PageHeader title="Budget">
+        <Info>Give every dollar a job. A change applies from the month shown onwards; earlier months keep their old budget.</Info>
         <MonthPicker months={months} value={month} onChange={setMonth} />
       </PageHeader>
 
       <section className={`zero ${Math.abs(left) < 1 ? 'is-zero' : left < 0 ? 'is-over' : ''}`} aria-label="Every dollar has a job">
-        <div><span>Take-home pay expected</span><BudgetInput label="expected income" value={income} onSave={(n) => updateSettings({ expectedIncome: n })} /></div>
+        <div><span>Take-home pay expected</span>{fromPay
+          ? <><b>{money(income)}</b><small><Link to="/wealth?tab=income" className="on-dark">Change on Wealth</Link></small></>
+          : <BudgetInput label="expected income" value={income} onSave={(n) => updateSettings({ expectedIncome: n })} />}</div>
         <div><span>Given a job</span><b>{money(total)}</b><small>{money(total - keep)} to spend, {money(keep)} to keep</small></div>
         <div className="zero-left"><span>{left >= 0 ? 'Left to give a job' : 'Budgeted beyond income'}</span><b>{money(Math.abs(left))}</b></div>
         <p>{Math.abs(left) < 1 ? 'Every dollar has a job.'

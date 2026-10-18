@@ -1,7 +1,7 @@
 import { FileUp } from 'lucide-react';
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { PageHeader } from '../components/bits';
+import { Info, PageHeader } from '../components/bits';
 import { applyRules } from '../data/rules';
 import { parseCsv, parseDataFile, splitNew, type ParsedImport } from '../data/importers';
 import { useStore } from '../data/store';
@@ -40,7 +40,7 @@ export function Import() {
 
   return (
     <div className="import">
-      <PageHeader title="Add statements" lead="Add a bank CSV, or a data file prepared by Claude from your PDF statements. Anything already in the app is skipped, so adding the same file twice is safe." />
+      <PageHeader title="Add statements"><Info>A bank CSV, or a data file Claude prepared from your PDF statements. Anything already in the app is skipped, so adding a file twice is safe.</Info></PageHeader>
 
       <label className={`drop ${drag ? 'drag' : ''}`}
         onDragOver={(e) => { e.preventDefault(); setDrag(true); }} onDragLeave={() => setDrag(false)}
@@ -78,6 +78,17 @@ export function Import() {
             } catch (e: any) { setResult(`Nothing was added: ${e?.message ?? e}`); }
             setBusy(false);
           }}>{busy ? 'Adding…' : `Add ${preview.fresh} transactions`}</button>
+        </div>
+      )}
+      {parsed?.file && !parsed.transactions.length && !result && (
+        <div className="step-box preview">
+          <p>This file updates {[parsed.file.settings && 'income, super, net worth and bills', parsed.file.budgets?.length && 'the budget', parsed.file.rules?.length && 'sorting rules', parsed.file.reviews?.length && 'monthly notes'].filter(Boolean).join(', ')}. Nothing you've already changed in the app is overwritten.</p>
+          <button className="btn primary" disabled={busy} onClick={async () => {
+            setBusy(true);
+            try { await importParsed(parsed!); setResult('Updated.'); setFile(null); setParsed(null); }
+            catch (e: any) { setResult(`Nothing was changed: ${e?.message ?? e}`); }
+            setBusy(false);
+          }}>{busy ? 'Updating…' : 'Apply update'}</button>
         </div>
       )}
       {result && <div className="step-box ok" role="status"><p>{result}</p><p><Link to="/transactions?review=1">Sort anything that needs your input</Link> or <Link to="/review">read the review</Link>.</p></div>}

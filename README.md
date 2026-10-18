@@ -10,9 +10,15 @@ Works on desktop, tablet and phone. Published to GitHub Pages; the family's data
 - **Spending**: every transaction. Change a category, add a note, mark a one-off, or teach the app a rule.
 - **Budget**: a zero-based budget. Every dollar gets a job, including money kept on purpose.
 - **Review**: verdict against recent months, category scorecard, subscriptions, unusual payments, Babylon's seven cures, Ramsey's baby steps, 50/30/20, and monthly notes.
+- **Bills**: regular bills found in the statements, what's due next, and prices that went up; add yearly ones by hand.
+- **Reports**: a printable monthly money-meeting page (with actions to tick off next month) and a financial-year report for tax time.
 - **Goals**: baby steps, cash on hand, university funds, the home loan.
+- **What if**: try spending less or cancelling subscriptions and see how much it frees up and how much sooner the loan is gone.
+- **Wealth**: net worth (cash, super, shares, home minus loan) and each person's pay and super, with room under the super cap.
 - **Add statements**: bank CSVs or a data file prepared by Claude from PDF statements. Duplicates are skipped.
-- **Settings**: theme, accounts, sorting rules, backup.
+- **Settings**: theme, accounts, categories (add your own, hide unused ones), sorting rules, backup.
+
+The Home page shows red banners only for things that need action now (spending more than came in, the squeeze after a home purchase, rent and mortgage overlapping).
 
 ## Running it
 

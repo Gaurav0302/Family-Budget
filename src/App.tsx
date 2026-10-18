@@ -2,14 +2,19 @@ import { useEffect } from 'react';
 import { HashRouter, Route, Routes } from 'react-router-dom';
 import { Shell } from './components/Shell';
 import { StoreProvider, useStore } from './data/store';
+import { Bills } from './screens/Bills';
 import { Budget } from './screens/Budget';
 import { Goals } from './screens/Goals';
 import { HomeScreen } from './screens/Home';
 import { Import } from './screens/Import';
 import { Login } from './screens/Login';
+import { More } from './screens/More';
+import { Reports } from './screens/Reports';
 import { Review } from './screens/Review';
 import { SettingsScreen } from './screens/Settings';
 import { Transactions } from './screens/Transactions';
+import { Wealth } from './screens/Wealth';
+import { WhatIf } from './screens/WhatIf';
 
 function Gate() {
   const { status, error, data, reload } = useStore();
@@ -37,6 +42,11 @@ function Gate() {
         <Route path="/budget" element={<Budget />} />
         <Route path="/review" element={<Review />} />
         <Route path="/goals" element={<Goals />} />
+        <Route path="/bills" element={<Bills />} />
+        <Route path="/reports" element={<Reports />} />
+        <Route path="/what-if" element={<WhatIf />} />
+        <Route path="/wealth" element={<Wealth />} />
+        <Route path="/more" element={<More />} />
         <Route path="/import" element={<Import />} />
         <Route path="/settings" element={<SettingsScreen />} />
         <Route path="*" element={<HomeScreen />} />

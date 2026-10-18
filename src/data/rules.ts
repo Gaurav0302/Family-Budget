@@ -9,6 +9,9 @@ const r = (pattern: string, category: string, kind: Kind = 'spend', extra: Parti
   id: `builtin:${category}:${pattern}`, pattern, category, kind, ...extra,
 });
 
+/** Raise this when the built-in rules change: the app then re-sorts every transaction a person hasn't sorted by hand. */
+export const RULES_VERSION = 2;
+
 export const DEFAULT_RULES: Rule[] = [
   // Money moving between the family's own accounts — never spending.
   r('self (mq )?save|\\bself\\b.*\\b(mq|save)\\b|Transfer (to|from) xx\\d{4}|- self\\b', 'own-transfer', 'transfer'),
@@ -44,7 +47,11 @@ export const DEFAULT_RULES: Rule[] = [
 
   // Kids and school.
   r('CompassTix|SCHOOL|GRAMMAR|COLLEGE', 'school'),
-  r('scouts?\\b|SCOUT|TENNIS|DOJO|MARTIAL|JIU|Chess\\.com|ChessKid|PIANO|SINGING|MUSIC', 'kids-activities'),
+  r('TENNIS', 'kids-tennis'),
+  r('DOJO|MARTIAL|JIU|KARATE|TAEKWONDO|JUDO', 'kids-martial-arts'),
+  r('PIANO|SINGING|VOCAL|MUSIC|GUITAR|VIOLIN', 'kids-music'),
+  r('scouts?\\b|SCOUT|GUIDES|\\bCAMP\\b', 'kids-scouts'),
+  r('Chess\\.com|ChessKid|CODING CLUB|DRAMA|DANCE', 'kids-activities'),
   r('YMCA|SWIM|AQUATIC', 'swimming'),
 
   // Health.

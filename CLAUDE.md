@@ -20,7 +20,8 @@ Household context, research and private files are in the claude.ai Project "Pers
 React 18 + Vite + TypeScript, HashRouter, Supabase (supabase-js, email + password logins, Row Level Security via `members` table). No chart library: small SVG/CSS components in `src/components/bits.tsx`. Fonts: Familjen Grotesk (headings), Atkinson Hyperlegible (text).
 
 ## Where things are
-- `src/data/rules.ts`: built-in sorting rules (generic only). `categories.ts`: categories and groups. `analysis.ts`: month totals, coverage, budgets, recurring payments. `review.ts`: the review engine (budget, trends, Babylon, Ramsey, 50/30/20, subscriptions, unusual). `importers.ts`: CSV and data-file import. `store.tsx`: state and saving. `adapters/`: Supabase and browser-only storage.
+- `src/data/rules.ts`: built-in sorting rules (generic only). Bump `RULES_VERSION` when you change them: the app re-sorts everything not sorted by hand.
+- `wealth.ts`: pay, super, caps, tax rates, net worth, pay-change detection. `bills.ts`: regular bills and price rises. `whatif.ts`: loan payoff with offset. `settingsMerge.ts`: how settings from files merge without overwriting. `categories.ts`: categories and groups. `analysis.ts`: month totals, coverage, budgets, recurring payments. `review.ts`: the review engine (budget, trends, Babylon, Ramsey, 50/30/20, subscriptions, unusual). `importers.ts`: CSV and data-file import. `store.tsx`: state and saving. `adapters/`: Supabase and browser-only storage.
 - `tools/`: `parse_statements.py` (PDF text → transactions), `prepare-import.ts`, `review.ts`.
 - `supabase/setup.sql`: tables and access rules. `.github/workflows/`: publish and keep-awake.
 
@@ -28,3 +29,6 @@ React 18 + Vite + TypeScript, HashRouter, Supabase (supabase-js, email + passwor
 - The workspace proxy blocks supabase.co and Google Fonts: test locally with `?demo` and Playwright (`npm i playwright@1.56.1` matches the installed Chromium).
 - A month only counts as complete when every account marked "needed for a complete month" covers it.
 - Grids need `minmax(0, 1fr)` columns, or tables push the phone layout sideways.
+- Pay, super, wealth items, bills, actions and custom categories all live in the `settings` JSON row: no database change needed to add fields there.
+- Keep pages uncluttered: explanations go behind the small `Info` button, not in paragraphs.
+- Super cap and tax-rate tables in `wealth.ts` need updating each July (ATO key super rates and thresholds).

@@ -6,7 +6,9 @@ import { localAdapter } from './adapters/local';
 import { supabase, supabaseAdapter } from './adapters/supabase';
 import { DEFAULT_BUDGETS, DEFAULT_SETTINGS } from './defaults';
 import { mergeCoverage, splitNew, type ParsedImport } from './importers';
-import { applyRules, categorise } from './rules';
+import { applyCustomCategories } from './categories';
+import { applyRules, categorise, RULES_VERSION } from './rules';
+import { mergeSettings } from './settingsMerge';
 import type { BudgetLine, Data, DataFile, Review, Rule, Settings, Transaction } from './types';
 
 interface Store {
@@ -56,6 +58,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [saving, setSaving] = useState(false);
   const dataRef = useRef(data);
   dataRef.current = data;
+  applyCustomCategories(data.settings.customCategories, data.settings.hiddenCategories);
 
   const guard = useCallback(async <T,>(fn: () => Promise<T>): Promise<T> => {
     setSaving(true);
@@ -70,15 +73,19 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       const settings = withDefaults(l.settings);
       const budgets = l.budgets.length ? l.budgets : DEFAULT_BUDGETS;
       const userRules = l.rules.map((r) => ({ ...r, user: true }));
-      // Anything added without a category (for example by an agent) gets sorted now and saved back.
-      const unsorted = l.transactions.filter((t) => !t.category || !t.kind);
+      applyCustomCategories(settings.customCategories, settings.hiddenCategories);
+      // New built-in rules: re-sort everything nobody sorted by hand. Otherwise only sort what has no category yet.
+      const resortAll = (settings.rulesVersion ?? 1) < RULES_VERSION;
+      const unsorted = l.transactions.filter((t) => resortAll ? !t.manual : !t.category || !t.kind);
       let transactions = l.transactions;
       if (unsorted.length) {
-        const fixed = applyRules(unsorted, userRules, settings);
+        const before = new Map(unsorted.map((t) => [t.id, `${t.category}|${t.kind}|${t.needsReview}`]));
+        const fixed = applyRules(unsorted, userRules, settings).filter((t) => before.get(t.id) !== `${t.category}|${t.kind}|${t.needsReview}`);
         const byId = new Map(fixed.map((t) => [t.id, t]));
         transactions = l.transactions.map((t) => byId.get(t.id) ?? t);
-        await adapter.upsertTransactions(fixed);
+        if (fixed.length) await adapter.upsertTransactions(fixed);
       }
+      if (resortAll) { settings.rulesVersion = RULES_VERSION; await adapter.saveSettings(settings); }
       if (!l.budgets.length) await adapter.upsertBudgets(DEFAULT_BUDGETS);
       if (!l.settings) await adapter.saveSettings(settings);
       transactions.sort((a, b) => b.date.localeCompare(a.date) || a.id.localeCompare(b.id));
@@ -153,10 +160,15 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     },
     async importParsed(p) {
       const d = dataRef.current;
-      const settings = p.file?.settings ? withDefaults({ ...d.settings, ...p.file.settings,
-        balances: [...d.settings.balances, ...(p.file.settings.balances ?? [])] } as Settings) : d.settings;
-      const incomingRules = (p.file?.rules ?? []).filter((r) => !d.rules.some((x) => x.id === r.id)).map((r) => ({ ...r, user: true }));
-      const rules = [...d.rules, ...incomingRules];
+      const settings = p.file?.settings ? withDefaults(mergeSettings(d.settings, p.file.settings)) : d.settings;
+      applyCustomCategories(settings.customCategories, settings.hiddenCategories);
+      // Rules in a file replace rules with the same id, then everything nobody sorted by hand is re-sorted.
+      const incomingRules = (p.file?.rules ?? []).map((r) => ({ ...r, user: true }));
+      const rules = [...incomingRules, ...d.rules.filter((r) => !incomingRules.some((x) => x.id === r.id))];
+      const resorted = incomingRules.length
+        ? d.transactions.filter((t) => !t.manual).map((t) => ({ t, n: { ...t, ...categorise(t, rules, settings) } }))
+          .filter(({ t, n }) => t.category !== n.category || t.kind !== n.kind || !!t.needsReview !== n.needsReview).map(({ n }) => n)
+        : [];
       const sorted = applyRules(p.transactions.map((t) => (t.category && t.kind ? t : { ...t, category: null, kind: null })), rules, settings)
         .map((t, i) => (p.transactions[i].manual ? p.transactions[i] : t));
       const { fresh, duplicates } = splitNew(d.transactions, sorted);
@@ -165,7 +177,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       const budgets = p.file?.budgets ?? [];
       await guard(async () => {
         if (incomingRules.length) await adapter.upsertRules(incomingRules);
-        if (fresh.length) await adapter.upsertTransactions(fresh);
+        if (fresh.length || resorted.length) await adapter.upsertTransactions([...fresh, ...resorted]);
         await adapter.replaceCoverage(coverage);
         if (reviews.length) await adapter.upsertReviews(reviews);
         if (budgets.length) await adapter.upsertBudgets(budgets);

@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Badge, Empty, MonthPicker, PageHeader } from '../components/bits';
+import { Badge, Empty, Info, MonthPicker, PageHeader } from '../components/bits';
 import { allMonths, completeMonths } from '../data/analysis';
 import { merchantOf } from '../data/merchant';
 import { reviewMonth, reviewText, type Finding, type Severity } from '../data/review';
@@ -59,7 +59,7 @@ export function Review() {
 
   return (
     <div className="review">
-      <PageHeader title={`${monthName(month)} review`} lead="How the month went against your budget, your recent months, and the money rules you follow.">
+      <PageHeader title={`${monthName(month)} review`}>
         <MonthPicker months={months} value={month} onChange={setMonth} completeSet={completeSet} />
       </PageHeader>
       {!r.summary.complete && <p className="partial-note">Not every account is loaded for {monthOnly(month)} ({r.summary.missing.join(', ')} missing). Treat this review as a preview.</p>}
@@ -107,7 +107,7 @@ export function Review() {
 
           <section className="panel" aria-labelledby="subs">
             <h2 id="subs">Subscriptions and memberships</h2>
-            <p className="muted">From the last three months. Costs in other currencies include the bank's conversion fee where it showed up separately.</p>
+
             <ul className="subs">
               {r.subscriptions.map((x) => (
                 <li key={x.merchant}>
@@ -138,7 +138,7 @@ export function Review() {
         <aside className="review-side">
           <section className="panel" aria-labelledby="split">
             <h2 id="split">Needs, wants and kept</h2>
-            <p className="muted">The 50/30/20 guide: about half on needs, under a third on wants, a fifth or more kept.</p>
+            <Info>The 50/30/20 guide: about half of take-home pay on needs, no more than 30% on wants, and at least 20% kept.</Info>
             <Split label="Needs" actual={r.split.needs} guide={0.5} />
             <Split label="Wants" actual={r.split.wants} guide={0.3} />
             <Split label="Kept" actual={r.split.kept} guide={0.2} />
@@ -146,7 +146,7 @@ export function Review() {
 
           <section className="panel" aria-labelledby="babylon">
             <h2 id="babylon">Babylon's seven cures</h2>
-            <p className="muted">From The Richest Man in Babylon.</p>
+
             <ol className="rules">
               {r.babylon.map((c) => (
                 <li key={c.title} className={`rule sev-line-${c.status}`}>

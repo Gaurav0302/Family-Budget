@@ -39,6 +39,19 @@ Status: ✅ done · ⬜ to do · 🔄 in progress · ❌ blocked · 🚫 dropped
 - ⬜ First run with October 2026 statements (Reeti's October statement still needed)
 - ⬜ Optional: Supabase connector in claude.ai so sessions can add data directly
 
+## Phase 6b — Wealth and insight (approved 18 Oct 2026)
+- ✅ 18 Oct 2026 — Income & super page: pay history per person, super balances, before-tax cap room and tax effect
+- ✅ 18 Oct 2026 — Net worth: cash + super + assets − debts, monthly trend
+- ✅ 18 Oct 2026 — Bills & renewals: found from statements, next dates, price rises, manual bills
+- ✅ 18 Oct 2026 — Reports: monthly money meeting (printable, actions) and financial year
+- ✅ 18 Oct 2026 — What if: cuts and cancelled subscriptions → kept after settlement, loan payoff
+- ✅ 18 Oct 2026 — Alert banners on Home; pay-change, creep, dipping-into-savings, price-rise findings
+- ✅ 18 Oct 2026 — Kids categories split; custom and hidden categories; re-sort when rules change
+- ⬜ User adds the update file, then current super balances and fund names (sheet values are from Jan 2026)
+- ⬜ User confirms car rego, insurance renewal dates as manual bills
+- ⬜ Each July: update super cap and tax tables in wealth.ts
+
 ## Phase 7 — Polish
 - ✅ 18 Oct 2026 — Tests (17), phone overflow check on every page, dark mode
 - ⬜ Install-to-home-screen (web app manifest + icons)
+- ⬜ PayPal CSV import in the app; PDF import in the app

@@ -3,7 +3,9 @@ import {
   average, budgetFor, cashOnHand, completeMonths, findRecurring, monthOf, summarise,
   type MonthSummary, type Recurring,
 } from './analysis';
+import { findBills } from './bills';
 import { merchantOf } from './merchant';
+import { expectedIncome, grossMonthly, payChanges, superMonthly } from './wealth';
 import type { Data, Transaction } from './types';
 
 export type Severity = 'act' | 'watch' | 'good' | 'info';
@@ -15,8 +17,10 @@ export interface Finding {
   detail: string;
   /** Monthly dollars at stake, used for ranking. */
   impact: number;
-  source: 'Budget' | 'Trend' | 'Babylon' | 'Ramsey' | '50/30/20' | 'Subscriptions' | 'Unusual' | 'Home' | 'Data';
+  source: 'Budget' | 'Trend' | 'Babylon' | 'Ramsey' | '50/30/20' | 'Subscriptions' | 'Unusual' | 'Home' | 'Data' | 'Bills' | 'Savings' | 'Income';
   category?: string;
+  /** Important enough for the red banner at the top of Home. */
+  scream?: boolean;
 }
 
 export interface ScoreRow {
@@ -53,6 +57,12 @@ const UNPLANNED = ['other', 'card-unitemised'];
 
 const money = (n: number) => `$${Math.round(Math.abs(n)).toLocaleString('en-AU')}`;
 const pct = (n: number) => `${Math.round(n * 100)}%`;
+const money2 = (n: number) => `$${Math.abs(n).toLocaleString('en-AU', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+function addMonthsLocal(month: string, n: number) {
+  const [y, m] = month.split('-').map(Number);
+  const d = new Date(Date.UTC(y, m - 1 + n, 1));
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`;
+}
 
 const OVERLAPS: [string, RegExp][] = [
   ['two AI assistants', /^(ChatGPT|Claude)$/],
@@ -75,6 +85,7 @@ export function reviewMonth(data: Data, month: string): ReviewResult {
   const usualSpend = summary.spend - summary.oneOffs.reduce((s, t) => s - t.amount, 0);
   const findings: Finding[] = [];
   const s = data.settings;
+  const sup = superMonthly(s, month), gross = grossMonthly(s, month);
 
   // ---- Verdict
   let verdict: ReviewResult['verdict'];
@@ -186,11 +197,12 @@ export function reviewMonth(data: Data, month: string): ReviewResult {
   const housingNow = (summary.byCategory['rent'] ?? 0) + (summary.byCategory['mortgage'] ?? 0) + (summary.byCategory['council-rates'] ?? 0) + (summary.byCategory['water'] ?? 0) + (summary.byCategory['home-insurance'] ?? 0);
   const housingAfterCost = h.repayment + budgetFor(data.budgets, 'council-rates', settleMonth) + budgetFor(data.budgets, 'water', settleMonth) + budgetFor(data.budgets, 'home-insurance', settleMonth);
   const housingShare = summary.income ? housingNow / summary.income : 0;
-  const housingAfter = s.expectedIncome ? housingAfterCost / s.expectedIncome : 0;
+  const incAfter = expectedIncome(s, settleMonth > month ? settleMonth : month);
+  const housingAfter = incAfter ? housingAfterCost / incAfter : 0;
   if (hasHome && h.leaseEnds > h.settlement && month <= settleMonth) {
     const overlap = Math.max(0, Math.round((new Date(h.leaseEnds).getTime() - new Date(h.settlement).getTime()) / (30.44 * 864e5)));
     const rent = budgetFor(data.budgets, 'rent', month);
-    if (overlap && rent) findings.push({ id: 'home:overlap', source: 'Home', severity: 'act', impact: rent,
+    if (overlap && rent) findings.push({ id: 'home:overlap', source: 'Home', severity: 'act', scream: true, impact: rent,
       title: `Rent and mortgage could overlap for ${overlap} months`, detail: `Settlement is ${fmtDate(h.settlement)} but the lease runs to ${fmtDate(h.leaseEnds)}. Paying both would cost about ${money(overlap * rent)} extra. Ask the rental agent now about ending the lease early or finding a replacement tenant.` });
   }
 
@@ -221,8 +233,8 @@ export function reviewMonth(data: Data, month: string): ReviewResult {
       status: month >= settleMonth ? 'good' : 'info',
       detail: !hasHome ? 'Add your home loan details on the Goals page.' : month >= settleMonth ? `You own your home. Every extra dollar in the offset brings payoff closer.` : `Settlement on ${fmtDate(h.settlement)} turns ${money(budgetFor(data.budgets, 'rent', month))} of rent a month into paying off your own home.` },
     { title: 'Insure a future income', rule: 'Provide for the years when you no longer work.',
-      status: s.grossMonthly && s.superMonthly / s.grossMonthly >= 0.12 ? 'good' : 'watch',
-      detail: `About ${money(s.superMonthly)} a month goes into super for both of you: ${pct(s.superMonthly / (s.grossMonthly || 1))} of gross pay.` },
+      status: gross && sup / gross >= 0.12 ? 'good' : 'watch',
+      detail: `About ${money(sup)} a month goes into super for both of you: ${pct(sup / (gross || 1))} of gross pay.` },
     { title: 'Increase thy ability to earn', rule: 'Grow your skills and your income.',
       status: summary.income > incomeStart * 1.01 ? 'good' : 'info',
       detail: complete.length > 1 ? `Take-home pay was ${money(summary.income)} this month, against ${money(incomeStart)} in ${fmtMonth(complete[0])}.` : `Take-home pay was ${money(summary.income)} this month.` },
@@ -242,8 +254,8 @@ export function reviewMonth(data: Data, month: string): ReviewResult {
       detail: s.babySteps['2'] ? 'Marked as done.' : 'Tick this on the Goals page if the credit card is paid in full every month and there are no other loans.' },
     { n: 3, title: '3–6 months of expenses saved', rule: 'A full emergency fund.', done: monthsCovered >= 3 || !!s.babySteps['3'],
       detail: cash.asOf ? `Covers about ${monthsCovered.toFixed(1)} months, counting the mortgage from settlement.` : 'Add your balances on the Goals page.' },
-    { n: 4, title: 'Invest 15% for retirement', rule: 'Your reading: super only, until the house is paid off.', done: s.superMonthly / (s.grossMonthly || 1) >= 0.15 || !!s.babySteps['4'],
-      detail: `Super is ${pct(s.superMonthly / (s.grossMonthly || 1))} of gross pay. 15% would be ${money(s.grossMonthly * 0.15)} a month.` },
+    { n: 4, title: 'Invest 15% for retirement', rule: 'Your reading: super only, until the house is paid off.', done: sup / (gross || 1) >= 0.15 || !!s.babySteps['4'],
+      detail: `Super is ${pct(sup / (gross || 1))} of gross pay. 15% would be ${money(gross * 0.15)} a month.` },
     { n: 5, title: "Save for the children's university", rule: 'Build a fund for each child.', done: !!s.babySteps['5'],
       detail: `${money(fundsSaved)} saved so far. Planned: ${s.uniFunds.map((f) => `${f.name} ${money(f.monthly)}/month`).join(', ')}.` },
     { n: 6, title: 'Pay off the home early', rule: 'Every spare dollar to the mortgage.', done: !!s.babySteps['6'],
@@ -258,10 +270,62 @@ export function reviewMonth(data: Data, month: string): ReviewResult {
     return { n: st.n, title: st.title, rule: st.rule, detail: st.detail, current, status: (st.done ? 'good' : current ? 'watch' : 'info') as Severity };
   });
   if (hasHome && housingAfter > 0.25) findings.push({ id: 'ramsey:housing', source: 'Ramsey', severity: 'watch', impact: 0,
-    title: `Housing will take ${pct(housingAfter)} of take-home pay`, detail: `Ramsey suggests keeping it to 25% or less. From settlement, the repayment, rates, water and insurance come to about ${money(housingAfterCost)} a month on ${money(s.expectedIncome)} take-home. It makes keeping other spending on budget more important.` });
+    title: `Housing will take ${pct(housingAfter)} of take-home pay`, detail: `Ramsey suggests keeping it to 25% or less. From settlement, the repayment, rates, water and insurance come to about ${money(housingAfterCost)} a month on ${money(incAfter)} take-home. It makes keeping other spending on budget more important.` });
+
+
+  // ---- Alerts that should scream
+  if (summary.income > 0 && summary.kept < 0) findings.push({ id: 'alert:overspend', source: 'Budget', severity: 'act', scream: true, impact: -summary.kept,
+    title: `${money(-summary.kept)} more went out than came in`, detail: `Spending was ${money(summary.spend)} against ${money(summary.income)} of income. The gap came out of savings.` });
+
+  if (hasHome && month < settleMonth && base.length + (summary.complete ? 1 : 0) >= 2) {
+    const recent = [...base, ...(summary.complete ? [summary] : [])].slice(-3);
+    const usual = average(recent.map((b) => b.spend - b.oneOffs.reduce((a, t) => a - t.amount, 0)));
+    const rentNow = budgetFor(data.budgets, 'rent', month);
+    const waterNow = budgetFor(data.budgets, 'water', month);
+    const after = usual - rentNow - waterNow + housingAfterCost;
+    const keptAfter = incAfter - after;
+    const overlapRent = h.leaseEnds > h.settlement ? budgetFor(data.budgets, 'rent', settleMonth) : 0;
+    if (keptAfter < incAfter * 0.1) findings.push({ id: 'alert:squeeze', source: 'Home', severity: 'act', scream: true, impact: incAfter * 0.1 - keptAfter,
+      title: `After settlement you'd keep about ${money(keptAfter)} a month (${pct(keptAfter / incAfter)})`,
+      detail: `At recent spending of ${money(usual)} a month, swapping ${money(rentNow)} of rent for about ${money(housingAfterCost)} of repayment and house bills leaves ${money(keptAfter)} of ${money(incAfter)}. That's below Babylon's tenth (${money(incAfter * 0.1)}).` +
+        (overlapRent ? ` While rent and mortgage overlap it would be ${money(keptAfter - overlapRent)} a month.` : '') + ' The What if page shows which changes close the gap.' });
+  }
+
+  // Three rises in a row.
+  const three = complete.filter((m) => m <= month).slice(-3).map((m) => (m === month ? summary : summarise(m, data)));
+  if (three.length === 3 && three[2].month === month) {
+    for (const c of SPEND_CATEGORIES) {
+      if (UNPLANNED.includes(c.id)) continue;
+      const [a, b, x] = three.map((t) => t.byCategoryUsual[c.id] ?? 0);
+      if (a > 0 && a < b && b < x && x >= a * 1.2 && x - a >= 75 && !findings.some((f) => f.category === c.id && f.source === 'Trend'))
+        findings.push({ id: `creep:${c.id}`, category: c.id, source: 'Trend', severity: 'watch', impact: x - a,
+          title: `${c.label} has gone up three months running`, detail: `${three.map((t) => money(t.byCategoryUsual[c.id] ?? 0)).join(', then ')}. That's ${money(x - a)} a month more than ${three[0].month === month ? 'before' : 'three months ago'}.` });
+    }
+  }
+
+  // Dipping back into savings.
+  const owner = new Map(s.accounts.map((a) => [a.key, a]));
+  const ins = data.transactions.filter((t) => monthOf(t.date) === month && t.kind === 'transfer' && t.category === 'own-transfer' && t.amount > 0
+    && owner.get(t.account)?.type === 'everyday' && /Transfer from xx\d{4}/i.test(t.description));
+  const dips = ins.filter((t) => !data.transactions.some((o) => o.account === t.account && Math.abs(o.amount + t.amount) < Math.max(1, t.amount * 0.05)
+    && Math.abs(new Date(o.date).getTime() - new Date(t.date).getTime()) <= 7 * 864e5));
+  const byOwner = new Map<string, Transaction[]>();
+  for (const t of dips) { const o = owner.get(t.account)!.owner; byOwner.set(o, [...(byOwner.get(o) ?? []), t]); }
+  for (const [who, list] of byOwner) if (list.length >= 2) findings.push({ id: `dip:${who}`, source: 'Savings', severity: 'watch', impact: list.reduce((a, t) => a + t.amount, 0),
+    title: `${who} moved ${money(list.reduce((a, t) => a + t.amount, 0))} back from savings`, detail: `${list.length} transfers this month. If it happens most months, a bigger regular allowance in the everyday account stops the back-and-forth and shows the real spending.` });
+
+  // Bills that went up.
+  const monthEnd = `${month}-31`;
+  for (const b of findBills(data.transactions.filter((t) => t.date <= monthEnd), `${month}-28`))
+    if (b.rise && b.rise.since >= `${addMonthsLocal(month, -2)}-01` && ((b.rise.to - b.rise.from) * b.yearly) / b.amount >= 50) findings.push({ id: `rise:${b.key}`, source: 'Bills', severity: 'watch', impact: (b.rise.to - b.rise.from) * (b.yearly / b.amount) / 12,
+      title: `${b.name} went up`, detail: `From ${money2(b.rise.from)} to ${money2(b.rise.to)} per payment, about ${money(((b.rise.to - b.rise.from) * b.yearly) / b.amount)} a year more. Worth a call to ask for a better price.` });
+
+  // Pay changed in the statements but not in Income & super.
+  for (const c of payChanges(data)) if (c.month <= month) findings.push({ id: `pay:${c.person}`, source: 'Income', severity: 'info', impact: 0,
+    title: `${c.person}'s pay changed`, detail: `It went from ${money2(c.from)} to ${money2(c.to)} per pay from ${c.month}. Update it on the Wealth page so the budget uses the right income.` });
 
   const order: Record<Severity, number> = { act: 0, watch: 1, info: 2, good: 3 };
-  findings.sort((a, b) => order[a.severity] - order[b.severity] || b.impact - a.impact);
+  findings.sort((a, b) => Number(!!b.scream) - Number(!!a.scream) || order[a.severity] - order[b.severity] || b.impact - a.impact);
 
   return { month, summary, baselineMonths, baseline, verdict, scorecard, findings, babylon,
     ramsey: { steps: ramseySteps, housingShare, housingAfter }, split, subscriptions, unusual };

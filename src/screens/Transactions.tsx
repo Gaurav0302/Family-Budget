@@ -1,7 +1,7 @@
 import { X } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Empty, PageHeader } from '../components/bits';
+import { Empty, Info, PageHeader } from '../components/bits';
 import { allMonths, monthOf } from '../data/analysis';
 import { CATEGORIES, CATEGORY, GROUPS, label } from '../data/categories';
 import { merchantOf } from '../data/merchant';
@@ -127,7 +127,7 @@ export function Transactions() {
 
   return (
     <div>
-      <PageHeader title="Spending" lead="Every transaction from every account. Tap one to change its category, add a note or mark it as a one-off." />
+      <PageHeader title="Spending"><Info>Tap a transaction to change its category, add a note, or mark it as a one-off so it doesn't skew your trends.</Info></PageHeader>
       <div className="filters">
         <select value={month} onChange={(e) => set('month', e.target.value)} aria-label="Month">
           <option value="all">All months</option>
