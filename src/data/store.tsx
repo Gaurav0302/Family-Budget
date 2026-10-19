@@ -3,7 +3,8 @@ import type { Session } from '@supabase/supabase-js';
 import { isDemo } from '../config';
 import type { Adapter } from './adapters/adapter';
 import { localAdapter } from './adapters/local';
-import { rebasePayees, supabase, supabaseAdapter } from './adapters/supabase';
+import { rebasePayees, setHousehold, supabase, supabaseAdapter } from './adapters/supabase';
+import { myHousehold, type Household } from './adapters/households';
 import { DEFAULT_BUDGETS, DEFAULT_SETTINGS } from './defaults';
 import { mergeCoverage, splitNew, type ParsedImport } from './importers';
 import { applyCustomCategories, label } from './categories';
@@ -16,7 +17,14 @@ import { today as todayLocal } from '../lib/format';
 
 interface Store {
   data: Data;
-  status: 'loading' | 'signed-out' | 'ready' | 'error';
+  /** 'no-household': signed in, but not yet in a household (start one, or accept an invitation). */
+  status: 'loading' | 'signed-out' | 'no-household' | 'ready' | 'error';
+  /** The signed-in person's household (shared database only). */
+  household: Household | null;
+  /** Look up the household again (after starting, joining, leaving or deleting one) and load its data. */
+  enterHousehold(): Promise<void>;
+  /** Create a login. Returns an error message, or null; `confirm` when the email must be confirmed before signing in. */
+  signUp(email: string, password: string): Promise<{ error: string | null; confirm: boolean }>;
   error: string | null;
   mode: Adapter['kind'];
   email: string | null;
@@ -91,6 +99,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [saveError, setSaveError] = useState<string | null>(null);
   const [recovering, setRecovering] = useState(false);
   const [activity, setActivity] = useState<Activity[]>([]);
+  const [household, setHouseholdState] = useState<Household | null>(null);
+  const userRef = useRef<string | null>(null);
+  const householdRef = useRef<Household | null>(null);
   const emailRef = useRef<string | null>(null);
   emailRef.current = email;
   const dataRef = useRef(data);
@@ -139,8 +150,13 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   /** `quiet`: a background refresh. It never shows the loading or error screen. */
   const load = useCallback(async (quiet = false) => {
+    // If someone else signs in on this device while this is loading, stop: nothing of this household may be written to
+    // theirs or shown to them.
+    const startedFor = householdRef.current?.id;
+    const moved = () => householdRef.current?.id !== startedFor;
     try {
       const l = await adapter.load();
+      if (moved()) return;
       const settings = withDefaults(l.settings);
       const budgets = l.budgets.length ? l.budgets : DEFAULT_BUDGETS;
       const userRules = l.rules.map((r) => ({ ...r, user: true }));
@@ -157,11 +173,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           .filter((t) => before.get(t.id) !== `${t.category}|${t.kind}|${t.needsReview}`);
         const byId = new Map(fixed.map((t) => [t.id, t]));
         transactions = l.transactions.map((t) => byId.get(t.id) ?? t);
-        if (fixed.length) await adapter.upsertTransactions(fixed);
+        if (fixed.length && !moved()) await adapter.upsertTransactions(fixed);
       }
       // Every transaction gets a payee. The first time, this builds the whole list from the existing categories.
       const added = payeesFor(transactions, payees);
-      if (added.length) { const base = payees; payees = [...payees, ...added]; payees = await adapter.savePayees(payees, base); }
+      if (added.length && !moved()) { const base = payees; payees = [...payees, ...added]; payees = await adapter.savePayees(payees, base); }
       // Things dated in the future (a house at settlement) must keep that start date once the date has passed.
       const today = todayLocal();
       let fixWealth = false;
@@ -171,9 +187,13 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         return w;
       });
       if (resortAll) settings.rulesVersion = RULES_VERSION;
+      if (moved()) return;
       if (resortAll || fixWealth) Object.assign(settings, withDefaults(await adapter.saveSettings(settings, { rulesVersion: settings.rulesVersion, wealth: settings.wealth })));
       if (!l.budgets.length) await adapter.upsertBudgets(DEFAULT_BUDGETS);
+      // A new household: its first settings carry the name it was started with.
+      if (!l.settings && householdRef.current) settings.household = householdRef.current.name;
       if (!l.settings) await adapter.saveSettings(settings, settings);
+      if (moved()) return;
       transactions.sort((a, b) => b.date.localeCompare(a.date) || a.id.localeCompare(b.id));
       setData({ transactions, rules: userRules, budgets, coverage: l.coverage, settings, reviews: l.reviews, payees });
       setActivity(l.activity ?? []);
@@ -185,6 +205,25 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       setStatus('error');
     }
   }, [adapter]);
+
+  /** Find the signed-in person's household, then load its data (or ask them to start or join one). */
+  const enter = useCallback(async () => {
+    const id = userRef.current;
+    if (!id) return;
+    setStatus('loading');
+    try {
+      const hh = await myHousehold(id);
+      householdRef.current = hh; setHouseholdState(hh); setHousehold(hh?.id ?? null);
+      if (!hh) { setData(empty); setStatus('no-household'); return; }
+      await load();
+    } catch (e: any) {
+      const msg = String(e?.message ?? e);
+      setError(/household_id|households|does not exist/i.test(msg)
+        ? 'The database needs its households update. In Supabase, run the setup script again (supabase/setup.sql), then try again.'
+        : msg);
+      setStatus('error');
+    }
+  }, [load]);
 
   useEffect(() => {
     if (adapter.kind === 'local') { setEmail('demo'); load(); return; }
@@ -199,13 +238,13 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     // after a long break the data is refreshed quietly in the background, so the other person's changes appear.
     function onSession(session: Session | null) {
       first = false;
-      if (!session) { user = null; setEmail(null); setStatus('signed-out'); return; }
+      if (!session) { user = null; userRef.current = null; householdRef.current = null; setHouseholdState(null); setHousehold(null); setEmail(null); setStatus('signed-out'); return; }
       setEmail(session.user.email ?? null);
-      if (session.user.id !== user) { user = session.user.id; loadedAt = Date.now(); setStatus('loading'); load(); }
+      if (session.user.id !== user) { user = session.user.id; userRef.current = user; loadedAt = Date.now(); enter(); }
       else if (Date.now() - loadedAt > 10 * 60_000) { loadedAt = Date.now(); load(true); }
     }
     return () => sub.subscription.unsubscribe();
-  }, [adapter, load]);
+  }, [adapter, load, enter]);
 
   const payeeIdx = useMemo(() => indexPayees(data.payees), [data.payees]);
 
@@ -234,7 +273,13 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   };
 
   const store = useMemo<Store>(() => ({
-    data, status, error, mode: adapter.kind, email, saving, payeeIdx,
+    data, status, error, mode: adapter.kind, email, saving, payeeIdx, household,
+    enterHousehold: enter,
+    async signUp(e, password) {
+      const { data: d, error } = await supabase().auth.signUp({ email: e.trim(), password, options: { emailRedirectTo: location.origin + location.pathname } });
+      if (error) return { error: /registered|exists/i.test(error.message) ? 'There is already a login for this email. Sign in instead, or reset the password.' : error.message, confirm: false };
+      return { error: null, confirm: !d.session };
+    },
     async signIn(e, password) {
       const { error } = await supabase().auth.signInWithPassword({ email: e.trim(), password });
       return error ? (error.message.includes('Invalid') ? 'That email and password don\'t match. Check them and try again.' : error.message) : null;
@@ -441,7 +486,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       await load();
     },
     activity,
-  }), [data, status, error, adapter, email, saving, saveError, recovering, guard, load, payeeIdx, activity]);
+  }), [data, status, error, adapter, email, saving, saveError, recovering, guard, load, payeeIdx, activity, household, enter]);
 
   return <Ctx.Provider value={store}>{children}</Ctx.Provider>;
 }

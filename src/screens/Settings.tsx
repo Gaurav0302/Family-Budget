@@ -6,12 +6,13 @@ import { Info, PageHeader } from '../components/bits';
 import { label } from '../data/categories';
 import { useStore } from '../data/store';
 import { ThemePicker } from '../theme/ThemePicker';
-import { Exports, RecentChanges, Reminders } from './SettingsParts';
+import { Exports, LeaveOrDelete, People, RecentChanges, Reminders } from './SettingsParts';
+import { renameHousehold } from '../data/adapters/households';
 import { download } from '../lib/format';
 import { today as todayLocal } from '../lib/format';
 
 export function SettingsScreen() {
-  const { data, deleteRule, signOut, email, mode, backup, resetLocal, updateSettings, changePassword } = useStore();
+  const { data, deleteRule, signOut, email, mode, backup, resetLocal, updateSettings, changePassword, household } = useStore();
   const [pw, setPw] = useState({ a: '', b: '', msg: '' });
 
   return (
@@ -21,9 +22,17 @@ export function SettingsScreen() {
       <section className="panel">
         <h2>Household</h2>
         <label className="lp-field"><span>Household name</span>
-          <input defaultValue={data.settings.household} onBlur={(e) => e.target.value.trim() && e.target.value.trim() !== data.settings.household && updateSettings({ household: e.target.value.trim() })} /></label>
+          <input defaultValue={data.settings.household} onBlur={(e) => {
+            const name = e.target.value.trim();
+            if (!name || name === data.settings.household) return;
+            updateSettings({ household: name });
+            // The household's own name (shown when inviting people) follows, if you're its owner.
+            if (household?.role === 'owner') renameHousehold(household.id, name).catch(() => {});
+          }} /></label>
         <p className="fine">People in the household come from their pay on <Link to="/wealth?tab=income">Wealth → Income &amp; super</Link>{people(data.settings).length ? `: ${people(data.settings).join(', ')}` : ''}.</p>
       </section>
+
+      {mode === 'supabase' && <People />}
 
       {mode === 'supabase' && (
         <section className="panel">
@@ -86,12 +95,13 @@ export function SettingsScreen() {
         <h2>Your data</h2>
         <p>{mode === 'supabase' ? <>Stored in your private Supabase database. Signed in as <b>{email}</b>.</> : 'Demo mode: everything is kept in this browser only.'}</p>
         <div className="btn-row">
-          <button className="btn" onClick={() => download(`family-budget-backup-${todayLocal()}.json`, JSON.stringify(backup()))}>Download a backup</button>
+          <button className="btn" onClick={() => download(`family-budget-backup-${todayLocal()}.json`, JSON.stringify(backup()))}>Download all our data</button>
           {mode === 'local' && <button className="btn danger" onClick={() => { if (confirm('Delete all demo data in this browser?')) resetLocal(); }}>Clear demo data</button>}
         </div>
         <h3 className="sub-h">Spreadsheets</h3>
         <Exports />
-        <p className="fine">The pack for your accountant is on <Link to="/check-in?tab=year">Monthly check-in → Financial year</Link>.</p>
+        <p className="fine">The pack for your accountant is on <Link to="/check-in?tab=year">Monthly check-in → Financial year</Link>. "Download all our data" is a backup: adding it on Statements restores everything.</p>
+        {mode === 'supabase' && <LeaveOrDelete />}
       </section>
     </div>
   );

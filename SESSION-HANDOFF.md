@@ -1,5 +1,10 @@
 # SESSION-HANDOFF.md
 
+## Current status (20 Oct 2026, around 9am)
+Households built (D37), not yet live: the user must first (1) download a backup, (2) run the new supabase/setup.sql in Supabase, (3) set Supabase sign-ups and URLs for Vercel; only then publish (the new app needs the new database). Vercel project exists; waiting for its public production address (the address first sent was a protected per-build one).
+
+Testing SQL locally: Postgres 16 is installed. `initdb` into a folder the postgres user owns (e.g. /var/tmp/fbpg), start with `pg_ctl -o '-p 5433 -k /var/tmp/fbpg'`, then load a stand-in for Supabase's auth (roles anon/authenticated, schema auth with users(id, email) and auth.uid() reading `request.jwt.claim.sub`, default grants to anon/authenticated), the previous setup.sql, sample rows, and the new setup.sql. Act as a user with `set role authenticated; select set_config('request.jwt.claim.sub', '<uuid>', false);`.
+
 ## Current status (20 Oct 2026, late morning)
 Block 4 part 1 built (D34): PDF statements in the app, calendar reminders, put aside for big bills, safe to spend, tax marks and accountant pack, meeting questions, recent changes, CSV exports, install on phone. Waiting on the user for bank feeds and the assistant (cost). Next: launch track (78–86) and code items (63–73).
 

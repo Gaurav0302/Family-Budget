@@ -9,8 +9,17 @@ export function supabase(): SupabaseClient {
   return client;
 }
 
+/** The household of whoever is signed in. Every row the app writes carries it (the database also fills it in and refuses
+ *  any other household's rows); set by `useHousehold` before anything is loaded. */
+let hid: string | null = null;
+export function setHousehold(id: string | null) {
+  if (id !== hid) { for (const k of Object.keys(stamps)) delete stamps[k]; for (const k of Object.keys(stored)) delete stored[k]; }
+  hid = id;
+}
+const h = () => { if (!hid) throw new Error('No household chosen yet.'); return hid; };
+
 const txToRow = (t: Transaction) => ({
-  id: t.id, date: t.date, account: t.account, description: t.description, amount: t.amount,
+  household_id: h(), id: t.id, date: t.date, account: t.account, description: t.description, amount: t.amount,
   category: t.category, kind: t.kind, note: t.note ?? null, one_off: !!t.oneOff, manual: !!t.manual,
   needs_review: !!t.needsReview, source: t.source ?? null, updated_at: new Date().toISOString(),
 });
@@ -35,7 +44,7 @@ async function inBatches<T>(items: T[], size: number, fn: (batch: T[]) => Promis
 async function all(table: string, order: string[]): Promise<any[]> {
   const out: any[] = [];
   for (let from = 0; ; from += 1000) {
-    let q = supabase().from(table).select('*');
+    let q = supabase().from(table).select('*').eq('household_id', h());
     for (const o of order) q = q.order(o);
     const rows = await check(q.range(from, from + 999));
     out.push(...(rows as any[]));
@@ -58,14 +67,14 @@ async function saveRecord<T>(key: string, build: (latest: T | undefined) => T): 
     const now = new Date().toISOString();
     const stamp = stamps[key];
     if (stamp == null) {
-      const { error } = await supabase().from('settings').insert({ key, value: next, updated_at: now });
+      const { error } = await supabase().from('settings').insert({ household_id: h(), key, value: next, updated_at: now });
       if (!error) { stamps[key] = now; stored[key] = next; return next; }
       if (error.code !== '23505' && !/duplicate|conflict/i.test(error.message ?? '')) throw new Error(error.message || 'The database refused the save.');
     } else {
-      const rows = await check(supabase().from('settings').update({ value: next, updated_at: now }).eq('key', key).eq('updated_at', stamp).select('key'));
+      const rows = await check(supabase().from('settings').update({ value: next, updated_at: now }).eq('household_id', h()).eq('key', key).eq('updated_at', stamp).select('key'));
       if ((rows as unknown[]).length) { stamps[key] = now; stored[key] = next; return next; }
     }
-    const theirs = await check(supabase().from('settings').select('value, updated_at').eq('key', key).maybeSingle());
+    const theirs = await check(supabase().from('settings').select('value, updated_at').eq('household_id', h()).eq('key', key).maybeSingle());
     stamps[key] = (theirs as any)?.updated_at ?? null;
     stored[key] = (theirs as any)?.value;
   }
@@ -104,35 +113,35 @@ export const supabaseAdapter: Adapter = {
     };
   },
   async upsertTransactions(txs) {
-    await inBatches(txs, 500, (b) => check(supabase().from('transactions').upsert(b.map(txToRow))));
+    await inBatches(txs, 500, (b) => check(supabase().from('transactions').upsert(b.map(txToRow), { onConflict: 'household_id,id' })));
   },
   async deleteTransactions(ids) {
-    await inBatches(ids, 200, (b) => check(supabase().from('transactions').delete().in('id', b)));
+    await inBatches(ids, 200, (b) => check(supabase().from('transactions').delete().eq('household_id', h()).in('id', b)));
   },
   async upsertRules(rules: Rule[]) {
-    await check(supabase().from('rules').upsert(rules.map((r) => ({ id: r.id, pattern: r.pattern, category: r.category, kind: r.kind, sign: r.sign ?? null, account: r.account ?? null }))));
+    await check(supabase().from('rules').upsert(rules.map((r) => ({ household_id: h(), id: r.id, pattern: r.pattern, category: r.category, kind: r.kind, sign: r.sign ?? null, account: r.account ?? null })), { onConflict: 'household_id,id' }));
   },
-  async deleteRule(id) { await check(supabase().from('rules').delete().eq('id', id)); },
+  async deleteRule(id) { await check(supabase().from('rules').delete().eq('household_id', h()).eq('id', id)); },
   async upsertBudgets(lines: BudgetLine[]) {
-    await check(supabase().from('budgets').upsert(lines.map((b) => ({ category: b.category, from_month: b.from, amount: b.amount }))));
+    await check(supabase().from('budgets').upsert(lines.map((b) => ({ household_id: h(), category: b.category, from_month: b.from, amount: b.amount })), { onConflict: 'household_id,category,from_month' }));
   },
   // Add the new spans first, then remove the old ones that aren't in the list: if anything fails part-way, coverage is never
   // left empty (overlapping spans are merged again when the app loads).
   async replaceCoverage(list: Coverage[]) {
-    const rows = list.map((c) => ({ account: c.account, from_date: c.from, to_date: c.to }));
-    if (rows.length) await check(supabase().from('coverage').upsert(rows, { onConflict: 'account,from_date,to_date', ignoreDuplicates: true }));
+    const rows = list.map((c) => ({ household_id: h(), account: c.account, from_date: c.from, to_date: c.to }));
+    if (rows.length) await check(supabase().from('coverage').upsert(rows, { onConflict: 'household_id,account,from_date,to_date', ignoreDuplicates: true }));
     const keep = new Set(rows.map((r) => `${r.account}|${r.from_date}|${r.to_date}`));
-    const old = (await check(supabase().from('coverage').select('account, from_date, to_date'))) as any[];
+    const old = (await check(supabase().from('coverage').select('account, from_date, to_date').eq('household_id', h()))) as any[];
     for (const r of old) if (!keep.has(`${r.account}|${r.from_date}|${r.to_date}`))
-      await check(supabase().from('coverage').delete().eq('account', r.account).eq('from_date', r.from_date).eq('to_date', r.to_date));
+      await check(supabase().from('coverage').delete().eq('household_id', h()).eq('account', r.account).eq('from_date', r.from_date).eq('to_date', r.to_date));
   },
   saveSettings(s, patch, rebuild) {
     return saveRecord<Settings>('settings', (latest) => (latest && rebuild ? { ...latest, ...rebuild(latest) } : patch && latest ? { ...latest, ...patch } : s));
   },
   async upsertReviews(r: Review[]) {
-    await check(supabase().from('reviews').upsert(r.map((x) => ({ id: x.id, month: x.month, title: x.title, body: x.body, author: x.author, created: x.created }))));
+    await check(supabase().from('reviews').upsert(r.map((x) => ({ household_id: h(), id: x.id, month: x.month, title: x.title, body: x.body, author: x.author, created: x.created })), { onConflict: 'household_id,id' }));
   },
-  async deleteReview(id) { await check(supabase().from('reviews').delete().eq('id', id)); },
+  async deleteReview(id) { await check(supabase().from('reviews').delete().eq('household_id', h()).eq('id', id)); },
   savePayees(p, base) {
     return saveRecord<Payee[]>('payees', (latest) => (base && latest ? rebasePayees(p, base, latest) : p));
   },

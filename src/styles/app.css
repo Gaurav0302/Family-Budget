@@ -1323,3 +1323,17 @@ ul.tx-list > li.is-picking > .tx { flex: 1; min-width: 0; }
 .tax-person h4 { margin: 10px 0 4px; font-size: 0.95rem; }
 .changes li small { color: var(--muted); white-space: nowrap; }
 .check-col .check { margin: 0; }
+.login-switch { margin: 12px 0 4px; text-align: center; }
+.welcome-choice { border-top: 1px solid var(--line); padding-top: 14px; margin-top: 14px; display: grid; gap: 8px; }
+.welcome-choice h2 { font-size: 1.1rem; margin: 0; }
+.welcome-choice p { margin: 0; }
+.people li { align-items: center; }
+.invite-form { display: flex; flex-wrap: wrap; align-items: end; gap: 8px; margin-top: 12px; }
+.invite-form label { display: grid; gap: 4px; flex: 1 1 240px; }
+.danger-zone { margin-top: 18px; padding-top: 12px; border-top: 1px solid var(--line); display: grid; gap: 8px; justify-items: start; }
+.danger-zone p { margin: 0; }
+.link.danger { color: var(--bad); }
+.invite-link { display: grid; gap: 6px; margin-top: 10px; padding: 10px 12px; border-radius: var(--r-md, 10px); background: var(--card-2); }
+.invite-link p { margin: 0; }
+.invite-link input { width: 100%; font-size: 0.85rem; }
+.invite-link .btn { justify-self: start; }

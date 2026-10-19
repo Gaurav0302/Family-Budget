@@ -1,4 +1,6 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import * as hh from '../data/adapters/households';
+import type { Invite, Member } from '../data/adapters/households';
 import { Link } from 'react-router-dom';
 import { Info } from '../components/bits';
 import { addMonths, allMonths, budgetFor, lastDay } from '../data/analysis';
@@ -110,5 +112,103 @@ export function RecentChanges() {
       </ul>
       {activity.length > 8 && <button className="link" onClick={() => setAll(!all)}>{all ? 'Show fewer' : 'Show more'}</button>}
     </section>
+  );
+}
+
+/** The household's people: who's in, invitations waiting, and (for the owner) inviting and removing. */
+export function People() {
+  const { household, email } = useStore();
+  const [list, setList] = useState<Member[] | null>(null);
+  const [waiting, setWaiting] = useState<Invite[]>([]);
+  const [to, setTo] = useState('');
+  const [msg, setMsg] = useState<string | null>(null);
+  const [link, setLink] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+  const copy = (text: string) => navigator.clipboard?.writeText(text).then(() => { setCopied(true); setMsg('Link copied.'); setTimeout(() => setCopied(false), 2000); }, () => setMsg('Copy didn\'t work here: select the link and copy it.'));
+  const owner = household?.role === 'owner';
+  const refresh = async () => {
+    if (!household) return;
+    try { setList(await hh.members(household.id)); setWaiting(await hh.invites(household.id)); }
+    catch (e: any) { setMsg(`Couldn't load the household's people (${e?.message ?? e}).`); }
+  };
+  useEffect(() => { refresh(); }, [household?.id]);
+  if (!household) return null;
+  const act = async (fn: () => Promise<unknown>, done: string) => {
+    setMsg(null);
+    try { await fn(); setMsg(done); await refresh(); } catch (e: any) { setMsg(e?.message ?? String(e)); }
+  };
+  const self = list?.find((m) => m.email?.toLowerCase() === email?.toLowerCase());
+  return (
+    <section className="panel" aria-labelledby="people-h">
+      <div className="panel-head"><h2 id="people-h">People in {household.name}</h2><Info>Everyone here sees and changes the same budget, payments and plans. The owner can invite and remove people. An invitation is a private link: send it to the person (a text or an email); whoever opens it and signs in can join, once, within 14 days. Cancel a link you no longer need.</Info></div>
+      {list === null ? <p className="muted">Loading…</p> : (
+        <ul className="value-list people">
+          {list.map((m) => (
+            <li key={m.userId}>
+              <span><b>{m.email ?? 'Someone'}</b>{m.email?.toLowerCase() === email?.toLowerCase() ? ' (you)' : ''}<small>{m.role === 'owner' ? 'Owner' : 'Member'}, joined {longDate(m.added.slice(0, 10))}</small></span>
+              {owner && m.userId !== self?.userId && <button className="btn small" onClick={() => { if (confirm(`Remove ${m.email} from ${household.name}? They won't see its data any more.`)) act(() => hh.removeMember(m.userId), `${m.email} removed.`); }}>Remove</button>}
+            </li>
+          ))}
+          {waiting.map((i) => (
+            <li key={i.code}>
+              <span><b>{i.email || 'Invitation link'}</b><small>Not joined yet. The link works until {longDate(i.expires.slice(0, 10))}</small></span>
+              <span className="btn-row">
+                <button className="btn small" onClick={() => copy(hh.inviteLink(i.code))}>Copy link</button>
+                {owner && <button className="btn small" onClick={() => act(() => hh.cancelInvite(i.code), 'Invitation cancelled: its link no longer works.')}>Cancel</button>}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+      {owner && (
+        <form className="invite-form" onSubmit={async (e) => {
+          e.preventDefault();
+          setMsg(null);
+          try {
+            const code = await hh.invite(household.id, to);
+            setLink(hh.inviteLink(code)); setTo(''); await refresh();
+          } catch (err: any) { setMsg(err?.message ?? String(err)); }
+        }}>
+          <label>Who it's for (optional)<input type="email" value={to} onChange={(e) => setTo(e.target.value)} placeholder="partner@example.com" /></label>
+          <button className="btn small primary">Make an invitation link</button>
+        </form>
+      )}
+      {link && (
+        <div className="invite-link" role="status">
+          <p>Send this link to them (a text or an email). It works once, for 14 days:</p>
+          <input readOnly value={link} aria-label="Invitation link" onFocus={(e) => e.target.select()} />
+          <button className="btn small" onClick={() => copy(link)}>{copied ? 'Copied' : 'Copy link'}</button>
+        </div>
+      )}
+      {msg && <p className="fine" role="status">{msg}</p>}
+    </section>
+  );
+}
+
+/** Leaving, or (the owner) deleting the household and everything in it. */
+export function LeaveOrDelete() {
+  const { household, enterHousehold } = useStore();
+  const [typed, setTyped] = useState('');
+  const [open, setOpen] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
+  if (!household) return null;
+  const owner = household.role === 'owner';
+  const run = async (fn: () => Promise<void>) => { setMsg(null); try { await fn(); await enterHousehold(); } catch (e: any) { setMsg(e?.message ?? String(e)); } };
+  return (
+    <div className="danger-zone">
+      {!open ? <button className="link danger" onClick={() => setOpen(true)}>{owner ? 'Leave or delete this household' : 'Leave this household'}</button> : (
+        <>
+          <p><b>Leave {household.name}:</b> you stop seeing its data; everyone else keeps it.{owner ? ' The longest-standing member becomes the owner. If you are the only one, the household and its data are deleted.' : ''}</p>
+          <button className="btn small" onClick={() => { if (confirm(`Leave ${household.name}?`)) run(hh.leaveHousehold); }}>Leave the household</button>
+          {owner && <>
+            <p><b>Delete {household.name}:</b> every payment, budget, plan and setting, for everyone in it. This can't be undone, so download all your data first. Type the household's name to confirm.</p>
+            <input aria-label="Type the household's name to confirm" value={typed} onChange={(e) => setTyped(e.target.value)} placeholder={household.name} />
+            <button className="btn small danger" disabled={typed.trim() !== household.name} onClick={() => run(hh.deleteHousehold)}>Delete everything</button>
+          </>}
+          <button className="link" onClick={() => { setOpen(false); setTyped(''); }}>Cancel</button>
+        </>
+      )}
+      {msg && <p className="form-error" role="alert">{msg}</p>}
+    </div>
   );
 }

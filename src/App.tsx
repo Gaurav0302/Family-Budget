@@ -6,7 +6,8 @@ import { PageBoundary } from './components/PageBoundary';
 import { StoreProvider, useStore } from './data/store';
 import { useLook } from './theme/useLook';
 import { HomeScreen } from './screens/Home';
-import { Login, SetPassword } from './screens/Login';
+import { Login, SetPassword, Welcome } from './screens/Login';
+import { codeFrom, PENDING_INVITE } from './data/adapters/households';
 
 // Pages load when first opened, so the app starts faster (Home and sign-in come with the first download).
 const PropertyScreen = lazy(() => import('./screens/Property').then((m) => ({ default: m.PropertyScreen })));
@@ -41,12 +42,20 @@ function WhatIfMoved() {
 
 function Gate() {
   const { status, error, reload, recovering } = useStore();
-  const where = useLocation().pathname;
+  const loc = useLocation();
+  const where = loc.pathname;
   useLook();
+  // An invitation link (#/join?code=…): keep the code while the person signs up or signs in, then the welcome screen uses it.
+  if (where === '/join') {
+    const code = codeFrom(loc.search);
+    try { if (code) localStorage.setItem(PENDING_INVITE, code); } catch { /* storage off: they can paste the link instead */ }
+    return <Navigate to="/" replace />;
+  }
 
   if (status === 'loading') return <div className="center-screen"><div className="loader" aria-label="Loading" /><p>Opening the family purse…</p></div>;
   if (recovering) return <SetPassword />;
   if (status === 'signed-out') return <Login />;
+  if (status === 'no-household') return <Welcome />;
   if (status === 'error') return (
     <div className="center-screen">
       <h1>{navigator.onLine ? "Couldn't load your data" : "You're offline"}</h1>

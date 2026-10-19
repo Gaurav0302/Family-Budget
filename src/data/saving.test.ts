@@ -10,7 +10,7 @@ function table(name: string) {
   const run = () => {
     if (db.fail) return { data: null, error: { message: 'Network down' } };
     if (name !== 'settings') return { data: [], error: null };
-    const match = [...db.rows].filter(([key, r]) => f.every((x) => (x.col === 'key' ? key === x.val : (r as any)[x.col] === x.val)));
+    const match = [...db.rows].filter(([key, r]) => f.every((x) => (x.col === 'household_id' ? x.val === 'h1' : x.col === 'key' ? key === x.val : (r as any)[x.col] === x.val)));
     if (op === 'update') { for (const [key] of match) db.rows.set(key, { value: patch.value, updated_at: stamp() }); return { data: match.map(([key]) => ({ key })), error: null }; }
     return { data: match.map(([key, r]) => ({ key, ...r })), error: null };
   };
@@ -33,7 +33,8 @@ vi.mock('@supabase/supabase-js', () => ({ createClient: () => ({ from: table, au
 /** Two devices: each module copy keeps its own "last seen" state, like two browsers. */
 async function device() {
   vi.resetModules();
-  const { supabaseAdapter } = await import('./adapters/supabase');
+  const { supabaseAdapter, setHousehold } = await import('./adapters/supabase');
+  setHousehold('h1');
   await supabaseAdapter.load();
   return supabaseAdapter;
 }
