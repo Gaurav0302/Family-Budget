@@ -1,4 +1,4 @@
-import type { Adapter, Loaded } from './adapter';
+import { addActivity, type Adapter, type Loaded } from './adapter';
 
 const KEY = 'fb:data';
 
@@ -35,6 +35,7 @@ export const localAdapter: Adapter = {
   async upsertReviews(r) { const d = read(); d.reviews = upsert(d.reviews, r, (x) => x.id); write(d); },
   async deleteReview(id) { const d = read(); d.reviews = d.reviews.filter((r) => r.id !== id); write(d); },
   async savePayees(p) { const d = read(); d.payees = p; write(d); return p; },
+  async logActivity(a) { const d = read(); d.activity = addActivity(d.activity ?? [], a); write(d); return d.activity; },
 };
 
 export function clearLocal() { try { localStorage.removeItem(KEY); } catch { /* ignore */ } }

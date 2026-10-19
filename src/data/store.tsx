@@ -6,11 +6,12 @@ import { localAdapter } from './adapters/local';
 import { rebasePayees, supabase, supabaseAdapter } from './adapters/supabase';
 import { DEFAULT_BUDGETS, DEFAULT_SETTINGS } from './defaults';
 import { mergeCoverage, splitNew, type ParsedImport } from './importers';
-import { applyCustomCategories } from './categories';
+import { applyCustomCategories, label } from './categories';
+import { describeSettings, describeTransactions } from './activity';
 import { categorise, RULES_VERSION } from './rules';
 import { indexPayees, payeesFor, sortTransaction, type PayeeIndex } from './payees';
 import { mergeSettings } from './settingsMerge';
-import type { BudgetLine, Data, DataFile, Payee, Review, Rule, Settings, Transaction } from './types';
+import type { Activity, BudgetLine, Data, DataFile, Payee, Review, Rule, Settings, Transaction } from './types';
 import { today as todayLocal } from '../lib/format';
 
 interface Store {
@@ -44,6 +45,9 @@ interface Store {
   /** Budget lines and settings changed together in one step, so the screen never shows one without the other. */
   setBudgetWith(lines: BudgetLine[], patch: Partial<Settings>): Promise<void>;
   updateSettings(patch: Partial<Settings>): Promise<void>;
+  /** A change worked out from the settings (one entry in a shared map): run again on the latest saved copy, so someone
+   *  else's entries made meanwhile are kept. */
+  updateSettingsBy(change: (s: Settings) => Partial<Settings>): Promise<void>;
   importParsed(p: ParsedImport): Promise<{ added: number; duplicates: number }>;
   addReview(r: Review): Promise<void>;
   deleteReview(id: string): Promise<void>;
@@ -58,6 +62,8 @@ interface Store {
   /** Fold one payee into another (same shop, different bank wording). */
   mergePayees(fromId: string, intoId: string): Promise<number>;
   markChecked(ids: string[]): Promise<void>;
+  /** Who changed what, newest first (shared between everyone signed in). */
+  activity: Activity[];
 }
 
 const empty: Data = { transactions: [], rules: [], budgets: DEFAULT_BUDGETS, coverage: [], settings: DEFAULT_SETTINGS, reviews: [], payees: [] };
@@ -84,6 +90,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [recovering, setRecovering] = useState(false);
+  const [activity, setActivity] = useState<Activity[]>([]);
+  const emailRef = useRef<string | null>(null);
+  emailRef.current = email;
   const dataRef = useRef(data);
   dataRef.current = data;
   applyCustomCategories(data.settings.customCategories, data.settings.hiddenCategories, data.settings);
@@ -167,6 +176,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       if (!l.settings) await adapter.saveSettings(settings, settings);
       transactions.sort((a, b) => b.date.localeCompare(a.date) || a.id.localeCompare(b.id));
       setData({ transactions, rules: userRules, budgets, coverage: l.coverage, settings, reviews: l.reviews, payees });
+      setActivity(l.activity ?? []);
       setStatus('ready');
       setError(null);
     } catch (e: any) {
@@ -217,6 +227,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     return { all, changed };
   };
 
+  /** Add a line to "who changed what". Never holds anything up, and a failure here isn't worth a banner. */
+  const note = (what: string | null) => {
+    if (!what) return;
+    adapter.logActivity({ at: new Date().toISOString(), by: emailRef.current, what }).then(setActivity, () => {});
+  };
+
   const store = useMemo<Store>(() => ({
     data, status, error, mode: adapter.kind, email, saving, payeeIdx,
     async signIn(e, password) {
@@ -254,7 +270,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       if (!cur) return;
       const next = { ...cur, ...patch, manual: patch.category || patch.kind ? true : cur.manual, needsReview: patch.category || patch.kind ? false : (patch.needsReview ?? cur.needsReview) };
       setData((d) => ({ ...d, transactions: d.transactions.map((t) => (t.id === id ? next : t)) }));
-      await guard(() => adapter.upsertTransactions([next]));
+      const ok = await guard(async () => { await adapter.upsertTransactions([next]); return true; });
+      // Only what really changed (the editor sends every field).
+      const real = Object.fromEntries(Object.entries(patch).filter(([k, v]) => ((cur as any)[k] ?? null) !== (v ?? null) && !(k === 'oneOff' && !!v === !!cur.oneOff))) as Partial<Transaction>;
+      if (ok && Object.keys(real).length) note(describeTransactions([next], real));
     },
     async updateTransactions(ids, patch) {
       const set = new Set(ids);
@@ -263,7 +282,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         .map((t) => ({ ...t, ...patch, manual: sorting ? true : t.manual, needsReview: sorting ? false : (patch.needsReview ?? t.needsReview) }));
       const byId = new Map(changed.map((t) => [t.id, t]));
       setData((d) => ({ ...d, transactions: d.transactions.map((t) => byId.get(t.id) ?? t) }));
-      await guard(() => adapter.upsertTransactions(changed));
+      const ok = await guard(async () => { await adapter.upsertTransactions(changed); return true; });
+      if (ok && changed.length) note(describeTransactions(changed, patch));
     },
     async addRule(rule) {
       const full: Rule = { ...rule, id: `user:${Date.now().toString(36)}`, user: true };
@@ -289,18 +309,24 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     async setBudget(category, from, amount) {
       const line: BudgetLine = { category, from, amount };
       setData((d) => ({ ...d, budgets: [...d.budgets.filter((b) => !(b.category === category && b.from === from)), line] }));
-      await guard(() => adapter.upsertBudgets([line]));
+      if (await guard(async () => { await adapter.upsertBudgets([line]); return true; })) note(`Changed the ${label(category)} budget`);
     },
     async setBudgetWith(lines, patch) {
       const settings = { ...dataRef.current.settings, ...patch };
       const same = (b: BudgetLine) => lines.some((l) => l.category === b.category && l.from === b.from);
       setData((d) => ({ ...d, settings, budgets: [...d.budgets.filter((b) => !same(b)), ...lines] }));
-      await guard(async () => { if (lines.length) await adapter.upsertBudgets(lines); adoptSettings(await adapter.saveSettings(settings, patch), settings); });
+      if (await guard(async () => { if (lines.length) await adapter.upsertBudgets(lines); adoptSettings(await adapter.saveSettings(settings, patch), settings); return true; })) note(lines.length ? `Changed the ${[...new Set(lines.map((l) => label(l.category)))].join(', ')} budget` : describeSettings(patch));
     },
     async updateSettings(patch) {
       const settings = { ...dataRef.current.settings, ...patch };
       setData((d) => ({ ...d, settings }));
-      await guard(async () => adoptSettings(await adapter.saveSettings(settings, patch), settings));
+      if (await guard(async () => { adoptSettings(await adapter.saveSettings(settings, patch), settings); return true; })) note(describeSettings(patch));
+    },
+    async updateSettingsBy(change) {
+      const patch = change(dataRef.current.settings);
+      const settings = { ...dataRef.current.settings, ...patch };
+      setData((d) => ({ ...d, settings }));
+      if (await guard(async () => { adoptSettings(await adapter.saveSettings(settings, patch, change), settings); return true; })) note(describeSettings(patch));
     },
     async importParsed(p) {
       const d = dataRef.current;
@@ -339,11 +365,13 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           if (incomingSettings) await adapter.saveSettings(settings, Object.fromEntries(Object.keys(incomingSettings).map((k) => [k, (settings as any)[k]])) as Partial<Settings>);
         }, true);
       } finally { await load(true); }
+      note(fresh.length ? `Added ${fresh.length} payments${p.transactions[0]?.source ? ` from ${p.transactions[0].source}` : ''}` : incomingSettings ? 'Added an update file' : null);
       return { added: fresh.length, duplicates };
     },
     async addReview(r) {
       setData((d) => ({ ...d, reviews: [...d.reviews.filter((x) => x.id !== r.id), r] }));
       await guard(() => adapter.upsertReviews([r]));
+      note('Wrote a note in the money meeting');
     },
     async deleteReview(id) {
       setData((d) => ({ ...d, reviews: d.reviews.filter((x) => x.id !== id) }));
@@ -359,6 +387,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       }
       setData({ ...d, payees, transactions });
       await guard(async () => { adoptPayees(await adapter.savePayees(payees, d.payees), payees); if (changed.length) await adapter.upsertTransactions(changed); });
+      const who = d.payees.find((p) => p.id === id)?.name;
+      note(patch.category ? `Sorted ${who ?? 'a payee'} into ${label(patch.category)}` : `Changed the payee ${who ?? ''}`.trim());
       return changed.length;
     },
     async markChecked(ids) {
@@ -410,7 +440,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       clearLocal();
       await load();
     },
-  }), [data, status, error, adapter, email, saving, saveError, recovering, guard, load, payeeIdx]);
+    activity,
+  }), [data, status, error, adapter, email, saving, saveError, recovering, guard, load, payeeIdx, activity]);
 
   return <Ctx.Provider value={store}>{children}</Ctx.Provider>;
 }

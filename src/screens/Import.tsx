@@ -1,9 +1,10 @@
 import { FileUp } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { PageHeader } from '../components/bits';
 import { applyRules } from '../data/rules';
 import { parseCsv, parseDataFile, splitNew, type ParsedImport } from '../data/importers';
+import { accountFor, detectFormat, parseStatementText } from '../data/pdfStatements';
 import { useStore } from '../data/store';
 import { isPayPalCsv, matchPayPal, parsePayPalCsv } from '../data/paypal';
 import { download, longDate, money } from '../lib/format';
@@ -20,18 +21,42 @@ export function Import({ embedded = false }: { embedded?: boolean } = {}) {
   const [busy, setBusy] = useState(false);
   const [drag, setDrag] = useState(false);
   const isPayPal = !!file && /\.csv$/i.test(file.name) && isPayPalCsv(text);
+  const isPdf = !!file && /\.pdf$/i.test(file.name);
   const isCsv = !!file && /\.csv$/i.test(file.name) && !isPayPal;
+  const [reading, setReading] = useState(false);
   const pp = isPayPal ? (() => { const r = parsePayPalCsv(text); return { ...r, ...matchPayPal(r.purchases, data.transactions) }; })() : null;
 
+  // The file being read: a slow PDF finishing after another file was chosen mustn't replace it on screen.
+  const picked = useRef<File | null>(null);
   async function choose(f: File) {
-    setResult(null); setParsed(null); setFile(f);
+    picked.current = f;
+    setResult(null); setParsed(null); setFile(f); setAccount(''); setReading(false);
+    if (/\.pdf$/i.test(f.name)) {
+      // A PDF statement: read here on this device, then matched to an account by its last four digits.
+      setReading(true); setText('');
+      try {
+        const { pdfText } = await import('../data/readPdf');
+        const t = await pdfText(f);
+        if (picked.current !== f) return;
+        setText(t);
+        const acc = accountFor(t, data.settings.accounts);
+        if (acc) { setAccount(acc); setParsed(parseStatementText(t, acc, f.name)); }
+        else if (!detectFormat(t)) setParsed(parseStatementText(t, '', f.name));
+      } catch (e: any) {
+        if (picked.current !== f) return;
+        setParsed({ transactions: [], coverage: [], problems: [`Couldn't read this PDF (${e?.message ?? e}). If it has a password, save a copy without one.`] });
+      }
+      setReading(false);
+      return;
+    }
     const t = await f.text();
+    if (picked.current !== f) return;
     setText(t);
     if (!/\.csv$/i.test(f.name)) setParsed(parseDataFile(t));
   }
   function readCsv(acc: string) {
     setAccount(acc);
-    if (acc && file) setParsed(parseCsv(text, acc, file.name));
+    if (acc && file) setParsed(isPdf ? parseStatementText(text, acc, file.name) : parseCsv(text, acc, file.name));
   }
 
   const preview = parsed && parsed.transactions.length ? (() => {
@@ -66,8 +91,8 @@ export function Import({ embedded = false }: { embedded?: boolean } = {}) {
         onDrop={(e) => { e.preventDefault(); setDrag(false); const f = e.dataTransfer.files[0]; if (f) choose(f); }}>
         <FileUp size={28} aria-hidden />
         <b>{file ? file.name : 'Choose a file, or drop it here'}</b>
-        <span>CSV from your bank or PayPal, or a Family Budget data file (.json)</span>
-        <input type="file" accept=".csv,.json,application/json,text/csv" onChange={(e) => { const f = e.target.files?.[0]; if (f) choose(f); e.target.value = ''; }} />
+        <span>PDF statement (CommBank, Macquarie), CSV from your bank or PayPal, or a Family Budget data file (.json)</span>
+        <input type="file" accept=".pdf,.csv,.json,application/pdf,application/json,text/csv" onChange={(e) => { const f = e.target.files?.[0]; if (f) choose(f); e.target.value = ''; }} />
       </label>
 
       {pp && !result && (
@@ -94,7 +119,8 @@ export function Import({ embedded = false }: { embedded?: boolean } = {}) {
         </div>
       )}
 
-      {isCsv && (
+      {reading && <div className="step-box" role="status"><p>Reading the PDF on this device…</p></div>}
+      {(isCsv || (isPdf && !reading && text && detectFormat(text))) && (
         <div className="step-box">
           <label htmlFor="acct"><b>Which account is this statement for?</b></label>
           <select id="acct" value={account} onChange={(e) => readCsv(e.target.value)}>
@@ -108,7 +134,8 @@ export function Import({ embedded = false }: { embedded?: boolean } = {}) {
 
       {preview && !result && (
         <div className="step-box preview">
-          <p><b>{preview.fresh}</b> new transactions from {longDate(preview.from)} to {longDate(preview.to)}.</p>
+          <p>{preview.fresh ? <><b>{preview.fresh}</b> new transactions</> : 'Nothing new: every payment is already in the app. Dates covered'} from {longDate(preview.from)} to {longDate(preview.to)}{isPdf && account ? <> in <b>{data.settings.accounts.find((a) => a.key === account)?.name}</b></> : null}.</p>
+          {parsed?.statements?.[0] && <p className="muted">Statement {longDate(parsed.statements[0].from)} to {longDate(parsed.statements[0].to)}: opening {money(parsed.statements[0].opening, { cents: true })}, closing {money(parsed.statements[0].closing, { cents: true })}. These go to the statement checks.</p>}
           {preview.duplicates > 0 && <p>{preview.duplicates} are already in the app and will be skipped.</p>}
           {preview.unsure > 0 && <p>{preview.unsure} couldn't be sorted automatically. They'll wait for you under “Needs your input”.</p>}
           {parsed?.file?.reviews?.length ? <p>Includes {parsed.file.reviews.length} monthly review note{parsed.file.reviews.length > 1 ? 's' : ''}.</p> : null}
@@ -120,7 +147,7 @@ export function Import({ embedded = false }: { embedded?: boolean } = {}) {
               setFile(null); setParsed(null);
             } catch (e: any) { setResult(`Not everything was saved (${e?.message ?? e}). Adding the same file again is safe: what's already in is skipped.`); }
             setBusy(false);
-          }}>{busy ? 'Adding…' : `Add ${preview.fresh} transactions`}</button>
+          }}>{busy ? 'Adding…' : preview.fresh ? `Add ${preview.fresh} transactions` : 'Save the dates and balances'}</button>
         </div>
       )}
       {parsed?.file && !parsed.transactions.length && !result && (
@@ -137,6 +164,11 @@ export function Import({ embedded = false }: { embedded?: boolean } = {}) {
       {result && <div className="step-box ok" role="status"><p>{result}</p><p><Link to="/transactions?review=1">Sort anything that needs your input</Link> or <Link to="/check-in?step=m-talk">read the review</Link>.</p></div>}
 
       <div className="import-help">
+        <section className="panel">
+          <h2>PDF statements</h2>
+          <p>Add CommBank and Macquarie PDF statements straight here: the app reads them on this device, finds the account from its last four digits and skips anything already added. Statements with a running balance also fill in the statement checks.</p>
+          <p className="fine">Other banks: use their CSV export, or ask Claude to prepare a data file.</p>
+        </section>
         <section className="panel">
           <h2>Getting a CSV from CommBank</h2>
           <ol className="howto">

@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Meter, MonthPicker, PageHeader, Tabs } from '../components/bits';
+import { SetAsidePanel } from '../components/SetAside';
 import { ChevronRight } from 'lucide-react';
 import { addMonths, allMonths, average, budgetFor, completeMonths, keepBudget, summarise, totalBudget } from '../data/analysis';
 import { GROUPS, KEEP_CATEGORIES, SPEND_CATEGORIES } from '../data/categories';
@@ -108,6 +109,8 @@ export function Budget() {
         })}
         <Info>Each month's pay less everything budgeted. Amber: money still without a job. Red: the plan spends more than comes in. Tap a month to fix it.</Info>
       </nav>
+
+      <SetAsidePanel month={month} />
 
       <section className="budget-group keep-group" aria-labelledby="g-keep">
         <div className="budget-group-head">

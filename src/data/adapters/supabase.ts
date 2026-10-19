@@ -1,7 +1,7 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { SUPABASE_KEY, SUPABASE_URL } from '../../config';
-import type { BudgetLine, Coverage, Kind, Payee, Review, Rule, Settings, Transaction } from '../types';
-import type { Adapter, Loaded } from './adapter';
+import type { Activity, BudgetLine, Coverage, Kind, Payee, Review, Rule, Settings, Transaction } from '../types';
+import { addActivity, type Adapter, type Loaded } from './adapter';
 
 let client: SupabaseClient | null = null;
 export function supabase(): SupabaseClient {
@@ -100,6 +100,7 @@ export const supabaseAdapter: Adapter = {
       reviews: reviews.map((r) => ({ id: r.id, month: r.month, title: r.title, body: r.body, author: r.author, created: r.created })),
       // The payee list is kept as its own record in the settings table.
       payees: (settings.find((s) => s.key === 'payees')?.value as Payee[]) ?? [],
+      activity: (settings.find((s) => s.key === 'activity')?.value as Activity[]) ?? [],
     };
   },
   async upsertTransactions(txs) {
@@ -125,8 +126,8 @@ export const supabaseAdapter: Adapter = {
     for (const r of old) if (!keep.has(`${r.account}|${r.from_date}|${r.to_date}`))
       await check(supabase().from('coverage').delete().eq('account', r.account).eq('from_date', r.from_date).eq('to_date', r.to_date));
   },
-  saveSettings(s, patch) {
-    return saveRecord<Settings>('settings', (latest) => (patch && latest ? { ...latest, ...patch } : s));
+  saveSettings(s, patch, rebuild) {
+    return saveRecord<Settings>('settings', (latest) => (latest && rebuild ? { ...latest, ...rebuild(latest) } : patch && latest ? { ...latest, ...patch } : s));
   },
   async upsertReviews(r: Review[]) {
     await check(supabase().from('reviews').upsert(r.map((x) => ({ id: x.id, month: x.month, title: x.title, body: x.body, author: x.author, created: x.created }))));
@@ -134,5 +135,8 @@ export const supabaseAdapter: Adapter = {
   async deleteReview(id) { await check(supabase().from('reviews').delete().eq('id', id)); },
   savePayees(p, base) {
     return saveRecord<Payee[]>('payees', (latest) => (base && latest ? rebasePayees(p, base, latest) : p));
+  },
+  logActivity(a) {
+    return saveRecord<Activity[]>('activity', (latest) => addActivity(latest ?? [], a));
   },
 };

@@ -17,7 +17,7 @@ Household context, research and private files are in the claude.ai Project "Pers
 - Commit as `Gaurav0302 <Gaurav0302@users.noreply.github.com>`, never with a personal email.
 
 ## Stack
-React 18 + Vite + TypeScript, HashRouter, Supabase (supabase-js, email + password logins, Row Level Security via `members` table). No chart library: one SVG chart component, `src/components/Chart.tsx` (spans, tooltips, click-through; colours `--s1`…`--s8` validated for colour-blind separation), plus `Spark` in `bits.tsx`. Fonts: Familjen Grotesk (headings), Atkinson Hyperlegible (text).
+React 18 + Vite + TypeScript, HashRouter, Supabase (supabase-js, email + password logins, Row Level Security via `members` table). No chart library: one SVG chart component, `src/components/Chart.tsx` (spans, tooltips, click-through; colours `--s1`…`--s8` validated for colour-blind separation), plus `Spark` in `bits.tsx`. Fonts: Familjen Grotesk (headings), Atkinson Hyperlegible (text), bundled from @fontsource (no Google Fonts; theme fonts load on demand in `themes.ts`). The published page has a content security policy (vite.config.ts `csp()`): new outside hosts must be added there.
 
 ## Where things are
 - `src/data/payees.ts`: the payee list (D13) that decides each transaction's category; `sortTransaction` is the one sorting entry point. Stored as settings key `payees`.
@@ -29,7 +29,7 @@ React 18 + Vite + TypeScript, HashRouter, Supabase (supabase-js, email + passwor
 - `supabase/setup.sql`: tables and access rules. `.github/workflows/`: publish and keep-awake.
 
 ## Gotchas
-- The workspace proxy blocks supabase.co and Google Fonts: test locally with `?demo` and Playwright (`npm i playwright@1.56.1` matches the installed Chromium).
+- The workspace proxy blocks supabase.co: test locally with `?demo` and Playwright (`npm i playwright@1.56.1` matches the installed Chromium).
 - A month only counts as complete when every account marked "needed for a complete month" covers it.
 - Grids need `minmax(0, 1fr)` columns, or tables push the phone layout sideways.
 - Pay, super, wealth items, bills, actions and custom categories all live in the `settings` JSON row: no database change needed to add fields there.
@@ -52,5 +52,8 @@ React 18 + Vite + TypeScript, HashRouter, Supabase (supabase-js, email + passwor
 - Privacy check: scans every file `git ls-files -co --exclude-standard` lists; on GitHub it reads the PRIVACY_WORDS secret.
 - Dev only: localStorage `fb:today` = `YYYY-MM` pretends the current month (`thisMonth()`), to test Record and check-ins before settlement.
 - Home's To do: `data/todos.ts` (`todosFor`). Settings also hold `meetings[month]` (meeting held), `goals` (own goals), `debts` (non-house debts, snowball), and each property's `checklist`. Own goals and debts are `screens/GoalsParts.tsx`. Password reset: store `resetPassword`/`changePassword`; Supabase's PASSWORD_RECOVERY event sets `recovering` and Gate shows `SetPassword`.
+- PDF statements (D34): `data/pdfStatements.ts` (`layoutLines`, `parseStatementText`, `accountFor`; same patterns and ids as tools/parse_statements.py) and `data/readPdf.ts` (pdf.js, loaded only when a PDF is chosen). Test against real PDFs only from the scratchpad, never commit statements.
+- Bills list: `data/billList.ts` (`billList`) is the one list for Bills, the calendar file and exports. Sinking funds and safe to spend: `data/setAside.ts`. Calendar file: `data/calendar.ts`; settings `meetingWhen`. Tax marks: settings `taxTags[txId]`, `data/tax.ts`. Meeting questions: settings `questions[txId]`. Who changed what: settings-table record `activity` (`adapter.logActivity`, store `note()`; describe new settings keys in `data/activity.ts`). CSV: `lib/csv.ts`.
+- Offline: `public/sw.js` caches only the app's own files (and fonts), never Supabase responses. Bump `CACHE` there if caching rules change.
 - Keep pages uncluttered: explanations go behind the small `Info` button, not in paragraphs.
 - Super cap and tax-rate tables in `wealth.ts` need updating each July (ATO key super rates and thresholds).

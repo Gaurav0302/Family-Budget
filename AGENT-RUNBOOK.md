@@ -10,6 +10,7 @@ Household context (accounts, private sorting rules, research) lives in the claud
 - Ask the user for the latest backup (app → Settings → Download a backup) so the review can compare with earlier months. If the Supabase connector is on, you can read the tables instead.
 
 ## 2. Turn statements into a data file
+Since D34 the family can add CommBank and Macquarie PDFs themselves on Statements → Add statements (read on their device, same ids as below). Use this section for other banks, PayPal PDFs, or when they'd rather hand the PDFs to you.
 ```bash
 pdftotext -layout statement.pdf private/statement.txt
 python3 tools/parse_statements.py private/parsed.json ACCOUNT:FORMAT:private/statement.txt [...]

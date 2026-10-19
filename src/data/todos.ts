@@ -19,6 +19,9 @@ export function todosFor(data: Data, audits: Map<string, MonthAudit>): Todo[] {
   }
   const toSort = data.transactions.filter((t) => t.needsReview).length;
   if (toSort) out.push({ id: 'sort', tone: 'warn', to: '/transactions?review=1', action: 'Sort them', text: `${toSort} payment${toSort === 1 ? '' : 's'} need${toSort === 1 ? 's' : ''} a category.` });
+  const have = new Set(data.transactions.map((t) => t.id));
+  const asks = Object.keys(data.settings.questions ?? {}).filter((id) => have.has(id)).length;
+  if (asks) out.push({ id: 'ask', tone: 'info', to: '/transactions?ask=1', action: 'See them', text: `${asks} payment${asks === 1 ? '' : 's'} to ask about at the money meeting.` });
   const done = completeMonths(data).at(-1);
   if (done && !data.settings.meetings?.[done]) out.push({ id: 'meeting', tone: 'info', to: '/check-in', action: 'Start the meeting', text: `Hold the money meeting for ${monthOnly(done)}.` });
   // A loan that has started: its balances for last month, from the statements or typed in on Property.

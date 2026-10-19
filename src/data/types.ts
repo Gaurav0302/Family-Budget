@@ -4,7 +4,7 @@ export type Kind =
   | 'spend'     // money going out to buy something (refunds come back as positive spend rows)
   | 'income'    // pay, interest, other money earned
   | 'transfer'  // moving money between the family's own accounts — never counted as spending
-  | 'invest';   // shares (Spaceship) — counts as money kept, not spent
+  | 'invest';   // shares — counts as money kept, not spent
 
 export type NeedWant = 'need' | 'want';
 
@@ -25,6 +25,12 @@ export interface Category {
   /** The area's key (built-in name or custom id); `group` is its display name. Set when categories are applied. */
   groupKey?: string;
 }
+
+/** One line of "who changed what": kept as its own record (newest first, the last 300). */
+export interface Activity { at: string; by: string | null; what: string }
+
+/** Kinds of tax deduction a payment can be marked as (Australian individual tax return headings, simplified). */
+export type TaxKind = 'work' | 'self-education' | 'donation' | 'income-protection' | 'tax-agent' | 'other';
 
 export interface Transaction {
   /** Stable id: account + date + amount + nth occurrence, so the same item from a PDF and a CSV matches. */
@@ -289,6 +295,13 @@ export interface Settings {
   debts?: { id: string; name: string; balance: number; rate?: number; minimum?: number }[];
   /** Money meetings held, by the month they reviewed (YYYY-MM): when, and who pressed "We've had this meeting". */
   meetings?: Record<string, { heldOn: string; by?: string }>;
+  /** Payments marked for tax time (by bank payment id): what kind of deduction, and whose. */
+  taxTags?: Record<string, { kind: TaxKind; person?: string; part?: number }>;
+  // `part`: for a split payment, which part (1, 2, …) is for tax; none means the whole payment.
+  /** Payments one person wants to ask about at the money meeting (by payment id). */
+  questions?: Record<string, { by?: string; on: string }>;
+  /** When the family holds the money meeting, for the calendar file: the nth (1–4, or -1 for last) weekday of each month, at a time. */
+  meetingWhen?: { nth: number; day: 'MO' | 'TU' | 'WE' | 'TH' | 'FR' | 'SA' | 'SU'; time: string };
   customCategories?: Category[];
   hiddenCategories?: string[];
   /** The family's own areas (groups of categories). */

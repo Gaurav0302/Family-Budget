@@ -49,9 +49,9 @@ function Gate() {
   if (status === 'signed-out') return <Login />;
   if (status === 'error') return (
     <div className="center-screen">
-      <h1>Couldn't load your data</h1>
-      <p className="lead">{error}</p>
-      <p>If the database has been asleep (free projects pause after a week without use), open supabase.com, choose the family-budget project and click <b>Restore project</b>. Then try again.</p>
+      <h1>{navigator.onLine ? "Couldn't load your data" : "You're offline"}</h1>
+      <p className="lead">{navigator.onLine ? error : 'Family Purse needs the internet to fetch your figures. Connect, then try again.'}</p>
+      {navigator.onLine && <p>If the database has been asleep (free projects pause after a week without use), open supabase.com, choose the family-budget project and click <b>Restore project</b>. Then try again.</p>}
       <button className="btn primary" onClick={() => reload()}>Try again</button>
     </div>
   );

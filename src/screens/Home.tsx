@@ -13,6 +13,7 @@ import { addMonths, allMonths, budgetFor, completeMonths } from '../data/analysi
 import { CATEGORY } from '../data/categories';
 import { reviewFor } from '../data/reviewCache';
 import { todosFor } from '../data/todos';
+import { SafeToSpendPanel } from '../components/SetAside';
 import { useAudits } from '../data/useAudit';
 import { useStore } from '../data/store';
 import { money, monthName, monthOnly, pct, thisMonth } from '../lib/format';
@@ -121,6 +122,8 @@ export function HomeScreen() {
             </ul>
           </section>
         )}
+
+        <SafeToSpendPanel />
 
         <section className="panel" aria-labelledby="where">
           <div className="panel-head"><h2 id="where">Where it went</h2><Link to={`/transactions?month=${month}`}>All spending</Link></div>

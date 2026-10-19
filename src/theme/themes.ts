@@ -105,14 +105,14 @@ export const THEMES: ThemeSpec[] = [
 export const DEFAULT_THEME = 'eucalyptus';
 export const themeById = (id: string | undefined) => THEMES.find((t) => t.id === id) ?? THEMES[0];
 
-export const FONTS: Record<Font, { display: string; text: string; weight: number; css?: string }> = {
+export const FONTS: Record<Font, { display: string; text: string; weight: number; load?: () => Promise<unknown[]> }> = {
   grotesk: { display: "'Familjen Grotesk', 'Atkinson Hyperlegible', system-ui, sans-serif", text: "'Atkinson Hyperlegible', system-ui, -apple-system, 'Segoe UI', sans-serif", weight: 700 },
-  geometric: { display: "'Outfit', system-ui, sans-serif", text: "'Manrope', system-ui, sans-serif", weight: 600, css: 'family=Outfit:wght@500;600;700&family=Manrope:wght@400;600;700' },
-  serif: { display: "'Fraunces', Georgia, serif", text: "'Source Sans 3', system-ui, sans-serif", weight: 600, css: 'family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Source+Sans+3:ital,wght@0,400;0,700;1,400' },
-  rounded: { display: "'Nunito', system-ui, sans-serif", text: "'Nunito Sans', system-ui, sans-serif", weight: 800, css: 'family=Nunito:wght@600;700;800&family=Nunito+Sans:ital,wght@0,400;0,700;1,400' },
-  editorial: { display: "'Playfair Display', Georgia, serif", text: "'DM Sans', system-ui, sans-serif", weight: 700, css: 'family=Playfair+Display:wght@500;600;700&family=DM+Sans:ital,wght@0,400;0,700;1,400' },
-  mono: { display: "'JetBrains Mono', ui-monospace, monospace", text: "'IBM Plex Sans', system-ui, sans-serif", weight: 700, css: 'family=JetBrains+Mono:wght@500;700&family=IBM+Plex+Sans:ital,wght@0,400;0,700;1,400' },
-  humanist: { display: "'Lexend', system-ui, sans-serif", text: "'Lexend', system-ui, sans-serif", weight: 600, css: 'family=Lexend:wght@400;600;700' },
+  geometric: { display: "'Outfit', system-ui, sans-serif", text: "'Manrope', system-ui, sans-serif", weight: 600, load: () => Promise.all([import('@fontsource/outfit/500.css'), import('@fontsource/outfit/600.css'), import('@fontsource/outfit/700.css'), import('@fontsource/manrope/400.css'), import('@fontsource/manrope/600.css'), import('@fontsource/manrope/700.css')]) },
+  serif: { display: "'Fraunces', Georgia, serif", text: "'Source Sans 3', system-ui, sans-serif", weight: 600, load: () => Promise.all([import('@fontsource/fraunces/500.css'), import('@fontsource/fraunces/600.css'), import('@fontsource/fraunces/700.css'), import('@fontsource/source-sans-3/400.css'), import('@fontsource/source-sans-3/700.css'), import('@fontsource/source-sans-3/400-italic.css')]) },
+  rounded: { display: "'Nunito', system-ui, sans-serif", text: "'Nunito Sans', system-ui, sans-serif", weight: 800, load: () => Promise.all([import('@fontsource/nunito/600.css'), import('@fontsource/nunito/700.css'), import('@fontsource/nunito/800.css'), import('@fontsource/nunito-sans/400.css'), import('@fontsource/nunito-sans/700.css'), import('@fontsource/nunito-sans/400-italic.css')]) },
+  editorial: { display: "'Playfair Display', Georgia, serif", text: "'DM Sans', system-ui, sans-serif", weight: 700, load: () => Promise.all([import('@fontsource/playfair-display/500.css'), import('@fontsource/playfair-display/600.css'), import('@fontsource/playfair-display/700.css'), import('@fontsource/dm-sans/400.css'), import('@fontsource/dm-sans/700.css'), import('@fontsource/dm-sans/400-italic.css')]) },
+  mono: { display: "'JetBrains Mono', ui-monospace, monospace", text: "'IBM Plex Sans', system-ui, sans-serif", weight: 700, load: () => Promise.all([import('@fontsource/jetbrains-mono/500.css'), import('@fontsource/jetbrains-mono/700.css'), import('@fontsource/ibm-plex-sans/400.css'), import('@fontsource/ibm-plex-sans/700.css'), import('@fontsource/ibm-plex-sans/400-italic.css')]) },
+  humanist: { display: "'Lexend', system-ui, sans-serif", text: "'Lexend', system-ui, sans-serif", weight: 600, load: () => Promise.all([import('@fontsource/lexend/400.css'), import('@fontsource/lexend/600.css'), import('@fontsource/lexend/700.css')]) },
 };
 
 const SHAPES: Record<Shape, [number, number, number]> = { sharp: [6, 5, 4], soft: [12, 9, 6], standard: [18, 12, 8], round: [24, 16, 12] };
@@ -187,15 +187,13 @@ export function themeVars(id: string, mode: Mode) {
 const NAMES = Object.keys(buildTheme(THEMES[0], 'light'));
 const loaded = new Set<string>();
 
-/** Fetch a font pairing from Google Fonts the first time it's needed. */
+/** Load a theme's font pairing the first time it's needed. The fonts come with the app (no Google Fonts), so nothing
+ *  about who uses the app goes to a third party, and they work offline. */
 export function loadFont(font: Font) {
   const f = FONTS[font];
-  if (!f.css || loaded.has(font)) return;
+  if (!f.load || loaded.has(font)) return;
   loaded.add(font);
-  const link = document.createElement('link');
-  link.rel = 'stylesheet';
-  link.href = `https://fonts.googleapis.com/css2?${f.css}&display=swap`;
-  document.head.appendChild(link);
+  f.load().catch(() => loaded.delete(font));
 }
 
 /** Put a theme on the page: colours, shapes and fonts. Eucalyptus in its original form uses the hand-tuned colours in app.css. */

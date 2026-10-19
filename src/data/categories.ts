@@ -43,7 +43,7 @@ export const CATEGORIES: Category[] = [
   c('car-insurance', 'Car insurance', 'Transport', 'need'),
   c('car-rego', 'Car registration', 'Transport', 'need'),
   c('car-maintenance', 'Car servicing & repairs', 'Transport', 'need'),
-  c('roadside', 'Roadside assistance (RACV)', 'Transport', 'need'),
+  c('roadside', 'Roadside assistance', 'Transport', 'need', 'RACV, NRMA, RAA and the like'),
   c('tolls-parking', 'Tolls & parking', 'Transport', 'need'),
   c('public-transport', 'Public transport', 'Transport', 'need'),
   c('rideshare', 'Taxis & Uber rides', 'Transport', 'want'),
@@ -79,9 +79,9 @@ export const CATEGORIES: Category[] = [
   { id: 'other-income', label: 'Other money in', group: 'Money in', type: 'need', system: true },
   { id: 'own-transfer', label: 'Between our accounts', group: 'Moving money', type: 'need', system: true },
   { id: 'card-payment', label: 'Credit card repayment', group: 'Moving money', type: 'need', system: true },
-  { id: 'shares', label: 'Shares (Spaceship)', group: 'Investing', type: 'need', system: true },
+  { id: 'shares', label: 'Shares', group: 'Investing', type: 'need', system: true },
   { id: 'keep-savings', label: 'Savings & offset', group: 'Kept on purpose', type: 'need', system: true, keep: true, hint: 'The weekly transfers, and from settlement the offset' },
-  { id: 'keep-shares', label: 'Shares (Spaceship)', group: 'Kept on purpose', type: 'need', system: true, keep: true },
+  { id: 'keep-shares', label: 'Shares', group: 'Kept on purpose', type: 'need', system: true, keep: true },
   { id: 'keep-uni', label: 'University funds', group: 'Kept on purpose', type: 'need', system: true, keep: true, hint: 'One fund for each child' },
 ];
 

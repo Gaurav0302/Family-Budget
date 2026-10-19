@@ -111,11 +111,13 @@ Status: ✅ done · ⬜ to do · 🔄 in progress · ❌ blocked · 🚫 dropped
 - ✅ 20 Oct 2026 — Block 2 (D32): new structure (29–34)
 - ✅ 20 Oct 2026 — Block 3 (D33): page clean-ups (35–50). Left for later: undo a whole import, net worth projection, phone collapse of meeting steps
 - ⬜ User: try "Forgot your password?" once on the live site (Supabase → Authentication → URL configuration must list the site address)
-- ⬜ Block 4: features (51–62): bank feeds (CDR), PDF import in the app, reminders, sinking funds, safe-to-spend, two-person features, tax pack, export, install on phone, assistant
+- ✅ 20 Oct 2026 — Block 4 part 1 (D34): PDF statements in the app, calendar reminders, put aside for big bills, safe to spend, tax marks and accountant pack, questions for the meeting, recent changes, CSV exports, install on phone
+- ⬜ User decides: bank feeds through Open Banking (Fiskil or Basiq, monthly cost, sign-up) and an "ask about our money" assistant (API cost)
+- ⬜ Later: per-person fun money, money sent overseas in AUD and INR, investment property tax
 - ⬜ Launch track (78–86): households and invitations, paid hosting and monitoring, privacy policy, advice rules, security headers, positioning, pricing, brand
 - ⬜ Code (63–73 remaining): split the settings record, data version and upgrades, categories per household, shared fields/sheet, logic out of screens, tests for store and screens, CSS split
 
 ## Phase 7 — Polish
 - ✅ 18 Oct 2026 — Tests (17), phone overflow check on every page, dark mode
-- ⬜ Install-to-home-screen (web app manifest + icons)
-- ⬜ PDF import in the app
+- ✅ 20 Oct 2026 — Install-to-home-screen (web app manifest + icons)
+- ✅ 20 Oct 2026 — PDF import in the app

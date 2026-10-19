@@ -15,6 +15,8 @@ import { merchantOf } from '../data/merchant';
 import { Markdown } from '../lib/markdown';
 import { Trends } from './Trends';
 import { reviewFor } from '../data/reviewCache';
+import { taxLines, taxTotals, TAX_LABEL } from '../data/tax';
+import { toCsv } from '../lib/csv';
 import { useStore } from '../data/store';
 import type { Data } from '../data/types';
 import { expectedIncome, financialYear, netWorth, payFor, people } from '../data/wealth';
@@ -23,7 +25,7 @@ import { outgoings, type Basis } from '../data/forecast';
 import { useForecast } from '../data/useProperties';
 import { EVERY_UNIT, freqOf, meterLimit, monthlyOf, perTime } from '../data/frequency';
 import { keepBudget, totalBudget } from '../data/analysis';
-import { dayName, longDate, money, monthName, monthOnly, pct, today } from '../lib/format';
+import { dayName, download, longDate, money, monthName, monthOnly, pct, today } from '../lib/format';
 
 const endOf = (m: string) => { const [y, mo] = m.split('-').map(Number); return `${m}-${String(new Date(Date.UTC(y, mo, 0)).getUTCDate()).padStart(2, '0')}`; };
 
@@ -142,7 +144,7 @@ function MoreFindings({ items }: { items: Finding[] }) {
 }
 
 function MoneyMeeting() {
-  const { data, updateSettings, setBudget, updateTransaction, addReview, deleteReview, email } = useStore();
+  const { data, updateSettings, updateSettingsBy, setBudget, updateTransaction, addReview, deleteReview, email } = useStore();
   const months = useMemo(() => allMonths(data.transactions), [data.transactions]);
   const complete = useMemo(() => completeMonths(data), [data]);
   const [month, setMonth] = useState(complete.at(-1) ?? months.at(-1) ?? '');
@@ -154,6 +156,9 @@ function MoneyMeeting() {
   const [openGroups, setOpenGroups] = useState<Set<string>>(new Set());
   const [present, setPresent] = useState<number | null>(null);
   const [active, setActive] = useState('m-month');
+  // Payments someone flagged to ask about (any month: questions wait until someone marks them answered).
+  const asks = useMemo(() => Object.entries(data.settings.questions ?? {}).map(([id, q]) => ({ tx: data.transactions.find((t) => t.id === id), q }))
+    .filter((x): x is { tx: (typeof data.transactions)[number]; q: { by?: string; on: string } } => !!x.tx).sort((a, b) => a.tx.date.localeCompare(b.tx.date)), [data.settings.questions, data.transactions]);
   const drill = useDrill();
   // On a computer the steps live in the pane beside the menu; on smaller screens they're a strip at the top of the page.
   const [wide, setWide] = useState(() => matchMedia('(min-width: 960px)').matches);
@@ -311,6 +316,20 @@ function MoneyMeeting() {
                 <div><b>{merchantOf(tx.description)}</b><small>{dayName(tx.date)}. {reason}</small></div>
                 <span className="num">{money(tx.amount, { cents: true })}</span>
                 <button className="btn small no-print" onClick={() => updateTransaction(tx.splitOf ?? tx.id, { oneOff: true })}>Mark as one-off</button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {asks.length > 0 && (
+        <div className="meet-unusual">
+          <h3>Questions about payments</h3>
+          <ul className="unusual">
+            {asks.map(({ tx, q }) => (
+              <li key={tx.id}>
+                <div><b>{merchantOf(tx.description)}</b><small>{dayName(tx.date)}{q.by ? `. Asked by ${q.by.split('@')[0]}` : ''}{tx.note ? `. ${tx.note}` : ''}</small></div>
+                <span className="num">{money(tx.amount, { cents: true })}</span>
+                <button className="btn small no-print" onClick={() => updateSettingsBy((s) => { const next = { ...(s.questions ?? {}) }; delete next[tx.id]; return { questions: next }; })}>Answered</button>
               </li>
             ))}
           </ul>
@@ -530,8 +549,17 @@ function FinancialYear() {
   const superIn = people(s).map((p) => ({ p, amount: have.reduce((a, m) => { const e = payFor(s, p, m); return a + (e ? (e.grossYearly / 12) * (e.superPct / 100) + e.salarySacrifice : 0); }, 0) }));
   const groups = GROUPS.map((g) => ({ g, amount: Object.entries(sums.reduce((acc, x) => { for (const [c, v] of Object.entries(x.byCategory)) acc[c] = (acc[c] ?? 0) + v; return acc; }, {} as Record<string, number>))
     .filter(([c]) => CATEGORY[c]?.group === g).reduce((a, [, v]) => a + v, 0) })).filter((x) => x.amount > 0).sort((a, b) => b.amount - a.amount);
-  const cat = (id: string) => inFy.filter((t) => t.category === id && t.kind === 'spend').reduce((a, t) => a - t.amount, 0);
   const inc = total((x) => x.income), spend = total((x) => x.spend);
+  const lines = taxLines(data, fy);
+  const tax = taxTotals(lines);
+  const pack = () => {
+    const rows: (string | number)[][] = [];
+    for (const [p, v] of pay) rows.push([p, 'Income', 'Take-home pay (see payment summary for gross)', '', '', '', v, '']);
+    for (const [p, v] of interest) rows.push([p, 'Income', 'Bank interest', '', '', '', v, '']);
+    for (const x of superIn.filter((x) => x.amount)) rows.push([x.p, 'Super', 'Paid into super (estimate)', '', '', '', Math.round(x.amount), '']);
+    for (const l of lines) rows.push([l.person, 'Deduction', TAX_LABEL[l.kind], l.tx.date, merchantOf(l.tx.description), l.tx.description, l.amount, l.tx.note ?? '']);
+    download(`tax-pack-${fy}.csv`, toCsv(['Person', 'Section', 'Item', 'Date', 'Payee', 'Bank description', 'Amount', 'Note'], rows), 'text/csv');
+  };
 
   return (
     <div className="report">
@@ -558,13 +586,17 @@ function FinancialYear() {
           </ul>
         </section>
         <section className="report-sec">
-          <h3>For tax time <Info>Things your accountant usually asks about. Bank interest is taxable income. Donations to registered charities ($2 or more) are deductible with a receipt.</Info></h3>
+          <h3>For tax time <Info>Payments marked "For tax time" on Transactions, plus donations and accountant fees. Bank interest is taxable income. Life cover isn't deductible; income protection is. Your accountant decides what's claimable: this is the list to start from.</Info></h3>
+          {tax.size ? [...tax].map(([p, kinds]) => (
+            <div key={p} className="tax-person">
+              {tax.size > 1 && <h4>{p}</h4>}
+              <ul className="value-list">{[...kinds].map(([k, v]) => <li key={k}><span>{TAX_LABEL[k]}</span><span>{money(v, { cents: true })}</span></li>)}</ul>
+            </div>
+          )) : <p className="muted">Nothing marked yet. Open a payment on Transactions and choose "For tax time".</p>}
           <ul className="value-list">
-            <li><span>Donations</span><span>{money(cat('donations'))}</span></li>
-            <li><span>Accountant & tax fees</span><span>{money(cat('accountant'))}</span></li>
-            <li><span>Life and income protection paid personally <small className="muted">only the income protection part is deductible; check the policy</small></span><span>{money(cat('life-insurance'))}</span></li>
-            <li><span>Bank interest earned</span><span>{money([...interest.values()].reduce((a, b) => a + b, 0))}</span></li>
+            {[...interest].map(([p, v]) => <li key={`ti${p}`}><span>{p}'s bank interest earned</span><span>{money(v, { cents: true })}</span></li>)}
           </ul>
+          <button className="btn small no-print" onClick={pack}>Download the pack for your accountant (CSV)</button>
         </section>
       </div>
       <section className="report-sec">

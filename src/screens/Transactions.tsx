@@ -8,14 +8,23 @@ import { SplitEditor } from '../components/SplitEditor';
 import { CategorySelect } from '../components/CategorySelect';
 import { findPayee, kindForCategory } from '../data/payees';
 import { merchantOf } from '../data/merchant';
+import { toCsv } from '../lib/csv';
 import { useStore } from '../data/store';
-import type { Transaction } from '../data/types';
-import { dayName, money, monthName } from '../lib/format';
+import type { Settings, TaxKind, Transaction } from '../data/types';
+import { dayName, money, monthName, today as todayLocal } from '../lib/format';
+import { TAX_KINDS, TAX_LABEL } from '../data/tax';
+import { people } from '../data/wealth';
 import { FocusTrap } from '../components/FocusTrap';
 
 function Editor({ tx, onClose }: { tx: Transaction; onClose: () => void }) {
-  const { data, updateTransaction, setPayee, payeeIdx } = useStore();
+  const { data, updateTransaction, setPayee, payeeIdx, updateSettingsBy, email } = useStore();
   const payee = findPayee(tx, payeeIdx);
+  const tag = data.settings.taxTags?.[tx.id];
+  const [taxKind, setTaxKind] = useState<TaxKind | ''>(tag?.kind ?? '');
+  const [taxWho, setTaxWho] = useState(tag?.person ?? '');
+  const [taxPart, setTaxPart] = useState(tag?.part ?? 0);
+  const asked = data.settings.questions?.[tx.id];
+  const [ask, setAsk] = useState(!!asked);
   const [category, setCategory] = useState(tx.category ?? 'other');
   const [note, setNote] = useState(tx.note ?? '');
   const [oneOff, setOneOff] = useState(!!tx.oneOff);
@@ -28,6 +37,24 @@ function Editor({ tx, onClose }: { tx: Transaction; onClose: () => void }) {
 
   async function save() {
     let msg = 'Saved.';
+    // Tax mark and meeting question live in settings, keyed by the payment. Worked out on the latest copy, so the other
+    // person's marks and questions made meanwhile are kept.
+    const taxChanged = taxKind !== (tag?.kind ?? '') || taxWho !== (tag?.person ?? '') || taxPart !== (tag?.part ?? 0);
+    const askChanged = ask !== !!asked;
+    if (taxChanged || askChanged) await updateSettingsBy((s) => {
+      const patch: Partial<Settings> = {};
+      if (taxChanged) {
+        const next = { ...(s.taxTags ?? {}) };
+        if (taxKind) next[tx.id] = { kind: taxKind, ...(taxWho ? { person: taxWho } : {}), ...(parts && taxPart ? { part: taxPart } : {}) }; else delete next[tx.id];
+        patch.taxTags = next;
+      }
+      if (askChanged) {
+        const next = { ...(s.questions ?? {}) };
+        if (ask) next[tx.id] = { by: email ?? undefined, on: todayLocal() }; else delete next[tx.id];
+        patch.questions = next;
+      }
+      return patch;
+    });
     if (allOfPayee && payee) {
       const n = await setPayee(payee.id, { category, kind: kindForCategory(category), checked: true }, true);
       msg = `Saved. ${payee.name} now goes to ${label(category)}; ${n} payment${n === 1 ? '' : 's'} moved.`;
@@ -73,6 +100,32 @@ function Editor({ tx, onClose }: { tx: Transaction; onClose: () => void }) {
           <span>One-off <small>Leave it out of trends and budget checks (e.g. a visa fee or a big repair)</small></span></label>
         <label htmlFor="note">Note</label>
         <textarea id="note" rows={2} value={note} onChange={(e) => setNote(e.target.value)} placeholder="What was this for?" />
+        <label className="check"><input type="checkbox" checked={ask} onChange={(e) => setAsk(e.target.checked)} />
+          <span>Ask about this at the money meeting <small>{asked ? `Asked${asked.by ? ` by ${asked.by.split('@')[0]}` : ''} on ${dayName(asked.on)}. Untick once it's answered.` : 'It shows in the meeting and on Home until someone unticks it.'}</small></span></label>
+        {tx.amount < 0 && (
+          <details className="tax-mark" open={!!taxKind}>
+            <summary>For tax time{taxKind ? `: ${TAX_LABEL[taxKind]}` : ''}</summary>
+            <div className="tax-fields">
+              <label>Kind<select value={taxKind} onChange={(e) => setTaxKind(e.target.value as TaxKind | '')}>
+                <option value="">Not for tax</option>
+                {TAX_KINDS.map((k) => <option key={k.id} value={k.id}>{k.label}</option>)}
+              </select></label>
+              {taxKind && parts && (
+                <label>Which part<select value={taxPart} onChange={(e) => setTaxPart(Number(e.target.value))}>
+                  <option value={0}>The whole payment</option>
+                  {parts.map((p, i) => <option key={i} value={i + 1}>{label(p.category)}: {money(Math.abs(p.amount), { cents: true })}</option>)}
+                </select></label>
+              )}
+              {taxKind && people(data.settings).length > 1 && (
+                <label>Whose<select value={taxWho} onChange={(e) => setTaxWho(e.target.value)}>
+                  <option value="">{data.settings.accounts.find((a) => a.key === tx.account)?.owner ?? 'Joint'} (account owner)</option>
+                  {people(data.settings).map((p) => <option key={p} value={p}>{p}</option>)}
+                </select></label>
+              )}
+            </div>
+            {taxKind && <p className="fine">{TAX_KINDS.find((k) => k.id === taxKind)?.hint}. Keep the receipt.</p>}
+          </details>
+        )}
         <div className="sheet-actions">
           {payee && !done && <Link className="btn small ghost" to={`/categories?tab=payees&payee=${payee.id}`} onClick={onClose}>Edit payee</Link>}
           {done ? <p className="ok" role="status">{done}</p> : <>
@@ -88,12 +141,6 @@ function Editor({ tx, onClose }: { tx: Transaction; onClose: () => void }) {
 type Sort = 'new' | 'old' | 'out' | 'in';
 const SORTS: { id: Sort; label: string }[] = [{ id: 'new', label: 'Newest first' }, { id: 'old', label: 'Oldest first' }, { id: 'out', label: 'Biggest payments out' }, { id: 'in', label: 'Biggest money in' }];
 
-/** The rows as a CSV file a spreadsheet opens (one line each, quotes around text). */
-function toCsv(rows: { date: string; payee: string; description: string; account: string; category: string; amount: number; note: string }[]) {
-  const q = (v: string | number) => (typeof v === 'number' ? v.toFixed(2) : `"${v.replace(/"/g, '""')}"`);
-  return ['Date,Payee,Description,Account,Category,Amount,Note', ...rows.map((r) => [r.date, q(r.payee), q(r.description), q(r.account), q(r.category), q(r.amount), q(r.note)].join(','))].join('\n');
-}
-
 export function Transactions() {
   const { data, payeeIdx, updateTransactions } = useStore();
   const [params, setParams] = useSearchParams();
@@ -101,6 +148,9 @@ export function Transactions() {
   const category = params.get('category') ?? 'all';
   const account = params.get('account') ?? 'all';
   const onlyReview = params.get('review') === '1';
+  const onlyAsk = params.get('ask') === '1';
+  // Questions about payments still in the app (one removed since can't be answered, so it isn't counted).
+  const questions = useMemo(() => { const have = new Set(data.transactions.map((t) => t.id)); return Object.fromEntries(Object.entries(data.settings.questions ?? {}).filter(([id]) => have.has(id))); }, [data.settings.questions, data.transactions]);
   const [q, setQ] = useState('');
   const [limit, setLimit] = useState(150);
   const [editing, setEditing] = useState<Transaction | null>(null);
@@ -112,7 +162,7 @@ export function Transactions() {
   const [bulkDone, setBulkDone] = useState<string | null>(null);
   const months = useMemo(() => allMonths(data.transactions).reverse(), [data.transactions]);
   const set = (k: string, v: string) => { const p = new URLSearchParams(params); if (v === 'all' || !v) p.delete(k); else p.set(k, v); setParams(p, { replace: true }); };
-  useEffect(() => setLimit(150), [month, category, account, onlyReview, q]);
+  useEffect(() => setLimit(150), [month, category, account, onlyReview, onlyAsk, q]);
 
   const rows = useMemo(() => {
     const needle = q.trim().toLowerCase();
@@ -121,15 +171,16 @@ export function Transactions() {
       (category === 'all' || t.category === category || (data.settings.splits?.[t.id] ?? []).some((p) => p.category === category)) &&
       (account === 'all' || t.account === account) &&
       (!onlyReview || t.needsReview) &&
+      (!onlyAsk || !!questions[t.id]) &&
       (!needle || t.description.toLowerCase().includes(needle) || (t.note ?? '').toLowerCase().includes(needle) || merchantOf(t.description).toLowerCase().includes(needle)))
       .sort((a, b) => sort === 'old' ? a.date.localeCompare(b.date) : sort === 'out' ? a.amount - b.amount : sort === 'in' ? b.amount - a.amount : b.date.localeCompare(a.date));
-  }, [data.transactions, data.settings.splits, month, category, account, onlyReview, q, sort]);
+  }, [data.transactions, data.settings.splits, month, category, account, onlyReview, onlyAsk, questions, q, sort]);
 
   const parts = withSplits(rows, data.settings.splits).filter((t) => category === 'all' || t.category === category);
   const out = parts.filter((t) => t.kind === 'spend').reduce((s, t) => s - t.amount, 0);
   const cameIn = parts.filter((t) => t.kind === 'income').reduce((s, t) => s + t.amount, 0);
   const exportCsv = () => {
-    const csv = toCsv(rows.map((t) => ({ date: t.date, payee: findPayee(t, payeeIdx)?.name ?? merchantOf(t.description), description: t.description, account: accountName(t.account), category: label(t.category), amount: t.amount, note: t.note ?? '' })));
+    const csv = toCsv(['Date', 'Payee', 'Description', 'Account', 'Category', 'Amount', 'Note'], rows.map((t) => [t.date, findPayee(t, payeeIdx)?.name ?? merchantOf(t.description), t.description, accountName(t.account), label(t.category), t.amount, t.note ?? '']));
     const a = document.createElement('a');
     a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
     a.download = `transactions-${month === 'all' ? 'all' : month}.csv`;
@@ -169,6 +220,11 @@ export function Transactions() {
         <button className={`chip ${onlyReview ? 'on' : ''}`} onClick={() => set('review', onlyReview ? '' : '1')} aria-pressed={onlyReview}>
           Needs your input <b>{toSort}</b>
         </button>
+        {(Object.keys(questions).length > 0 || onlyAsk) && (
+          <button className={`chip ${onlyAsk ? 'on' : ''}`} onClick={() => set('ask', onlyAsk ? '' : '1')} aria-pressed={onlyAsk}>
+            To ask at the meeting <b>{Object.keys(questions).length}</b>
+          </button>
+        )}
       </div>
       <div className="result-bar">
         <p className="result-line">{rows.length} transaction{rows.length === 1 ? '' : 's'}{category !== 'all' && CATEGORY[category] ? ` in ${CATEGORY[category].label}` : ''}: <b>{money(out)}</b> spent{cameIn ? <>, <b>{money(cameIn)}</b> came in</> : ''}.</p>
@@ -205,6 +261,8 @@ export function Transactions() {
               <span className="tx-cat">
                 <span className={`pill ${t.needsReview ? 'pill-warn' : ''}`}>{data.settings.splits?.[t.id] ? `Split: ${data.settings.splits[t.id].map((p) => label(p.category)).join(' + ')}` : t.needsReview ? 'Needs your input' : label(t.category)}</span>
                 {t.oneOff && <span className="pill pill-quiet">One-off</span>}
+                {data.settings.taxTags?.[t.splitOf ?? t.id] && <span className="pill pill-quiet">Tax</span>}
+                {data.settings.questions?.[t.splitOf ?? t.id] && <span className="pill pill-ask">To ask</span>}
               </span>
               <span className={`tx-amt ${t.amount > 0 ? 'in' : ''}`}>{money(t.amount, { cents: true, sign: true })}</span>
             </button></li>,

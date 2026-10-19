@@ -1,6 +1,9 @@
 # SESSION-HANDOFF.md
 
-## Current status (20 Oct 2026, morning)
+## Current status (20 Oct 2026, late morning)
+Block 4 part 1 built (D34): PDF statements in the app, calendar reminders, put aside for big bills, safe to spend, tax marks and accountant pack, meeting questions, recent changes, CSV exports, install on phone. Waiting on the user for bank feeds and the assistant (cost). Next: launch track (78–86) and code items (63–73).
+
+## Earlier status (20 Oct 2026, morning)
 Audit blocks 1–3 built and published (D31 fixes, D32 new layout, D33 page clean-ups). The user dropped the history rewrite and will make the repository private (GitHub Pages on a free plan needs a public repo: check the site still publishes). Accessibility check: 0 failures on 16 pages, desktop and phone, light and dark. Next: block 4 features (51–62), then the launch track and code items. Password reset is untested against Supabase from here.
 
 ## Current status (19 Oct 2026, around midnight)

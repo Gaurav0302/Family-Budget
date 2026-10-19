@@ -6,6 +6,7 @@ import { Info, PageHeader } from '../components/bits';
 import { label } from '../data/categories';
 import { useStore } from '../data/store';
 import { ThemePicker } from '../theme/ThemePicker';
+import { Exports, RecentChanges, Reminders } from './SettingsParts';
 import { download } from '../lib/format';
 import { today as todayLocal } from '../lib/format';
 
@@ -55,6 +56,10 @@ export function SettingsScreen() {
         </details>
       </section>
 
+      <Reminders />
+
+      <RecentChanges />
+
       <section className="panel">
         <h2>Accounts, categories and payees</h2>
         <div className="btn-row">
@@ -82,9 +87,11 @@ export function SettingsScreen() {
         <p>{mode === 'supabase' ? <>Stored in your private Supabase database. Signed in as <b>{email}</b>.</> : 'Demo mode: everything is kept in this browser only.'}</p>
         <div className="btn-row">
           <button className="btn" onClick={() => download(`family-budget-backup-${todayLocal()}.json`, JSON.stringify(backup()))}>Download a backup</button>
-          <Link className="btn" to="/transactions">Transactions as a spreadsheet (CSV)</Link>
           {mode === 'local' && <button className="btn danger" onClick={() => { if (confirm('Delete all demo data in this browser?')) resetLocal(); }}>Clear demo data</button>}
         </div>
+        <h3 className="sub-h">Spreadsheets</h3>
+        <Exports />
+        <p className="fine">The pack for your accountant is on <Link to="/check-in?tab=year">Monthly check-in → Financial year</Link>.</p>
       </section>
     </div>
   );
