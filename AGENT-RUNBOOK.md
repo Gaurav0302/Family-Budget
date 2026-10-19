@@ -14,6 +14,7 @@ Household context (accounts, private sorting rules, research) lives in the claud
 pdftotext -layout statement.pdf private/statement.txt
 python3 tools/parse_statements.py private/parsed.json ACCOUNT:FORMAT:private/statement.txt [...]
 ```
+The family can also add PayPal's activity CSV in the app (Add statements) to name PayPal payments themselves.
 Formats: `cba_summary` (CommBank "Transaction Summary" letters and the credit card), `cba_statement` (formal CommBank statements), `macquarie`, `paypal` (only used to name the merchant behind PayPal debits).
 Account keys are in `household.json` → `settings.accounts`. Match each statement to its account by the last 4 digits (`last4`); if a statement's last 4 isn't there, it's a new account: ask the user, then add it on the Accounts page.
 

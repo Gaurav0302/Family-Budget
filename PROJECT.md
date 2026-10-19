@@ -24,10 +24,11 @@ src/
   components/  Shell.tsx (sidebar / phone tab bar), bits.tsx (meter, purse bar, columns chart, badges),
                Drill.tsx (payments behind a figure), Chart.tsx (all charts), Menu.tsx (⋯ menus), CategorySelect.tsx
   data/        types, categories, rules, merchant, analysis, review, importers, defaults, store, adapters/,
-               wealth (pay, super, net worth), bills, whatif, settingsMerge, payees (the payee list), useMonthly (month totals for charts)
+               wealth (pay, super, net worth), bills, whatif, settingsMerge, payees (the payee list), useMonthly (month totals for charts), paypal (PayPal activity CSV)
   screens/     Home, Transactions, Budget, Bills, Review, Reports, Trends, Goals, WhatIf, Wealth, Accounts, Categories,
                More (phone), Import, Settings, Login
   styles/      app.css (tokens, light + dark)
+  theme/       themes.ts (54 themes), color.ts (OKLCH + contrast), useLook.ts, ThemePicker.tsx
 tools/         parse_statements.py, prepare-import.ts, review.ts
 supabase/      setup.sql
 .github/       workflows/pages.yml, workflows/keep-awake.yml

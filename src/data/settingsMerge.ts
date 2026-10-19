@@ -37,7 +37,7 @@ export function mergeSettings(current: Settings, incoming: Partial<Settings>): S
     else if (k === 'actions') out.actions = union(current.actions, v, (a) => a.id);
     else if (k === 'customCategories') out.customCategories = union(current.customCategories, v, (c) => c.id);
     else if (k === 'customGroups') out.customGroups = union(current.customGroups, v, (g) => g.id);
-    else if (k === 'groupNames' || k === 'categoryEdits') out[k] = { ...v, ...(cur ?? {}) };
+    else if (k === 'groupNames' || k === 'categoryEdits' || k === 'looks') out[k] = { ...v, ...(cur ?? {}) };
     else if (k === 'hiddenCategories') out.hiddenCategories = [...new Set([...(current.hiddenCategories ?? []), ...v])];
     else if (k === 'accounts') out.accounts = union(current.accounts, v, (a) => a.key).map((a) => {
       const inc = (v as Settings['accounts']).find((x) => x.key === a.key);

@@ -3,25 +3,19 @@ import { Link } from 'react-router-dom';
 import { Info, PageHeader } from '../components/bits';
 import { label } from '../data/categories';
 import { useStore } from '../data/store';
+import { ThemePicker } from '../theme/ThemePicker';
 import { download } from '../lib/format';
 
 export function SettingsScreen() {
-  const { data, updateSettings, deleteRule, signOut, email, mode, backup, resetLocal } = useStore();
-  const s = data.settings;
+  const { data, deleteRule, signOut, email, mode, backup, resetLocal } = useStore();
 
   return (
     <div className="settings">
       <PageHeader title="Settings" />
 
       <section className="panel">
-        <h2>Look</h2>
-        <div className="seg" role="radiogroup" aria-label="Theme">
-          {(['auto', 'light', 'dark'] as const).map((t) => (
-            <button key={t} role="radio" aria-checked={s.theme === t} className={s.theme === t ? 'on' : ''} onClick={() => updateSettings({ theme: t })}>
-              {t === 'auto' ? 'Match my device' : t === 'light' ? 'Light' : 'Dark'}
-            </button>
-          ))}
-        </div>
+        <div className="panel-head"><h2>Look</h2><Info>Your choice is just for you{email ? ` (${email})` : ''}: the rest of the family keeps theirs. It follows you to any device you sign in on. Every theme has a light and a dark version, and all text meets accessibility contrast.</Info></div>
+        <ThemePicker />
       </section>
 
       <section className="panel">

@@ -37,6 +37,8 @@ interface Store {
   payeeIdx: PayeeIndex;
   /** Change a payee. With applyPast, its earlier transactions (not sorted by hand) move too. Returns how many moved. */
   setPayee(id: string, patch: Partial<Payee>, applyPast: boolean): Promise<number>;
+  /** Give PayPal bank payments the shop's name from a PayPal activity file, and sort them by it. Returns how many were named. */
+  namePayPal(list: { id: string; description: string; note?: string }[]): Promise<number>;
   /** Fold one payee into another (same shop, different bank wording). */
   mergePayees(fromId: string, intoId: string): Promise<number>;
   markChecked(ids: string[]): Promise<void>;
@@ -75,7 +77,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     finally { setSaving(false); }
   }, []);
 
-  const load = useCallback(async () => {
+  /** `quiet`: a background refresh. It never shows the loading or error screen. */
+  const load = useCallback(async (quiet = false) => {
     try {
       const l = await adapter.load();
       const settings = withDefaults(l.settings);
@@ -116,6 +119,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       setStatus('ready');
       setError(null);
     } catch (e: any) {
+      if (quiet) return;
       setError(e?.message ?? String(e));
       setStatus('error');
     }
@@ -125,12 +129,19 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     if (adapter.kind === 'local') { setEmail('demo'); load(); return; }
     const sb = supabase();
     let first = true;
+    let user: string | null = null;
+    let loadedAt = 0;
     sb.auth.getSession().then(({ data: { session } }) => onSession(session));
     const { data: sub } = sb.auth.onAuthStateChange((_e, session) => { if (!first) onSession(session); });
+    // Supabase announces "signed in" again whenever the tab comes back into view and when it renews the login.
+    // Only a different person (or signing in after signing out) shows the loading screen. For the same person,
+    // after a long break the data is refreshed quietly in the background, so the other person's changes appear.
     function onSession(session: Session | null) {
       first = false;
-      if (session) { setEmail(session.user.email ?? null); setStatus('loading'); load(); }
-      else { setEmail(null); setStatus('signed-out'); }
+      if (!session) { user = null; setEmail(null); setStatus('signed-out'); return; }
+      setEmail(session.user.email ?? null);
+      if (session.user.id !== user) { user = session.user.id; loadedAt = Date.now(); setStatus('loading'); load(); }
+      else if (Date.now() - loadedAt > 10 * 60_000) { loadedAt = Date.now(); load(true); }
     }
     return () => sub.subscription.unsubscribe();
   }, [adapter, load]);
@@ -162,11 +173,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       return error ? (error.message.includes('Invalid') ? 'That email and password don\'t match. Check them and try again.' : error.message) : null;
     },
     async signOut() { if (adapter.kind === 'supabase') await supabase().auth.signOut(); },
-    reload: load,
+    reload: () => load(),
     async updateTransaction(id, patch) {
       const cur = dataRef.current.transactions.find((t) => t.id === id);
       if (!cur) return;
-      const next = { ...cur, ...patch, manual: patch.category || patch.kind ? true : cur.manual, needsReview: patch.category || patch.kind ? false : cur.needsReview };
+      const next = { ...cur, ...patch, manual: patch.category || patch.kind ? true : cur.manual, needsReview: patch.category || patch.kind ? false : (patch.needsReview ?? cur.needsReview) };
       setData((d) => ({ ...d, transactions: d.transactions.map((t) => (t.id === id ? next : t)) }));
       await guard(() => adapter.upsertTransactions([next]));
     },
@@ -272,6 +283,26 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       const { all, changed } = resortFor(d.transactions, payees, new Set([intoId]), d.settings, d.rules);
       setData({ ...d, payees, transactions: all });
       await guard(async () => { await adapter.savePayees(payees); if (changed.length) await adapter.upsertTransactions(changed); });
+      return changed.length;
+    },
+    async namePayPal(list) {
+      const d = dataRef.current;
+      const byId = new Map(list.map((x) => [x.id, x]));
+      const idx = indexPayees(d.payees);
+      // New wording, then sort again: an existing payee for that shop wins, otherwise the built-in rules decide.
+      const changed = d.transactions.filter((t) => byId.has(t.id)).map((t) => {
+        const x = byId.get(t.id)!;
+        const renamed: Transaction = { ...t, description: x.description, note: t.note || x.note || null };
+        if (t.manual) return renamed;
+        const { payee: _p, ...sorted } = sortTransaction({ ...renamed, category: null, kind: null }, idx, d.rules, d.settings);
+        return { ...renamed, ...sorted };
+      });
+      const byChanged = new Map(changed.map((t) => [t.id, t]));
+      const transactions = d.transactions.map((t) => byChanged.get(t.id) ?? t);
+      const added = payeesFor(changed, d.payees);
+      const payees = added.length ? [...d.payees, ...added] : d.payees;
+      setData({ ...d, transactions, payees });
+      await guard(async () => { await adapter.upsertTransactions(changed); if (added.length) await adapter.savePayees(payees); });
       return changed.length;
     },
     backup() {

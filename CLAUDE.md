@@ -31,6 +31,9 @@ React 18 + Vite + TypeScript, HashRouter, Supabase (supabase-js, email + passwor
 - A month only counts as complete when every account marked "needed for a complete month" covers it.
 - Grids need `minmax(0, 1fr)` columns, or tables push the phone layout sideways.
 - Pay, super, wealth items, bills, actions and custom categories all live in the `settings` JSON row: no database change needed to add fields there.
+- Themes: `src/theme/themes.ts` (54 specs → tokens via OKLCH, contrast enforced; `themes.test.ts` checks all 108). Each person's look is settings `looks[email]`; `useLook()` applies it. Never hard-code colours outside `:root`: use the tokens.
+- Splits: settings `splits[txId]` (parts add up to the payment). Anything totalling spending should go through `summarise()` or `withSplits()`.
+- PayPal: `src/data/paypal.ts` reads PayPal's activity CSV and pairs purchases with bank debits (same amount, ±6 days).
 - Areas: `GROUPS` (names) and `GROUP_KEYS` are live lists; a category's `groupKey` is the stable key, `group` its display name. Family changes live in settings `customGroups`, `groupNames`, `categoryEdits`.
 - Actions go behind `Menu` (⋯) from `components/Menu.tsx`; month totals for charts come from `useMonthly()` in `data/useMonthly.ts`.
 - Drill-downs: `DrillLink` with `drillCategory/drillType/drillGroup` from `components/Drill.tsx` opens the payments behind any figure.

@@ -20,7 +20,6 @@ Status: ✅ done · ⬜ to do · 🔄 in progress · ❌ blocked · 🚫 dropped
 - ✅ 18 Oct 2026 — Import page: CommBank/other CSVs and Family Budget data files; duplicate skipping
 - ✅ 18 Oct 2026 — History Feb–Oct 2026 prepared (627 transactions, reconciled to the cent)
 - ⬜ User imports the history file and sorts the items under "Needs your input"
-- ⬜ PayPal CSV import in the app (today PayPal is only handled by the PDF tool)
 - ⬜ PDF import directly in the app (today PDFs go through a Claude session)
 
 ## Phase 3 — Budget
@@ -72,7 +71,15 @@ Status: ✅ done · ⬜ to do · 🔄 in progress · ❌ blocked · 🚫 dropped
 - ⬜ User moves Home Affairs / VFS payees into "Visa, PR & citizenship" if they show under Government & official fees
 - ⬜ PayPal Australia ($6,248 in June) sits in "Other / not sure yet": sort it so the Other spike disappears
 
+## Phase 6e — Themes, splits, PayPal (19 Oct 2026)
+- ✅ 19 Oct 2026 — No reload when coming back to the app (D20)
+- ✅ 19 Oct 2026 — 54 themes × light/dark, per person, contrast-tested (D21)
+- ✅ 19 Oct 2026 — Split a payment into parts; notes and bank wording in drill-downs (D22)
+- ✅ 19 Oct 2026 — PayPal activity CSV names PayPal bank payments in the app (D22)
+- ⬜ User downloads PayPal activity 1 Feb–30 Jun 2026 and adds it, to name the 8 unnamed PayPal payments ($7,207, incl. $6,176.40 on 15 Jun)
+- ⬜ Font loading is from Google Fonts; consider self-hosting fonts if offline use matters
+
 ## Phase 7 — Polish
 - ✅ 18 Oct 2026 — Tests (17), phone overflow check on every page, dark mode
 - ⬜ Install-to-home-screen (web app manifest + icons)
-- ⬜ PayPal CSV import in the app; PDF import in the app
+- ⬜ PDF import in the app

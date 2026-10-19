@@ -2,8 +2,9 @@ import { X } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { Empty, Info, PageHeader } from '../components/bits';
-import { allMonths, monthOf } from '../data/analysis';
+import { allMonths, monthOf, withSplits } from '../data/analysis';
 import { CATEGORIES, CATEGORY, label } from '../data/categories';
+import { SplitEditor } from '../components/SplitEditor';
 import { CategorySelect } from '../components/CategorySelect';
 import { findPayee, kindForCategory } from '../data/payees';
 import { merchantOf } from '../data/merchant';
@@ -19,6 +20,8 @@ function Editor({ tx, onClose }: { tx: Transaction; onClose: () => void }) {
   const [oneOff, setOneOff] = useState(!!tx.oneOff);
   const [allOfPayee, setAllOfPayee] = useState(!!tx.needsReview && !payee?.askEachTime);
   const [done, setDone] = useState<string | null>(null);
+  const [splitting, setSplitting] = useState(false);
+  const parts = data.settings.splits?.[tx.id];
   const count = payee ? data.transactions.filter((t) => findPayee(t, payeeIdx)?.id === payee.id).length : 0;
   const account = data.settings.accounts.find((a) => a.key === tx.account)?.name ?? tx.account;
 
@@ -48,9 +51,18 @@ function Editor({ tx, onClose }: { tx: Transaction; onClose: () => void }) {
           <div><dt>Account</dt><dd>{account}</dd></div>
           <div className="wide"><dt>Bank's description</dt><dd>{tx.description}</dd></div>
         </dl>
+        {splitting ? <SplitEditor tx={tx} onDone={(msg) => { setSplitting(false); if (msg) setDone(msg); }} /> : parts ? (
+          <div className="split-summary">
+            <b>Split into {parts.length} parts</b>
+            <ul>{parts.map((p, i) => <li key={i}><span>{label(p.category)}{p.note ? <small> {p.note}</small> : null}</span><span>{money(Math.abs(p.amount), { cents: true })}</span></li>)}</ul>
+            <button className="btn small" onClick={() => setSplitting(true)}>Change the split</button>
+          </div>
+        ) : <>
         <label htmlFor="cat">Category</label>
         <CategorySelect id="cat" value={category} onChange={setCategory} />
-        {payee && (
+        <button className="btn small ghost split-open" onClick={() => setSplitting(true)}>Split into parts</button>
+        </>}
+        {payee && !parts && !splitting && (
           <label className="check"><input type="checkbox" checked={allOfPayee} onChange={(e) => setAllOfPayee(e.target.checked)} />
             <span>Use this for all {count} {payee.name} payments, and future ones
               <small>{payee.askEachTime ? 'This payee is set to "ask me each time", so leave this unticked to sort just this one.' : 'Untick to change just this payment.'}</small></span></label>
@@ -89,13 +101,13 @@ export function Transactions() {
     const needle = q.trim().toLowerCase();
     return data.transactions.filter((t) =>
       (month === 'all' || monthOf(t.date) === month) &&
-      (category === 'all' || t.category === category) &&
+      (category === 'all' || t.category === category || (data.settings.splits?.[t.id] ?? []).some((p) => p.category === category)) &&
       (account === 'all' || t.account === account) &&
       (!onlyReview || t.needsReview) &&
       (!needle || t.description.toLowerCase().includes(needle) || (t.note ?? '').toLowerCase().includes(needle) || merchantOf(t.description).toLowerCase().includes(needle)));
-  }, [data.transactions, month, category, account, onlyReview, q]);
+  }, [data.transactions, data.settings.splits, month, category, account, onlyReview, q]);
 
-  const out = rows.filter((t) => t.kind === 'spend').reduce((s, t) => s - t.amount, 0);
+  const out = withSplits(rows, data.settings.splits).filter((t) => t.kind === 'spend' && (category === 'all' || t.category === category)).reduce((s, t) => s - t.amount, 0);
   const toSort = data.transactions.filter((t) => t.needsReview).length;
   const accountName = (k: string) => data.settings.accounts.find((a) => a.key === k)?.name.replace(/ \(.*\)$/, '') ?? k;
 
@@ -132,7 +144,7 @@ export function Transactions() {
                 <small>{accountName(t.account)}{t.note ? ` – ${t.note}` : ''}</small>
               </span>
               <span className="tx-cat">
-                <span className={`pill ${t.needsReview ? 'pill-warn' : ''}`}>{t.needsReview ? 'Needs your input' : label(t.category)}</span>
+                <span className={`pill ${t.needsReview ? 'pill-warn' : ''}`}>{data.settings.splits?.[t.id] ? `Split: ${data.settings.splits[t.id].map((p) => label(p.category)).join(' + ')}` : t.needsReview ? 'Needs your input' : label(t.category)}</span>
                 {t.oneOff && <span className="pill pill-quiet">One-off</span>}
               </span>
               <span className={`tx-amt ${t.amount > 0 ? 'in' : ''}`}>{money(t.amount, { cents: true, sign: true })}</span>

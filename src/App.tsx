@@ -1,7 +1,7 @@
-import { useEffect } from 'react';
 import { HashRouter, Route, Routes } from 'react-router-dom';
 import { Shell } from './components/Shell';
 import { StoreProvider, useStore } from './data/store';
+import { useLook } from './theme/useLook';
 import { Accounts } from './screens/Accounts';
 import { Bills } from './screens/Bills';
 import { Categories } from './screens/Categories';
@@ -20,12 +20,8 @@ import { Wealth } from './screens/Wealth';
 import { WhatIf } from './screens/WhatIf';
 
 function Gate() {
-  const { status, error, data, reload } = useStore();
-  const theme = data.settings.theme;
-  useEffect(() => {
-    if (theme === 'auto') document.documentElement.removeAttribute('data-theme');
-    else document.documentElement.setAttribute('data-theme', theme);
-  }, [theme]);
+  const { status, error, reload } = useStore();
+  useLook();
 
   if (status === 'loading') return <div className="center-screen"><div className="loader" aria-label="Loading" /><p>Opening the family purse…</p></div>;
   if (status === 'signed-out') return <Login />;

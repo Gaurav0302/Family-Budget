@@ -70,11 +70,26 @@ export interface MonthSummary {
   count: number;
 }
 
+/** A split payment's parts, as if each were its own payment (ids `<payment id>#1`, `#2`…). Other payments pass through unchanged. */
+export function withSplits(txs: Transaction[], splits: Settings['splits']): Transaction[] {
+  if (!splits || !Object.keys(splits).length) return txs;
+  return txs.flatMap((t) => {
+    const parts = splits[t.id];
+    if (!parts?.length) return [t];
+    return parts.map((p, i) => ({ ...t, id: `${t.id}#${i + 1}`, amount: p.amount, category: p.category, kind: kindOf(p.category), note: p.note ?? t.note, splitOf: t.id }));
+  });
+}
+const kindOf = (c: string): Transaction['kind'] => (['salary', 'interest', 'other-income'].includes(c) ? 'income' : ['own-transfer', 'card-payment'].includes(c) ? 'transfer' : c === 'shares' ? 'invest' : 'spend');
+
+/** Do a payment's parts add up to it, to the cent? */
+export const splitAddsUp = (amount: number, parts: { amount: number }[]) => Math.round(parts.reduce((a, p) => a + p.amount, 0) * 100) === Math.round(amount * 100);
+
 export function summarise(month: string, data: Pick<Data, 'transactions' | 'coverage' | 'settings'>): MonthSummary {
-  const txs = data.transactions.filter((t) => monthOf(t.date) === month);
+  const raw = data.transactions.filter((t) => monthOf(t.date) === month);
+  const txs = withSplits(raw, data.settings.splits);
   const s: MonthSummary = {
     month, ...monthCoverage(month, data.coverage, data.settings), income: 0, spend: 0, invest: 0, kept: 0, keptRate: 0,
-    needs: 0, wants: 0, byCategory: {}, byCategoryUsual: {}, oneOffs: [], count: txs.length,
+    needs: 0, wants: 0, byCategory: {}, byCategoryUsual: {}, oneOffs: [], count: raw.length,
   };
   for (const t of txs) {
     if (t.kind === 'income') s.income += t.amount;

@@ -12,7 +12,7 @@ export function assignIds<T extends Omit<Transaction, 'id'>>(rows: T[]): (T & { 
   });
 }
 
-function splitCsvLine(line: string): string[] {
+export function splitCsvLine(line: string): string[] {
   const out: string[] = [];
   let cur = '', q = false;
   for (let i = 0; i < line.length; i++) {
@@ -29,12 +29,12 @@ function splitCsvLine(line: string): string[] {
   return out.map((s) => s.trim());
 }
 
-const toNumber = (s: string) => {
+export const toNumber = (s: string) => {
   const v = parseFloat(s.replace(/[$,\s]/g, '').replace(/^\((.*)\)$/, '-$1'));
   return Number.isFinite(v) ? v : NaN;
 };
 
-function toIsoDate(s: string): string | null {
+export function toIsoDate(s: string): string | null {
   s = s.trim();
   let m = s.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{4})$/);        // 15/09/2026 (Australian order)
   if (m) return `${m[3]}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}`;

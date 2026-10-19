@@ -30,3 +30,22 @@ describe('chart time spans', () => {
     expect(inRange(months, 'all')).toHaveLength(11);
   });
 });
+
+describe('split payments', () => {
+  it('counts each part in its own category and keeps the bank payment whole', async () => {
+    const { summarise, withSplits, splitAddsUp } = await import('./analysis');
+    const { DEFAULT_SETTINGS } = await import('./defaults');
+    const tx = { id: 'a:2026-06-15:-6176.40:1', date: '2026-06-15', account: 'a', description: 'PAYPAL', amount: -6176.4, category: 'other', kind: 'spend' as const };
+    const parts = [{ amount: -5000, category: 'travel' }, { amount: -1176.4, category: 'shopping', note: 'Desk' }];
+    expect(splitAddsUp(tx.amount, parts)).toBe(true);
+    expect(splitAddsUp(tx.amount, parts.slice(0, 1))).toBe(false);
+    const settings = { ...DEFAULT_SETTINGS, splits: { [tx.id]: parts } };
+    expect(withSplits([tx], settings.splits).map((t) => t.id)).toEqual([`${tx.id}#1`, `${tx.id}#2`]);
+    const s = summarise('2026-06', { transactions: [tx], coverage: [], settings });
+    expect(s.byCategory.travel).toBe(5000);
+    expect(s.byCategory.shopping).toBeCloseTo(1176.4);
+    expect(s.byCategory.other).toBeUndefined();
+    expect(s.spend).toBeCloseTo(6176.4);
+    expect(s.count).toBe(1);
+  });
+});

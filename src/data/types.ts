@@ -39,7 +39,12 @@ export interface Transaction {
   manual?: boolean;      // category chosen by a person — rules never overwrite it
   needsReview?: boolean; // the app wasn't sure; shows in "Needs your input"
   source?: string | null;
+  /** Set on the parts of a split payment (worked out from settings.splits, never saved): the id of the bank payment. */
+  splitOf?: string;
 }
+
+/** One part of a payment the family divided between categories. Parts add up to the payment. */
+export interface SplitPart { amount: number; category: string; note?: string }
 
 /** Someone the family pays (or is paid by). Every transaction belongs to one, worked out from the bank's wording. */
 export interface Payee {
@@ -132,6 +137,10 @@ export interface Settings {
   /** Gross pay per month for both of you, before tax. */
   grossMonthly: number;
   theme: 'auto' | 'light' | 'dark';
+  /** Payments divided into parts, by transaction id. */
+  splits?: Record<string, SplitPart[]>;
+  /** Each person's own theme and light/dark choice, by sign-in email. */
+  looks?: Record<string, { theme: string; mode: 'auto' | 'light' | 'dark' }>;
   /** Pay for each person; the latest entry on or before a month applies to that month. */
   pay?: PayEntry[];
   superBalances?: SuperBalance[];

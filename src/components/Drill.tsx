@@ -1,7 +1,7 @@
 import { ChevronRight, X } from 'lucide-react';
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { monthOf } from '../data/analysis';
+import { monthOf, withSplits } from '../data/analysis';
 import { CATEGORIES, CATEGORY, label } from '../data/categories';
 import { budgetOf, spendOf, useMonthly } from '../data/useMonthly';
 import { Chart } from './Chart';
@@ -11,6 +11,7 @@ import type { Transaction } from '../data/types';
 import { money, monthName } from '../lib/format';
 import { CategorySelect } from './CategorySelect';
 import { Menu } from './Menu';
+import { SplitEditor } from './SplitEditor';
 
 export interface DrillSpec {
   title: string; subtitle?: string; filter: (t: Transaction) => boolean; link?: string;
@@ -47,7 +48,10 @@ function Sheet({ spec: first, onClose }: { spec: DrillSpec; onClose: () => void 
   const [spec, setSpec] = useState(first);
   const monthly = useMonthly();
   const navigate = useNavigate();
-  const txs = data.transactions.filter(spec.filter);
+  const txs = withSplits(data.transactions, data.settings.splits).filter(spec.filter);
+  const original = (t: Transaction) => (t.splitOf ? data.transactions.find((x) => x.id === t.splitOf) ?? t : t);
+  const [splitting, setSplitting] = useState<Transaction | null>(null);
+  const [noting, setNoting] = useState<string | null>(null);
   const groups = groupByPayee(txs, payeeIdx);
   const total = txs.reduce((a, t) => a - t.amount, 0);
   const acct = (k: string) => data.settings.accounts.find((a) => a.key === k)?.name.replace(/ \(.*\)$/, '') ?? k;
@@ -68,6 +72,39 @@ function Sheet({ spec: first, onClose }: { spec: DrillSpec; onClose: () => void 
     </div>
   );
   const isMoving = (t: Transaction) => !!moving && 'tx' in moving && moving.tx.id === t.id;
+  const close = () => { setMoving(null); setSplitting(null); setNoting(null); };
+  /** What can be done to one payment (or one part of a split payment). */
+  const payMenu = (t: Transaction) => t.splitOf
+    ? [{ label: 'Change the split', onClick: () => { close(); setSplitting(original(t)); } }]
+    : [
+      { label: 'Move just this payment', onClick: () => { close(); setMoving({ tx: t }); } },
+      { label: 'Split this payment', onClick: () => { close(); setSplitting(t); } },
+      { label: t.note ? 'Edit note' : 'Add a note', onClick: () => { close(); setNoting(t.id); } },
+    ];
+  /** The bank's own wording, any note, and whether this is part of a split. */
+  const detail = (t: Transaction) => {
+    const o = original(t);
+    return (
+      <>
+        <small className="dl-desc">{o.description}</small>
+        {t.splitOf && <small className="dl-split">Part of a {money(-o.amount, { cents: true })} payment</small>}
+        {t.note && <small className="dl-note">{t.note}</small>}
+      </>
+    );
+  };
+  const below = (t: Transaction) => (
+    <>
+      {isMoving(t) && mover(moving!, t.category ?? 'other')}
+      {splitting && splitting.id === original(t).id && <SplitEditor tx={splitting} onDone={(msg) => { setSplitting(null); if (msg) setDone(msg); }} />}
+      {noting === t.id && (
+        <form className="dl-move" onSubmit={async (e) => { e.preventDefault(); const v = (new FormData(e.currentTarget).get('note') as string).trim(); await updateTransaction(t.id, { note: v || null }); setNoting(null); setDone(v ? 'Note saved.' : 'Note removed.'); }}>
+          <input name="note" autoFocus defaultValue={t.note ?? ''} placeholder="What was this for?" aria-label="Note" />
+          <button className="btn small primary">Save</button>
+          <button type="button" className="btn small ghost" onClick={() => setNoting(null)}>Cancel</button>
+        </form>
+      )}
+    </>
+  );
 
   return (
     <div className="sheet-wrap" role="dialog" aria-modal="true" aria-labelledby="drill-title" onClick={onClose}>
@@ -90,15 +127,15 @@ function Sheet({ spec: first, onClose }: { spec: DrillSpec; onClose: () => void 
             const single = g.txs.length === 1 ? g.txs[0] : null;
             const isOpen = open.has(key);
             const groupMenu = [
-              g.payee && { label: `Move all ${g.name} payments`, onClick: () => setMoving({ payeeId: g.payee!.id, name: g.name }) },
-              single && { label: 'Move just this payment', onClick: () => setMoving({ tx: single }) },
+              g.payee && { label: `Move all ${g.name} payments`, onClick: () => { close(); setMoving({ payeeId: g.payee!.id, name: g.name }); } },
+              ...(single ? payMenu(single) : []),
               g.payee && { label: 'Edit payee', onClick: () => navigate(`/categories?tab=payees&payee=${g.payee!.id}`) },
             ];
             return (
               <li key={key} className="dl-item">
                 <div className="dl-row">
                   {single ? (
-                    <span className="dl-main"><b>{g.name}</b><small>{short(single.date)} · {acct(single.account)}</small></span>
+                    <span className="dl-main"><b>{g.name}</b><small>{short(single.date)} · {acct(single.account)}</small>{detail(single)}</span>
                   ) : (
                     <button className="dl-main dl-toggle" aria-expanded={isOpen} onClick={() => setOpen((o) => { const n = new Set(o); if (n.has(key)) n.delete(key); else n.add(key); return n; })}>
                       <ChevronRight size={15} aria-hidden className={isOpen ? 'rot' : ''} />
@@ -109,17 +146,17 @@ function Sheet({ spec: first, onClose }: { spec: DrillSpec; onClose: () => void 
                   <Menu label={`Options for ${g.name}`} items={groupMenu} />
                 </div>
                 {moving && 'payeeId' in moving && moving.payeeId === g.payee?.id && mover(moving, g.payee!.category)}
-                {single && isMoving(single) && mover(moving!, single.category ?? 'other')}
+                {single && below(single)}
                 {!single && isOpen && (
                   <ul className="dl-sub">
                     {g.txs.slice().sort((x, y) => y.date.localeCompare(x.date)).map((t) => (
                       <li key={t.id}>
                         <div className="dl-row">
-                          <span className="dl-main"><span>{short(t.date)}</span><small>{acct(t.account)}</small></span>
+                          <span className="dl-main"><span>{short(t.date)}</span><small>{acct(t.account)}</small>{detail(t)}</span>
                           <span className="dl-amt">{money(-t.amount, { cents: true })}</span>
-                          <Menu label={`Options for the ${short(t.date)} payment`} items={[{ label: 'Move just this payment', onClick: () => setMoving({ tx: t }) }]} />
+                          <Menu label={`Options for the ${short(t.date)} payment`} items={payMenu(t)} />
                         </div>
-                        {isMoving(t) && mover(moving!, t.category ?? 'other')}
+                        {below(t)}
                       </li>
                     ))}
                   </ul>
