@@ -77,6 +77,7 @@ Status: ✅ done · ⬜ to do · 🔄 in progress · ❌ blocked · 🚫 dropped
 - ✅ 19 Oct 2026 — Split a payment into parts; notes and bank wording in drill-downs (D22)
 - ✅ 19 Oct 2026 — PayPal activity CSV names PayPal bank payments in the app (D22)
 - ⬜ User downloads PayPal activity 1 Feb–30 Jun 2026 and adds it, to name the 8 unnamed PayPal payments ($7,207, incl. $6,176.40 on 15 Jun)
+- ✅ 19 Oct 2026 — Needs/wants/kept bar with meaningful colours, a guide row, and a like-for-like verdict (D23)
 - ⬜ Font loading is from Google Fonts; consider self-hosting fonts if offline use matters
 
 ## Phase 7 — Polish

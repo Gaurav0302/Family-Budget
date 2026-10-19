@@ -25,5 +25,6 @@ Fifth build pushed: no reload on returning, 54 themes (light and dark, per perso
 - Subscriptions seen only once are treated as yearly until a second payment appears.
 
 ## Got wrong this session
+- The needs/wants/kept bar took its colours from the theme, so they meant nothing (wants looked fine while over guide), and the verdict compared spending without one-offs against averages with them. Fixed (D23): status colours with words, like-for-like sentence.
 - Chart tooltips first sat above the plot and covered the time span buttons; they now sit beside the hovered month. Menus inside scrolling sheets were cut off; they're now fixed to the screen.
 - The drill-down sheet stayed open after moving to another page; fixed by closing it on navigation and Escape. Test flows across pages, not just one page.

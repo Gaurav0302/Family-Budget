@@ -87,19 +87,32 @@ export function reviewMonth(data: Data, month: string): ReviewResult {
   const s = data.settings;
   const sup = superMonthly(s, month), gross = grossMonthly(s, month);
 
-  // ---- Verdict
+  // ---- Verdict: like for like. What was spent against what's usual (both with everything in), then the one-offs named,
+  // then the share kept against last month, saying when an earlier month had unusual pay in it.
   let verdict: ReviewResult['verdict'];
-  if (!base.length) verdict = { tone: 'first', text: `This is the first complete month, so there's nothing to compare with yet. You kept ${pct(summary.keptRate)} of what came in.` };
+  const oneOffTotal = summary.spend - usualSpend;
+  const monthWord = (m: string) => new Date(`${m}-01T00:00:00`).toLocaleDateString('en-AU', { month: 'long' });
+  const list = (ms: string[]) => ms.length < 2 ? ms.map(monthWord).join('') : `${ms.slice(0, -1).map(monthWord).join(', ')} and ${monthWord(ms[ms.length - 1])}`;
+  const oneOffLine = oneOffTotal > 0.5 ? ` ${money(oneOffTotal)} of it was marked as one-off; without it you spent ${money(usualSpend)}.` : '';
+  if (!base.length) verdict = { tone: 'first', text: `You spent ${money(summary.spend)} in ${monthWord(month)}.${oneOffLine} This is the first complete month, so there's nothing to compare with yet. You kept ${pct(summary.keptRate)} of what came in.` };
   else {
-    const spendChange = baseline.spend ? (usualSpend - baseline.spend) / baseline.spend : 0;
-    const keptChange = summary.keptRate - baseline.keptRate;
+    const usualAll = average(base.map((b) => b.spend));
+    const prev = base[base.length - 1];
+    const spendChange = usualAll ? (summary.spend - usualAll) / usualAll : 0;
+    const keptChange = summary.keptRate - prev.keptRate;
     const tone = spendChange < -0.03 || keptChange > 0.02 ? 'better' : spendChange > 0.03 || keptChange < -0.02 ? 'worse' : 'steady';
-    const dir = usualSpend <= baseline.spend ? 'less' : 'more';
-    verdict = {
-      tone,
-      text: `Day-to-day spending was ${money(usualSpend)}, ${money(usualSpend - baseline.spend)} ${dir} than your ${base.length}-month average of ${money(baseline.spend)}. ` +
-        `You kept ${pct(summary.keptRate)} of what came in, against ${pct(baseline.keptRate)} on average.`,
-    };
+    const diff = summary.spend - usualAll;
+    const spendLine = Math.abs(diff) < 50
+      ? `You spent ${money(summary.spend)} in ${monthWord(month)}, about the same as usual (${money(usualAll)} in ${list(baselineMonths)}).`
+      : `You spent ${money(summary.spend)} in ${monthWord(month)}, ${money(diff)} ${diff > 0 ? 'more' : 'less'} than usual (${money(usualAll)} on average in ${list(baselineMonths)}).`;
+    const keptDir = Math.abs(keptChange) < 0.01 ? 'the same as' : keptChange > 0 ? 'up from' : 'down from';
+    let keptLine = ` You kept ${pct(summary.keptRate)} of what came in, ${keptDir} ${pct(prev.keptRate)} in ${monthWord(prev.month)}.`;
+    // An earlier month with much more pay than usual (a bonus, a refund) makes its share kept look high.
+    const incomes = [...base.map((b) => b.income), summary.income].sort((a, b) => a - b);
+    const typical = incomes[Math.floor(incomes.length / 2)];
+    const big = base.filter((b) => b.income > typical * 1.2);
+    if (big.length) keptLine += ` ${big.map((b) => `${monthWord(b.month)}'s ${pct(b.keptRate)} included about ${money(b.income - typical)} of extra pay`).join('; ')}.`;
+    verdict = { tone, text: spendLine + oneOffLine + keptLine };
   }
 
   // ---- Scorecard

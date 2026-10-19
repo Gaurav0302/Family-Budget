@@ -182,19 +182,27 @@ label.check.small { font-size: 0.85rem; margin: 6px 0 0; }
 .verdict { color: var(--ink-2); max-width: 70ch; margin-top: 14px; }
 
 .purse { margin: 26px 0 0; }
-.purse-bar { position: relative; display: flex; height: 64px; border-radius: var(--r-lg); overflow: visible; background: var(--line-2); gap: 3px; }
-.purse-seg { display: flex; flex-direction: column; justify-content: center; padding: 0 14px; font-size: 0.92rem; overflow: hidden; white-space: nowrap; min-width: 0; }
-.purse-seg b { font-family: var(--display); font-size: 0.8rem; font-weight: 600; opacity: 0.85; }
-.purse-seg:first-child { border-radius: 16px 0 0 16px; }
-.purse-seg:last-of-type { border-radius: 0 16px 16px 0; }
-.seg-needs { background: var(--euc); color: var(--euc-ink); }
-.seg-wants { background: var(--sage); color: #0f1f1a; }
-.seg-kept { background: var(--brass); color: #2a1f06; font-weight: 700; }
-.purse-mark { position: absolute; top: -8px; bottom: -8px; width: 0; border-left: 2px dashed var(--ink); }
-.purse figcaption { display: flex; flex-wrap: wrap; gap: 6px 18px; margin-top: 12px; color: var(--ink-2); font-size: 0.9rem; }
-.purse-legend-mark { color: var(--muted); }
-.dot { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 6px; vertical-align: 0; }
-.dot-needs { background: var(--euc); } .dot-wants { background: var(--sage); } .dot-kept { background: var(--brass); }
+.purse-rows { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 6px 10px; align-items: center; }
+.purse-row-label { font-size: 0.8rem; color: var(--muted); font-weight: 700; }
+.purse-bar { display: flex; height: 64px; gap: 3px; }
+.purse-seg { display: flex; flex-direction: column; justify-content: center; padding: 0 12px; font-size: 0.92rem; overflow: hidden; white-space: nowrap; min-width: 0; font-variant-numeric: tabular-nums; }
+.purse-seg b { font-family: var(--display); font-size: 0.8rem; font-weight: 700; }
+.purse-seg:first-child { border-radius: var(--r-md) 0 0 var(--r-md); }
+.purse-seg:last-child { border-radius: 0 var(--r-md) var(--r-md) 0; }
+/* Meaning, not decoration: neutral within the guide, amber over it, green/amber/red for what was kept. */
+.st-needs { background: color-mix(in srgb, var(--ink) 22%, var(--card)); color: var(--ink); }
+.st-wants { background: color-mix(in srgb, var(--ink) 32%, var(--card)); color: var(--ink); }
+.st-good { background: var(--good); color: var(--card); }
+.st-warn { background: var(--warn); color: var(--card); }
+.st-bad { background: var(--bad); color: var(--card); }
+.purse-guide { display: flex; height: 22px; gap: 3px; }
+.purse-guide span { display: flex; align-items: center; padding: 0 10px; font-size: 0.74rem; color: var(--muted); border: 1px dashed var(--line); white-space: nowrap; overflow: hidden; }
+.purse-guide span:first-child { border-radius: var(--r-sm) 0 0 var(--r-sm); }
+.purse-guide span:last-child { border-radius: 0 var(--r-sm) var(--r-sm) 0; }
+.purse figcaption { display: grid; gap: 4px; margin-top: 12px; color: var(--ink-2); font-size: 0.9rem; }
+.purse-key b { color: var(--ink); }
+@media (max-width: 559px) { .purse-guide .full { display: none; } .purse-guide span { padding: 0 6px; } }
+@media (min-width: 760px) { .purse figcaption { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px 16px; } }
 
 .home-grid { display: grid; gap: 16px; }
 .home-grid .panel + .panel { margin: 0; }
@@ -329,7 +337,6 @@ label.check.small { font-size: 0.85rem; margin: 6px 0 0; }
 .split-row { display: grid; grid-template-columns: 64px 1fr auto; gap: 10px; align-items: center; margin: 12px 0; }
 .split-track { position: relative; height: 14px; background: var(--line-2); border-radius: 999px; }
 .split-fill { height: 100%; border-radius: 999px; }
-.split-needs { background: var(--euc); } .split-wants { background: var(--sage); } .split-kept { background: var(--brass); }
 .split-guide { position: absolute; top: -4px; bottom: -4px; border-left: 2px dashed var(--ink); }
 .split-num { font-weight: 700; font-variant-numeric: tabular-nums; text-align: right; }
 .split-num small { display: block; color: var(--muted); font-weight: 400; font-size: 0.75rem; }
@@ -534,7 +541,7 @@ a.on-dark { color: var(--euc-ink); }
 .drill-link { background: none; border: 0; padding: 0; font: inherit; color: inherit; cursor: pointer; text-align: inherit; text-decoration: underline; text-decoration-color: color-mix(in srgb, var(--euc) 45%, transparent); text-decoration-thickness: 1.5px; text-underline-offset: 3px; }
 .drill-link:hover { color: var(--euc); text-decoration-color: var(--euc); }
 button.cat-row { width: 100%; background: none; border: 0; font: inherit; text-align: left; cursor: pointer; }
-.purse figcaption .drill-link { display: inline-flex; align-items: center; gap: 6px; }
+.purse figcaption .drill-link { text-align: left; }
 .drill { max-width: 640px; }
 .drill-total { margin: 6px 0 12px; }
 .drill-groups { display: grid; gap: 8px; margin-bottom: 14px; }
@@ -856,3 +863,6 @@ h1, h2, h3, h4 { font-weight: var(--display-weight, 700); }
 .split-summary li { display: flex; justify-content: space-between; gap: 10px; padding: 4px 0; border-bottom: 1px solid var(--line-2); }
 .split-summary small { color: var(--muted); margin-left: 6px; }
 .split-open { margin-top: 4px; }
+
+.tile-warn { border-left: 4px solid var(--warn); } .tile-bad { border-left: 4px solid var(--bad); } .tile-good { border-left: 4px solid var(--good); }
+.purse-guide i { font-style: normal; }

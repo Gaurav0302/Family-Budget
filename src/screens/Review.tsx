@@ -32,14 +32,18 @@ function FindingList({ items }: { items: Finding[] }) {
 
 function Split({ label, actual, guide, spec }: { label: string; actual: number; guide: number; spec?: DrillSpec }) {
   const w = (v: number) => `${Math.min(Math.max(v, 0), 1) * 100}%`;
+  // Same meaning as the bar on Home: plain within the guide, amber over it; kept is green, amber or red.
+  const kept = label === 'Kept';
+  const state = kept ? (actual >= 0.2 ? 'good' : actual >= 0.1 ? 'warn' : 'bad') : actual > guide ? 'warn' : label === 'Needs' ? 'needs' : 'wants';
+  const word = kept ? (actual >= 0.2 ? 'on track' : actual >= 0.1 ? 'under guide' : "under Babylon's 10%") : actual > guide ? 'over guide' : 'within guide';
   return (
     <div className="split-row">
       <span className="split-label">{spec ? <DrillLink spec={spec}>{label}</DrillLink> : label}</span>
-      <div className="split-track" role="img" aria-label={`${label}: ${pct(actual)} of income, guide ${pct(guide)}`}>
-        <div className={`split-fill split-${label.toLowerCase()}`} style={{ width: w(actual) }} />
+      <div className="split-track" role="img" aria-label={`${label}: ${pct(actual)} of income, guide ${pct(guide)}, ${word}`}>
+        <div className={`split-fill st-${state}`} style={{ width: w(actual) }} />
         <div className="split-guide" style={{ left: w(guide) }} />
       </div>
-      <span className="split-num">{pct(actual)} <small>guide {pct(guide)}</small></span>
+      <span className="split-num">{pct(actual)} <small>{word}, guide {pct(guide)}</small></span>
     </div>
   );
 }

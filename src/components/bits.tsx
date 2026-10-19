@@ -60,28 +60,45 @@ export function Meter({ actual, budget }: { actual: number; budget: number }) {
 }
 
 /** The month's income split into needs, wants and what was kept, with Babylon's one-in-ten line. */
+/** Where the month's money went, against the 50/30/20 guide. Colours carry meaning (the same in every theme):
+ *  plain for needs within the guide, amber for anything over it, and for kept green (20%+), amber (10–20%) or red (under 10%).
+ *  Every colour also has words, so nothing relies on colour alone. */
 export function PurseBar({ income, needs, wants, kept, onOpen }: { income: number; needs: number; wants: number; kept: number; onOpen?: (type: 'need' | 'want') => void }) {
   const total = Math.max(income, needs + wants, 1);
   const seg = (v: number) => `${(Math.max(v, 0) / total) * 100}%`;
+  const share = (v: number) => (income > 0 ? v / income : 0);
   const short = kept < 0;
+  const n = share(needs), w = share(wants), k = share(kept);
+  const needsOver = n > 0.5, wantsOver = w > 0.3;
+  const keptState = k >= 0.2 ? 'good' : k >= 0.1 ? 'warn' : 'bad';
+  const over = (v: number, guide: number) => money(v - guide * income);
+  const status = {
+    needs: needsOver ? `${over(needs, 0.5)} over the 50% guide` : 'within the 50% guide',
+    wants: wantsOver ? `${over(wants, 0.3)} over the 30% guide` : 'within the 30% guide',
+    kept: short ? `${money(-kept)} more went out than came in` : k >= 0.2 ? 'on track: 20% or more' : k >= 0.1 ? "above Babylon's 10%, under the 20% guide" : "under Babylon's 10%",
+  };
+  const label = (name: string, v: number, state: string, type?: 'need' | 'want') => {
+    const text = <><b>{name} {pct(share(v))}</b> <span>{money(v)}, {state}</span></>;
+    return type && onOpen ? <button type="button" className="drill-link purse-key" onClick={() => onOpen(type)}>{text}</button> : <span className="purse-key">{text}</span>;
+  };
   return (
     <figure className="purse">
-      <div className="purse-bar" role="img" aria-label={`Needs ${money(needs)}, wants ${money(wants)}, kept ${money(kept)} of ${money(income)} income`}>
-        <span className="purse-seg seg-needs" style={{ width: seg(needs) }}><b>Needs</b> {money(needs)}</span>
-        <span className="purse-seg seg-wants" style={{ width: seg(wants) }}><b>Wants</b> {money(wants)}</span>
-        {!short && <span className="purse-seg seg-kept" style={{ width: seg(kept) }}><b>Kept</b> {money(kept)}</span>}
-        {income > 0 && <span className="purse-mark" style={{ left: '90%' }} title="Babylon's rule: keep at least one in every ten" />}
+      <div className="purse-rows">
+        <span className="purse-row-label">You</span>
+        <div className="purse-bar" role="img" aria-label={`Needs ${pct(n)}, ${status.needs}. Wants ${pct(w)}, ${status.wants}. Kept ${pct(k)}, ${status.kept}.`}>
+          <span className={`purse-seg ${needsOver ? 'st-warn' : 'st-needs'}`} style={{ width: seg(needs) }}><b>Needs</b><span>{money(needs)}</span></span>
+          <span className={`purse-seg ${wantsOver ? 'st-warn' : 'st-wants'}`} style={{ width: seg(wants) }}><b>Wants</b><span>{money(wants)}</span></span>
+          {!short && <span className={`purse-seg st-${keptState}`} style={{ width: seg(kept) }}><b>Kept</b><span>{money(kept)}</span></span>}
+        </div>
+        <span className="purse-row-label">Guide</span>
+        <div className="purse-guide" aria-hidden>
+          <span style={{ width: '50%' }}><i className="full">Needs&nbsp;</i>50%</span><span style={{ width: '30%' }}><i className="full">Wants&nbsp;</i>30%</span><span style={{ width: '20%' }}><i className="full">Kept&nbsp;</i>20%</span>
+        </div>
       </div>
       <figcaption>
-        {onOpen ? <>
-          <button type="button" className="drill-link" onClick={() => onOpen('need')}><i className="dot dot-needs" />Needs {pct(needs / (income || 1))}</button>
-          <button type="button" className="drill-link" onClick={() => onOpen('want')}><i className="dot dot-wants" />Wants {pct(wants / (income || 1))}</button>
-        </> : <>
-          <span><i className="dot dot-needs" />Needs {pct(needs / (income || 1))}</span>
-          <span><i className="dot dot-wants" />Wants {pct(wants / (income || 1))}</span>
-        </>}
-        <span><i className="dot dot-kept" />Kept {pct(kept / (income || 1))}</span>
-        <span className="purse-legend-mark">The line marks Babylon's tenth: keep everything to its right.</span>
+        {label('Needs', needs, status.needs, 'need')}
+        {label('Wants', wants, status.wants, 'want')}
+        <span className="purse-key"><b>Kept {pct(k)}</b> <span>{status.kept}</span></span>
       </figcaption>
     </figure>
   );

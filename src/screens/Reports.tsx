@@ -113,6 +113,7 @@ function MoneyMeeting() {
   const toggle = (g: string) => setOpenGroups((o) => { const n = new Set(o); if (n.has(g)) n.delete(g); else n.add(g); return n; });
   const diff = (spent: number, budget: number) => budget ? <span className={spent > budget * 1.05 ? 'bad' : 'good'}>{money(budget - spent, { sign: true })}</span> : '–';
   const share = (n: number) => (s.income ? pct(n / s.income) : '–');
+  const rate = (n: number) => (s.income ? n / s.income : 0);
 
   return (
     <div className="report">
@@ -134,9 +135,9 @@ function MoneyMeeting() {
       <section className="report-sec">
         <h3>Needs, wants and kept <Info>The 50/30/20 guide: about half of take-home pay on needs, under 30% on wants, at least 20% kept. Tap needs or wants to see every payment in it and fix any that are in the wrong place.</Info></h3>
         <div className="split-tiles">
-          <DrillLink spec={drillType(month, 'need')} className="tile"><span>Needs</span><b>{money(s.needs)}</b><small>{share(s.needs)} of pay · aim 50%</small></DrillLink>
-          <DrillLink spec={drillType(month, 'want')} className="tile"><span>Wants</span><b>{money(s.wants)}</b><small>{share(s.wants)} of pay · aim 30%</small></DrillLink>
-          <div className="tile"><span>Kept</span><b>{money(s.kept)}</b><small>{share(s.kept)} of pay · aim 20%</small></div>
+          <DrillLink spec={drillType(month, 'need')} className={`tile tile-${rate(s.needs) > 0.5 ? 'warn' : 'ok'}`}><span>Needs</span><b>{money(s.needs)}</b><small>{share(s.needs)} of pay, {rate(s.needs) > 0.5 ? 'over' : 'within'} the 50% guide</small></DrillLink>
+          <DrillLink spec={drillType(month, 'want')} className={`tile tile-${rate(s.wants) > 0.3 ? 'warn' : 'ok'}`}><span>Wants</span><b>{money(s.wants)}</b><small>{share(s.wants)} of pay, {rate(s.wants) > 0.3 ? `${money(s.wants - 0.3 * s.income)} over` : 'within'} the 30% guide</small></DrillLink>
+          <div className={`tile tile-${rate(s.kept) >= 0.2 ? 'good' : rate(s.kept) >= 0.1 ? 'warn' : 'bad'}`}><span>Kept</span><b>{money(s.kept)}</b><small>{share(s.kept)} of pay, {rate(s.kept) >= 0.2 ? 'on track for' : 'under'} the 20% guide</small></div>
         </div>
       </section>
 
