@@ -1,6 +1,9 @@
 # SESSION-HANDOFF.md
 
-## Current status (19 Oct 2026, late afternoon)
+## Current status (19 Oct 2026, evening)
+Also pushed since: theme-independent meaning colours (D24), 50/30/20 green-within colours (D25), money meeting agenda with Present mode (D26).
+
+## Earlier status (19 Oct 2026, late afternoon)
 Fifth build pushed: no reload on returning, 54 themes (light and dark, per person), split payments, PayPal activity CSV naming (D20–D22). Before that, the fourth build: own areas and ⋯ menus, compact drill-downs with charts, dynamic charts everywhere (Trends page, per-area charts in the money meeting), accounts by person, clearer Wealth (D17–D19). Before that, the third build: payee list, Categories & payees page, drill-downs, Accounts page, Wealth fixes (owned-since, editable history, line chart) and the money meeting redesign (D13–D16). Waiting on the user to add the 19 Oct update file and check their payees.
 
 ## Done

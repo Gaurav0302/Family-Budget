@@ -1,6 +1,7 @@
 import { AlertTriangle, CheckCircle2, ChevronLeft, ChevronRight, Info as InfoIcon, Eye } from 'lucide-react';
 import { useState, type ReactNode } from 'react';
 import type { Severity } from '../data/review';
+import { tone, toneWords } from '../data/guide';
 import { money, monthName, pct } from '../lib/format';
 
 export function PageHeader({ title, children, lead }: { title: string; lead?: ReactNode; children?: ReactNode }) {
@@ -63,20 +64,14 @@ export function Meter({ actual, budget }: { actual: number; budget: number }) {
 /** Where the month's money went, against the 50/30/20 guide. Colours carry meaning (the same in every theme):
  *  plain for needs within the guide, amber for anything over it, and for kept green (20%+), amber (10–20%) or red (under 10%).
  *  Every colour also has words, so nothing relies on colour alone. */
-export function PurseBar({ income, needs, wants, kept, onOpen }: { income: number; needs: number; wants: number; kept: number; onOpen?: (type: 'need' | 'want') => void }) {
+export function PurseBar({ income, needs, wants, kept, complete = true, onOpen }: { income: number; needs: number; wants: number; kept: number; complete?: boolean; onOpen?: (type: 'need' | 'want') => void }) {
   const total = Math.max(income, needs + wants, 1);
   const seg = (v: number) => `${(Math.max(v, 0) / total) * 100}%`;
   const share = (v: number) => (income > 0 ? v / income : 0);
   const short = kept < 0;
   const n = share(needs), w = share(wants), k = share(kept);
-  const needsOver = n > 0.5, wantsOver = w > 0.3;
-  const keptState = k >= 0.2 ? 'good' : k >= 0.1 ? 'warn' : 'bad';
-  const over = (v: number, guide: number) => money(v - guide * income);
-  const status = {
-    needs: needsOver ? `${over(needs, 0.5)} over the 50% guide` : 'within the 50% guide',
-    wants: wantsOver ? `${over(wants, 0.3)} over the 30% guide` : 'within the 30% guide',
-    kept: short ? `${money(-kept)} more went out than came in` : k >= 0.2 ? 'on track: 20% or more' : k >= 0.1 ? "above Babylon's 10%, under the 20% guide" : "under Babylon's 10%",
-  };
+  const t = { needs: tone('needs', n, complete), wants: tone('wants', w, complete), kept: tone('kept', k, complete) };
+  const words = { needs: toneWords('needs', n, income, complete), wants: toneWords('wants', w, income, complete), kept: short ? `${money(-kept)} more went out than came in` : toneWords('kept', k, income, complete) };
   const label = (name: string, v: number, state: string, type?: 'need' | 'want') => {
     const text = <><b>{name} {pct(share(v))}</b> <span>{money(v)}, {state}</span></>;
     return type && onOpen ? <button type="button" className="drill-link purse-key" onClick={() => onOpen(type)}>{text}</button> : <span className="purse-key">{text}</span>;
@@ -85,10 +80,10 @@ export function PurseBar({ income, needs, wants, kept, onOpen }: { income: numbe
     <figure className="purse">
       <div className="purse-rows">
         <span className="purse-row-label">You</span>
-        <div className="purse-bar" role="img" aria-label={`Needs ${pct(n)}, ${status.needs}. Wants ${pct(w)}, ${status.wants}. Kept ${pct(k)}, ${status.kept}.`}>
-          <span className={`purse-seg ${needsOver ? 'st-warn' : 'st-needs'}`} style={{ width: seg(needs) }}><b>Needs</b><span>{money(needs)}</span></span>
-          <span className={`purse-seg ${wantsOver ? 'st-warn' : 'st-wants'}`} style={{ width: seg(wants) }}><b>Wants</b><span>{money(wants)}</span></span>
-          {!short && <span className={`purse-seg st-${keptState}`} style={{ width: seg(kept) }}><b>Kept</b><span>{money(kept)}</span></span>}
+        <div className="purse-bar" role="img" aria-label={`Needs ${pct(n)}, ${words.needs}. Wants ${pct(w)}, ${words.wants}. Kept ${pct(k)}, ${words.kept}.`}>
+          <span className={`purse-seg st-${t.needs}`} style={{ width: seg(needs) }}><b>Needs</b><span>{money(needs)}</span></span>
+          <span className={`purse-seg st-${t.wants}`} style={{ width: seg(wants) }}><b>Wants</b><span>{money(wants)}</span></span>
+          {!short && <span className={`purse-seg st-${t.kept}`} style={{ width: seg(kept) }}><b>Kept</b><span>{money(kept)}</span></span>}
         </div>
         <span className="purse-row-label">Guide</span>
         <div className="purse-guide" aria-hidden>
@@ -96,9 +91,9 @@ export function PurseBar({ income, needs, wants, kept, onOpen }: { income: numbe
         </div>
       </div>
       <figcaption>
-        {label('Needs', needs, status.needs, 'need')}
-        {label('Wants', wants, status.wants, 'want')}
-        <span className="purse-key"><b>Kept {pct(k)}</b> <span>{status.kept}</span></span>
+        {label('Needs', needs, words.needs, 'need')}
+        {label('Wants', wants, words.wants, 'want')}
+        <span className="purse-key"><b>Kept {pct(k)}</b> <span>{words.kept}</span></span>
       </figcaption>
     </figure>
   );

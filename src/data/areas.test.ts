@@ -49,3 +49,19 @@ describe('split payments', () => {
     expect(s.count).toBe(1);
   });
 });
+
+describe('the 50/30/20 guide colours', () => {
+  it('treats needs and wants as ceilings and kept as a floor', async () => {
+    const { tone, toneWords } = await import('./guide');
+    expect(tone('needs', 0.29)).toBe('good');
+    expect(tone('needs', 0.55)).toBe('warn');
+    expect(tone('needs', 0.65)).toBe('bad');
+    expect(tone('wants', 0.37)).toBe('warn');
+    expect(tone('wants', 0.45)).toBe('bad');
+    expect(tone('kept', 0.33)).toBe('good');
+    expect(tone('kept', 0.15)).toBe('warn');
+    expect(tone('kept', 0.05)).toBe('bad');
+    expect(tone('needs', 0.29, false)).toBe('partial');
+    expect(toneWords('wants', 6903 / 18585, 18585)).toBe('$1,328 over the 30% guide');
+  });
+});

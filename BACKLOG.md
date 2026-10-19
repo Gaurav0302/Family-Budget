@@ -79,6 +79,8 @@ Status: ✅ done · ⬜ to do · 🔄 in progress · ❌ blocked · 🚫 dropped
 - ⬜ User downloads PayPal activity 1 Feb–30 Jun 2026 and adds it, to name the 8 unnamed PayPal payments ($7,207, incl. $6,176.40 on 15 Jun)
 - ✅ 19 Oct 2026 — Needs/wants/kept bar with meaningful colours, a guide row, and a like-for-like verdict (D23)
 - ✅ 19 Oct 2026 — Theme colours never carry meaning; fixed status/data colours across the app (D24)
+- ✅ 19 Oct 2026 — Guide colours: green within, amber/red past it (D25)
+- ✅ 19 Oct 2026 — Money meeting as an agenda with Present mode and one-tap actions (D26)
 - ⬜ Font loading is from Google Fonts; consider self-hosting fonts if offline use matters
 
 ## Phase 7 — Polish

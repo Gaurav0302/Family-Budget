@@ -60,7 +60,7 @@ export function HomeScreen() {
             ? <>In {monthOnly(month)} you kept <span className={`num is-${s.keptRate >= 0.2 ? 'good' : s.keptRate >= 0.1 ? 'warn' : 'bad'}`}>{money(s.kept)}</span> of the <span className="num">{money(s.income)}</span> that came in.</>
             : <>In {monthOnly(month)} you spent <span className="num is-bad">{money(-s.kept)}</span> more than came in.</>}
         </h1>
-        <PurseBar income={s.income} needs={s.needs} wants={s.wants} kept={s.kept} onOpen={(t) => drill(drillType(month, t))} />
+        <PurseBar income={s.income} needs={s.needs} wants={s.wants} kept={s.kept} complete={s.complete} onOpen={(t) => drill(drillType(month, t))} />
         <p className={`verdict tone-${review.verdict.tone}`}>{review.verdict.text}</p>
       </section>
 

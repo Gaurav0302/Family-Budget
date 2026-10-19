@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Badge, Empty, Info, MonthPicker, PageHeader } from '../components/bits';
+import { tone, type Part } from '../data/guide';
 import { DrillLink, drillCategory, drillType, type DrillSpec } from '../components/Drill';
 import { allMonths, completeMonths } from '../data/analysis';
 import { merchantOf } from '../data/merchant';
@@ -32,10 +33,10 @@ function FindingList({ items }: { items: Finding[] }) {
 
 function Split({ label, actual, guide, spec }: { label: string; actual: number; guide: number; spec?: DrillSpec }) {
   const w = (v: number) => `${Math.min(Math.max(v, 0), 1) * 100}%`;
-  // Same meaning as the bar on Home: plain within the guide, amber over it; kept is green, amber or red.
-  const kept = label === 'Kept';
-  const state = kept ? (actual >= 0.2 ? 'good' : actual >= 0.1 ? 'warn' : 'bad') : actual > guide ? 'warn' : label === 'Needs' ? 'needs' : 'wants';
-  const word = kept ? (actual >= 0.2 ? 'on track' : actual >= 0.1 ? 'under guide' : "under Babylon's 10%") : actual > guide ? 'over guide' : 'within guide';
+  // Same meaning as the bar on Home: green within the guide, amber a little past it, red well past it.
+  const part = label.toLowerCase() as Part;
+  const state = tone(part, actual);
+  const word = part === 'kept' ? (actual >= 0.2 ? 'on track' : actual >= 0.1 ? 'under guide' : "under Babylon's 10%") : actual > guide ? 'over guide' : 'within guide';
   return (
     <div className="split-row">
       <span className="split-label">{spec ? <DrillLink spec={spec}>{label}</DrillLink> : label}</span>

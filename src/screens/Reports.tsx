@@ -1,14 +1,16 @@
-import { ChevronRight, Maximize2, Minimize2, Printer, Trash2 } from 'lucide-react';
+import { Check, ChevronLeft, ChevronRight, Maximize2, Minimize2, Play, Printer, Trash2, X } from 'lucide-react';
 import { Chart, inRange, RangePicker, seriesColor, type Range } from '../components/Chart';
 import { budgetOf, spendOf, useMonthly } from '../data/useMonthly';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Badge, Info, MonthPicker, NumberField, PageHeader, Spark, Tabs } from '../components/bits';
+import { Badge, Info, MonthPicker, NumberField, PageHeader, PurseBar, Spark, Tabs } from '../components/bits';
+import { tone, type Tone } from '../data/guide';
 import { DrillLink, drillCategory, drillGroup, drillType, useDrill } from '../components/Drill';
 import { addMonths, allMonths, budgetFor, completeMonths, monthOf, summarise } from '../data/analysis';
 import { CATEGORIES, CATEGORY, GROUPS } from '../data/categories';
-import { reviewMonth } from '../data/review';
+import { reviewMonth, type Finding } from '../data/review';
 import { useStore } from '../data/store';
+import type { Data } from '../data/types';
 import { expectedIncome, financialYear, netWorth, payFor, people } from '../data/wealth';
 import { money, monthName, monthOnly, pct } from '../lib/format';
 
@@ -32,9 +34,9 @@ function AreaCharts({ month }: { month: string }) {
     return { g, cats, ids, values, inSpan, now: values[values.length - 1] ?? 0, budget: budgetOf(data.budgets, months, ids) };
   }).filter((a) => a.inSpan > 0).sort((a, b) => b.inSpan - a.inSpan);
   return (
-    <section className="report-sec">
+    <div>
       <div className="sec-head">
-        <h3>Each area over time <Info>Bars are what each area cost each month; the dashed line is its budget. Hover or tap a month for the numbers, click it for the payments. Tap ⤢ to split an area into its categories.</Info></h3>
+        <p className="meet-sub">What each area cost, month by month, against its budget. <Info>Bars are what each area cost each month; the dashed line is its budget. Hover or tap a month for the numbers, click it for the payments. Tap ⤢ to split an area into its categories.</Info></p>
         <RangePicker months={months} value={range} onChange={setRange} />
       </div>
       <div className="area-grid">
@@ -59,7 +61,7 @@ function AreaCharts({ month }: { month: string }) {
           );
         })}
       </div>
-    </section>
+    </div>
   );
 }
 
@@ -69,13 +71,40 @@ function InOutChart({ month }: { month: string }) {
   const upTo = m.months.findIndex((x) => x === month) + 1;
   const months = m.months.slice(0, upTo), sums = m.sums.slice(0, upTo);
   return (
-    <section className="report-sec">
-      <Chart title={<h3>Came in and spent</h3>} label="Came in and spent by month" months={months} highlight={month} partial={m.partial} height={190}
-        series={[{ id: 'in', label: 'Came in', values: sums.map((x) => x.income), color: 'var(--s1)' }, { id: 'out', label: 'Spent', values: sums.map((x) => x.spend), color: 'var(--s2)' }]}
-        tipExtra={(mm) => { const x = sums[months.indexOf(mm)]; return [{ label: 'Kept', value: `${money(x.kept)} (${pct(x.keptRate)})` }]; }} />
-    </section>
+    <Chart title={<h3>Came in and spent</h3>} label="Came in and spent by month" months={months} highlight={month} partial={m.partial} height={190}
+      series={[{ id: 'in', label: 'Came in', values: sums.map((x) => x.income), color: 'var(--s1)' }, { id: 'out', label: 'Spent', values: sums.map((x) => x.spend), color: 'var(--s2)' }]}
+      tipExtra={(mm) => { const x = sums[months.indexOf(mm)]; return [{ label: 'Kept', value: `${money(x.kept)} (${pct(x.keptRate)})` }]; }} />
   );
 }
+
+/** A ring that fills as last month's plan gets done. */
+function Ring({ done, total }: { done: number; total: number }) {
+  const r = 26, c = 2 * Math.PI * r, f = total ? done / total : 0;
+  return (
+    <svg width="68" height="68" viewBox="0 0 68 68" className="ring" role="img" aria-label={`${done} of ${total} done`}>
+      <circle cx="34" cy="34" r={r} className="ring-track" />
+      <circle cx="34" cy="34" r={r} className={`ring-fill ${f === 1 ? 'is-done' : ''}`} strokeDasharray={`${c * f} ${c}`} transform="rotate(-90 34 34)" />
+      <text x="34" y="39" textAnchor="middle" className="ring-text">{done}/{total}</text>
+    </svg>
+  );
+}
+
+/** A suggested action for a talking point: concrete where the app knows enough, otherwise a prompt to agree one. */
+function suggestAction(f: Finding, data: Data, nextMonth: string): string {
+  const [kind, id] = f.id.split(':');
+  const name = id && CATEGORY[id] ? CATEGORY[id].label : '';
+  const budget = id ? budgetFor(data.budgets, id, nextMonth) : 0;
+  if (kind === 'over' && name) return budget ? `Keep ${name} to ${money(budget)} in ${monthOnly(nextMonth)}` : `Set a budget for ${name}`;
+  if (kind === 'creep' && name) return `Find out why ${name} keeps going up`;
+  if (kind === 'split') return `Bring wants back under 30% of pay`;
+  if (kind === 'overlap') return `Cancel one of the ${id}`;
+  if (kind === 'rise') return `Shop around: ${f.title.replace(/ went up.*$/i, '')}`;
+  if (kind === 'home') return 'Ask the rental agent about ending the lease early';
+  if (kind === 'unused' && name) return `Stop paying for ${name}`;
+  return `Agree what to do: ${f.title}`;
+}
+
+interface Step { id: string; title: string; body: ReactNode }
 
 function MoneyMeeting() {
   const { data, updateSettings, setBudget } = useStore();
@@ -84,6 +113,21 @@ function MoneyMeeting() {
   const [month, setMonth] = useState(complete.at(-1) ?? months.at(-1) ?? '');
   const [text, setText] = useState('');
   const [openGroups, setOpenGroups] = useState<Set<string>>(new Set());
+  const [present, setPresent] = useState<number | null>(null);
+  const [active, setActive] = useState('m-month');
+  const drill = useDrill();
+
+  // Highlight the agenda step that's on screen.
+  useEffect(() => {
+    const els = [...document.querySelectorAll<HTMLElement>('.meet-step')];
+    const io = new IntersectionObserver((es) => { const v = es.filter((e) => e.isIntersecting).sort((x, y) => x.boundingClientRect.top - y.boundingClientRect.top)[0]; if (v) setActive(v.target.id); }, { rootMargin: '-20% 0px -60% 0px' });
+    els.forEach((e) => io.observe(e));
+    return () => io.disconnect();
+  }, [month]);
+
+  // On a phone the agenda is a strip: keep the current step in view.
+  useEffect(() => { document.querySelector(`.agenda a[href="#${active}"]`)?.scrollIntoView({ block: 'nearest', inline: 'nearest' }); }, [active]);
+
   if (!month) return <p className="muted">Add statements first.</p>;
   const r = reviewMonth(data, month);
   const s = r.summary;
@@ -97,6 +141,7 @@ function MoneyMeeting() {
   const before = netWorth(data.settings, endOf(prev));
   const nwBefore = before.cash > 0 ? before.total : 0;   // only compare when last month's bank balances are known
   const setActions = (list: typeof actions) => updateSettings({ actions: list });
+  const addAction = (t: string) => setActions([...actions, { id: `a${Date.now().toString(36)}`, month, text: t, done: false }]);
 
   // The trend shows up to six complete months ending with this one.
   const trendMonths = [...complete.filter((m) => m < month).slice(-5), month];
@@ -112,59 +157,72 @@ function MoneyMeeting() {
   const tot = (k: 'spent' | 'budget' | 'next') => groups.reduce((a, g) => a + g[k], 0);
   const toggle = (g: string) => setOpenGroups((o) => { const n = new Set(o); if (n.has(g)) n.delete(g); else n.add(g); return n; });
   const diff = (spent: number, budget: number) => budget ? <span className={spent > budget * 1.05 ? 'bad' : 'good'}>{money(budget - spent, { sign: true })}</span> : '–';
-  const share = (n: number) => (s.income ? pct(n / s.income) : '–');
-  const rate = (n: number) => (s.income ? n / s.income : 0);
 
-  return (
-    <div className="report">
-      <div className="report-tools no-print">
-        <MonthPicker months={months} value={month} onChange={setMonth} />
-        <button className="btn" onClick={() => window.print()}><Printer size={16} aria-hidden /> Print or save as PDF</button>
-      </div>
-      <header className="report-head">
-        <h2>Money meeting: {monthName(month)}</h2>
-        <p>{r.verdict.text}</p>
-      </header>
-      <div className="stat-row">
-        <div><span>Came in</span><b>{money(s.income)}</b></div>
-        <div><span>Spent</span><b>{money(s.spend)}</b></div>
-        <div><span>Kept</span><b>{money(s.kept)} ({pct(s.keptRate)})</b></div>
-        {nwNow !== 0 && <div><span>Net worth</span><b>{money(nwNow)}</b><small>{nwBefore ? `${money(nwNow - nwBefore, { sign: true })} on last month` : ''}</small></div>}
-      </div>
+  // The headline: three short facts, each with its own status chip.
+  const base = complete.filter((m) => m < month).slice(-3).map((m) => summarise(m, data));
+  const usualAll = base.length ? base.reduce((a, b) => a + b.spend, 0) / base.length : 0;
+  const change = usualAll ? (s.spend - usualAll) / usualAll : 0;
+  const k = s.income ? s.kept / s.income : 0, w = s.income ? s.wants / s.income : 0;
+  const spendTone: Tone = !usualAll ? 'partial' : change <= 0.03 ? 'good' : change <= 0.1 ? 'warn' : 'bad';
+  const facts = [
+    { tone: spendTone, short: !usualAll ? `Spent ${money(s.spend)}.` : Math.abs(change) <= 0.03 ? 'Spent about usual.' : `Spent ${money(Math.abs(s.spend - usualAll))} ${change > 0 ? 'more' : 'less'} than usual.`, chip: `Spending ${!usualAll ? money(s.spend) : Math.abs(change) <= 0.03 ? 'as usual' : `${change > 0 ? '+' : '−'}${pct(Math.abs(change))}`}` },
+    { tone: tone('wants', w, s.complete), short: w > 0.3 ? 'Wants ran high.' : 'Wants under control.', chip: `Wants ${pct(w)}` },
+    { tone: tone('kept', k, s.complete), short: `Kept ${pct(k)}.`, chip: `Kept ${pct(k)}` },
+  ];
+  const doneCount = lastActions.filter((a) => a.done).length;
+  const leftToKeep = expectedIncome(data.settings, nextMonth) - tot('next');
 
-      <section className="report-sec">
-        <h3>Needs, wants and kept <Info>The 50/30/20 guide: about half of take-home pay on needs, under 30% on wants, at least 20% kept. Tap needs or wants to see every payment in it and fix any that are in the wrong place.</Info></h3>
-        <div className="split-tiles">
-          <DrillLink spec={drillType(month, 'need')} className={`tile tile-${rate(s.needs) > 0.5 ? 'warn' : 'ok'}`}><span>Needs</span><b>{money(s.needs)}</b><small>{share(s.needs)} of pay, {rate(s.needs) > 0.5 ? 'over' : 'within'} the 50% guide</small></DrillLink>
-          <DrillLink spec={drillType(month, 'want')} className={`tile tile-${rate(s.wants) > 0.3 ? 'warn' : 'ok'}`}><span>Wants</span><b>{money(s.wants)}</b><small>{share(s.wants)} of pay, {rate(s.wants) > 0.3 ? `${money(s.wants - 0.3 * s.income)} over` : 'within'} the 30% guide</small></DrillLink>
-          <div className={`tile tile-${rate(s.kept) >= 0.2 ? 'good' : rate(s.kept) >= 0.1 ? 'warn' : 'bad'}`}><span>Kept</span><b>{money(s.kept)}</b><small>{share(s.kept)} of pay, {rate(s.kept) >= 0.2 ? 'on track for' : 'under'} the 20% guide</small></div>
+  const steps: Step[] = [
+    { id: 'm-month', title: 'The month', body: (
+      <>
+        <p className="meet-kicker">{monthName(month)}</p>
+        <h2 className="meet-headline">{facts.map((f) => f.short).join(' ')}</h2>
+        <ul className="meet-chips">{facts.map((f) => <li key={f.chip} className={`chip-st st-text-${f.tone}`}><i aria-hidden />{f.chip}</li>)}</ul>
+        <PurseBar income={s.income} needs={s.needs} wants={s.wants} kept={s.kept} complete={s.complete} onOpen={(t) => drill(drillType(month, t))} />
+        <div className="stat-row meet-stats">
+          <div><span>Came in</span><b>{money(s.income)}</b></div>
+          <div><span>Spent</span><b>{money(s.spend)}</b></div>
+          <div><span>Kept</span><b>{money(s.kept)}</b></div>
+          {nwNow !== 0 && <div><span>Net worth</span><b>{money(nwNow)}</b><small>{nwBefore ? `${money(nwNow - nwBefore, { sign: true })} on ${monthOnly(prev)}` : ''}</small></div>}
         </div>
-      </section>
-
-      <InOutChart month={month} />
-
-      {lastActions.length > 0 && (
-        <section className="report-sec">
-          <h3>Did we do what we planned for {monthOnly(month)}?</h3>
+        <p className="meet-verdict">{r.verdict.text}</p>
+        <div className="meet-chart"><InOutChart month={month} /></div>
+      </>
+    ) },
+    { id: 'm-last', title: 'Last month’s plan', body: lastActions.length ? (
+      <div className="meet-plan">
+        <Ring done={doneCount} total={lastActions.length} />
+        <div>
+          <p className="meet-sub">{doneCount === lastActions.length ? 'Everything you planned for ' : `${doneCount} of ${lastActions.length} things planned for `}{monthOnly(month)}{doneCount === lastActions.length ? ' got done.' : ' got done. Tick off the rest if they did.'}</p>
           <ul className="checklist">
             {lastActions.map((a) => (
               <li key={a.id}><label className="check"><input type="checkbox" checked={a.done} onChange={(e) => setActions(actions.map((x) => (x.id === a.id ? { ...x, done: e.target.checked } : x)))} /><span>{a.text}</span></label></li>
             ))}
           </ul>
-        </section>
-      )}
-
-      <section className="report-sec">
-        <h3>What to talk about</h3>
-        <ul className="findings">
-          {top.map((f) => <li key={f.id}><Badge severity={f.severity} short /><div><strong>{f.title}</strong><p>{f.detail}</p></div></li>)}
-        </ul>
-      </section>
-
-      <AreaCharts month={month} />
-
-      <section className="report-sec">
-        <h3>Budget and next month's targets <Info>Tap an area to open its categories, and a category or amount to check what's in it. The trend shows the last {trendMonths.length} complete months, this one darker, with the budget as a faint line. Set {monthOnly(nextMonth)}'s target in the last column: it becomes the budget from then on.</Info></h3>
+        </div>
+      </div>
+    ) : <p className="muted">No plan was set for {monthOnly(month)}. The plan you make in step 6 shows up here next month.</p> },
+    { id: 'm-talk', title: 'What to talk about', body: (
+      <ul className="talk">
+        {top.map((f) => {
+          const suggestion = suggestAction(f, data, nextMonth);
+          const added = nextActions.some((a) => a.text === suggestion);
+          return (
+            <li key={f.id} className={`talk-card sev-edge-${f.severity}`}>
+              <div className="talk-text"><Badge severity={f.severity} short /><div><strong>{f.title}</strong><p>{f.detail}</p></div></div>
+              <button className={`btn small ${added ? 'ghost' : ''} no-print`} disabled={added} onClick={() => addAction(suggestion)} title={suggestion}>
+                {added ? <><Check size={15} aria-hidden /> In {monthOnly(nextMonth)}’s plan</> : 'Make this an action'}
+              </button>
+            </li>
+          );
+        })}
+        {!top.length && <li className="muted">Nothing needs talking about this month.</li>}
+      </ul>
+    ) },
+    { id: 'm-areas', title: 'Each area', body: <AreaCharts month={month} /> },
+    { id: 'm-targets', title: 'Targets', body: (
+      <>
+        <p className="meet-sub">Set what each category should cost in {monthOnly(nextMonth)}. It becomes the budget from then on. <Info>Tap an area to open its categories, and a category or amount to check what's in it. The trend shows the last {trendMonths.length} complete months, this one darker, with the budget as a dashed line.</Info></p>
         <div className="table-wrap">
           <table className="score meeting">
             <thead><tr><th>Area</th><th className="hide-sm">Budget</th><th>Spent</th><th>Left</th><th>Trend</th><th>{monthOnly(nextMonth)} target</th></tr></thead>
@@ -196,22 +254,95 @@ function MoneyMeeting() {
             <tfoot><tr><th scope="row">Total</th><td className="hide-sm">{money(tot('budget'))}</td><td>{money(tot('spent'))}</td><td>{diff(tot('spent'), tot('budget'))}</td><td><Spark label="All spending by month" values={trend(groups.flatMap((g) => g.cats.map((c) => c.id)))} highlight={month} budget={tot('budget')} /></td><td>{money(tot('next'))}</td></tr></tfoot>
           </table>
         </div>
-        <p className="fine no-print">{tot('next') > 0 && s.income > 0 && <>Next month's targets add up to {money(tot('next'))}, leaving about {money(expectedIncome(data.settings, nextMonth) - tot('next'))} of expected pay to keep.</>}</p>
-      </section>
-
-      <section className="report-sec">
-        <h3>What we'll do in {monthOnly(nextMonth)}</h3>
+      </>
+    ) },
+    { id: 'm-next', title: `Plan for ${monthOnly(nextMonth)}`, body: (
+      <>
+        {tot('next') > 0 && s.income > 0 && (
+          <div className={`meet-keep st-text-${tone('kept', leftToKeep / Math.max(1, expectedIncome(data.settings, nextMonth)))}`}>
+            <span>The targets add up to <b>{money(tot('next'))}</b>, leaving about</span>
+            <b className="meet-keep-num">{money(leftToKeep)}</b>
+            <span>of expected pay to keep in {monthOnly(nextMonth)} ({pct(leftToKeep / Math.max(1, expectedIncome(data.settings, nextMonth)))}).</span>
+          </div>
+        )}
         <ul className="checklist">
           {nextActions.map((a) => (
-            <li key={a.id}><span>{a.text}</span><button className="icon-btn no-print" aria-label="Remove" onClick={() => setActions(actions.filter((x) => x.id !== a.id))}><Trash2 size={15} /></button></li>
+            <li key={a.id}><span>{a.text}</span><button className="icon-btn no-print" aria-label={`Remove ${a.text}`} onClick={() => setActions(actions.filter((x) => x.id !== a.id))}><Trash2 size={15} /></button></li>
           ))}
+          {!nextActions.length && <li className="muted">Nothing planned yet. Add something below, or use “Make this an action” in step 3.</li>}
         </ul>
-        <form className="inline-form no-print" onSubmit={(e) => { e.preventDefault(); if (!text.trim()) return; setActions([...actions, { id: `a${Date.now().toString(36)}`, month, text: text.trim(), done: false }]); setText(''); }}>
+        <form className="inline-form no-print" onSubmit={(e) => { e.preventDefault(); if (!text.trim()) return; addAction(text.trim()); setText(''); }}>
           <input placeholder="e.g. Cap takeaway at $300" value={text} onChange={(e) => setText(e.target.value)} aria-label="New action" />
           <button className="btn small">Add</button>
         </form>
-        <p className="fine no-print">Next month's report asks whether these got done.</p>
-      </section>
+        <p className="fine no-print">Next month's meeting starts by asking whether these got done.</p>
+      </>
+    ) },
+  ];
+
+  return (
+    <div className="meeting-wrap">
+      <nav className="agenda no-print" aria-label="Meeting agenda">
+        <ol>
+          {steps.map((st, i) => (
+            <li key={st.id}><a href={`#${st.id}`} className={active === st.id ? 'on' : ''} onClick={(e) => { e.preventDefault(); document.getElementById(st.id)?.scrollIntoView({ behavior: 'smooth', block: 'start' }); }}>
+              <span className="agenda-n">{i + 1}</span><span>{st.title}</span></a></li>
+          ))}
+        </ol>
+        <button className="btn primary present-btn" onClick={() => setPresent(0)} aria-label="Present the meeting, one step at a time"><Play size={16} aria-hidden /><span className="pb-text">Present</span></button>
+      </nav>
+      <div className="report meeting-body">
+        <div className="report-tools no-print">
+          <MonthPicker months={months} value={month} onChange={setMonth} />
+          <button className="btn" onClick={() => window.print()}><Printer size={16} aria-hidden /> Print or save as PDF</button>
+        </div>
+        {steps.map((st, i) => (
+          <section key={st.id} id={st.id} className="meet-step" aria-labelledby={`${st.id}-h`}>
+            <h3 id={`${st.id}-h`} className="meet-step-h"><span className="agenda-n">{i + 1}</span>{st.title}</h3>
+            {st.body}
+          </section>
+        ))}
+      </div>
+      {present !== null && <Present steps={steps} index={present} onIndex={setPresent} month={month} />}
+    </div>
+  );
+}
+
+/** One step at a time, full screen, for going through the meeting together. Arrow keys or swipe to move; Escape to leave. */
+function Present({ steps, index, onIndex, month }: { steps: Step[]; index: number; onIndex: (i: number | null) => void; month: string }) {
+  const go = (d: number) => onIndex(Math.max(0, Math.min(steps.length - 1, index + d)));
+  useEffect(() => {
+    const key = (e: KeyboardEvent) => {
+      if ((e.target as HTMLElement).closest('input, select, textarea')) return;
+      if (e.key === 'ArrowRight' || e.key === 'PageDown' || e.key === ' ') { e.preventDefault(); go(1); }
+      if (e.key === 'ArrowLeft' || e.key === 'PageUp') { e.preventDefault(); go(-1); }
+      if (e.key === 'Escape') onIndex(null);
+    };
+    window.addEventListener('keydown', key);
+    document.body.style.overflow = 'hidden';
+    return () => { window.removeEventListener('keydown', key); document.body.style.overflow = ''; };
+  });
+  const start = useRef<number | null>(null);
+  const st = steps[index];
+  return (
+    <div className="present" role="dialog" aria-modal="true" aria-label={`Money meeting, ${monthName(month)}`}
+      onPointerDown={(e) => { if (e.pointerType !== 'mouse') start.current = e.clientX; }}
+      onPointerUp={(e) => { if (start.current !== null) { const dx = e.clientX - start.current; if (Math.abs(dx) > 70) go(dx < 0 ? 1 : -1); start.current = null; } }}>
+      <header className="present-top">
+        <span className="present-title">Money meeting · {monthName(month)}</span>
+        <ol className="present-dots" aria-label="Steps">{steps.map((x, i) => <li key={x.id}><button className={i === index ? 'on' : ''} aria-label={`${i + 1}. ${x.title}`} aria-current={i === index ? 'step' : undefined} onClick={() => onIndex(i)} /></li>)}</ol>
+        <button className="icon-btn" onClick={() => onIndex(null)} aria-label="Leave present mode"><X size={22} /></button>
+      </header>
+      <main className="present-body" key={st.id}>
+        <h2 className="present-h"><span className="agenda-n">{index + 1}</span>{st.title}</h2>
+        {st.body}
+      </main>
+      <footer className="present-nav">
+        <button className="btn" disabled={index === 0} onClick={() => go(-1)}><ChevronLeft size={18} aria-hidden /> {index > 0 ? steps[index - 1].title : 'Back'}</button>
+        {index < steps.length - 1
+          ? <button className="btn primary" onClick={() => go(1)}>{steps[index + 1].title} <ChevronRight size={18} aria-hidden /></button>
+          : <button className="btn primary" onClick={() => onIndex(null)}>Finish</button>}
+      </footer>
     </div>
   );
 }

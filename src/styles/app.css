@@ -190,9 +190,8 @@ label.check.small { font-size: 0.85rem; margin: 6px 0 0; }
 .purse-seg b { font-family: var(--display); font-size: 0.8rem; font-weight: 700; }
 .purse-seg:first-child { border-radius: var(--r-md) 0 0 var(--r-md); }
 .purse-seg:last-child { border-radius: 0 var(--r-md) var(--r-md) 0; }
-/* Meaning, not decoration: neutral within the guide, amber over it, green/amber/red for what was kept. */
-.st-needs { background: color-mix(in srgb, var(--ink) 22%, var(--card)); color: var(--ink); }
-.st-wants { background: color-mix(in srgb, var(--ink) 32%, var(--card)); color: var(--ink); }
+/* Meaning, not decoration (src/data/guide.ts): green within the guide, amber a little past it, red well past it; grey for a month that isn't complete. */
+.st-partial { background: color-mix(in srgb, var(--ink) 22%, var(--card)); color: var(--ink); }
 .st-good { background: var(--good); color: var(--card); }
 .st-warn { background: var(--warn); color: var(--card); }
 .st-bad { background: var(--bad); color: var(--card); }
@@ -248,7 +247,7 @@ label.check.small { font-size: 0.85rem; margin: 6px 0 0; }
   .tx-date { text-align: left; }
 }
 
-.sheet-wrap { position: fixed; inset: 0; background: rgba(10, 20, 16, 0.45); z-index: 40; display: flex; align-items: flex-end; justify-content: center; }
+.sheet-wrap { position: fixed; inset: 0; background: rgba(10, 20, 16, 0.45); z-index: 100; display: flex; align-items: flex-end; justify-content: center; }
 .sheet { background: var(--card); width: 100%; max-width: 560px; max-height: 92vh; overflow: auto; border-radius: var(--r-lg) var(--r-lg) 0 0; padding: 20px 20px calc(20px + env(safe-area-inset-bottom)); animation: rise 0.18s ease-out; }
 @keyframes rise { from { transform: translateY(24px); opacity: 0; } }
 @media (min-width: 760px) { .sheet-wrap { align-items: center; } .sheet { border-radius: var(--r-lg); } }
@@ -641,7 +640,7 @@ button.tile:hover { border-color: var(--euc); }
 /* ---- ⋯ menus ---- */
 .menu { position: relative; flex: none; }
 .menu-btn { width: 34px; height: 34px; color: var(--muted); }
-.menu-list { position: fixed; z-index: 60; list-style: none; margin: 0; padding: 6px; min-width: 210px; background: var(--card); border: 1px solid var(--line); border-radius: var(--r-md); box-shadow: 0 10px 30px rgba(0, 0, 0, 0.16); }
+.menu-list { position: fixed; z-index: 120; list-style: none; margin: 0; padding: 6px; min-width: 210px; background: var(--card); border: 1px solid var(--line); border-radius: var(--r-md); box-shadow: 0 10px 30px rgba(0, 0, 0, 0.16); }
 .menu-list button { display: block; width: 100%; text-align: left; background: none; border: 0; padding: 9px 10px; border-radius: var(--r-sm); font: inherit; font-size: 0.92rem; color: var(--ink); cursor: pointer; }
 .menu-list button:hover, .menu-list button:focus-visible { background: var(--card-2); }
 .menu-list button.danger { color: var(--bad); }
@@ -842,3 +841,71 @@ h1, h2, h3, h4 { font-weight: var(--display-weight, 700); }
 
 .tile-warn { border-left: 4px solid var(--warn); } .tile-bad { border-left: 4px solid var(--bad); } .tile-good { border-left: 4px solid var(--good); }
 .purse-guide i { font-style: normal; }
+
+/* ---- Money meeting: an agenda you work through ---- */
+.meeting-wrap { display: grid; grid-template-columns: minmax(0, 1fr); gap: 18px; align-items: start; }
+@media (min-width: 1100px) { .meeting-wrap { grid-template-columns: 210px minmax(0, 1fr); } }
+.agenda { position: sticky; top: 64px; z-index: 6; background: var(--paper); padding: 6px 0; }
+.agenda ol { list-style: none; margin: 0; padding: 0; display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; }
+.agenda a { display: flex; align-items: center; gap: 8px; padding: 7px 10px; border-radius: var(--r-md); text-decoration: none; color: var(--ink-2); white-space: nowrap; font-weight: 700; font-size: 0.9rem; }
+.agenda a:hover { background: var(--card); color: var(--ink); }
+.agenda a.on { background: var(--card); color: var(--ink); box-shadow: var(--shadow); }
+.agenda a.on .agenda-n { background: var(--euc); color: var(--euc-ink); border-color: var(--euc); }
+.agenda-n { display: inline-grid; place-items: center; width: 26px; height: 26px; flex: none; border-radius: 999px; border: 1.5px solid var(--line); font-family: var(--display); font-size: 0.82rem; font-weight: 700; color: var(--ink-2); }
+.present-btn { margin-top: 10px; width: 100%; }
+@media (max-width: 1099px) { .agenda { display: flex; gap: 8px; align-items: center; } .agenda ol { flex: 1; } .present-btn { margin: 0; width: auto; flex: none; } }
+@media (min-width: 1100px) { .agenda { top: 24px; padding: 0; background: none; } .agenda ol { flex-direction: column; } .agenda a { white-space: normal; } }
+@media (max-width: 959px) { .agenda { top: 58px; } }
+
+.meeting-body { padding: 0; background: none; border: 0; box-shadow: none; }
+.meeting-body .report-tools { margin: 0 0 14px; }
+.meet-step { background: var(--card); border: 1px solid var(--line-2); border-radius: var(--r-lg); padding: 22px; box-shadow: var(--shadow); scroll-margin-top: 120px; }
+.meet-step + .meet-step { margin-top: 16px; }
+.meet-step-h { display: flex; align-items: center; gap: 10px; font-size: 1.2rem; margin-bottom: 14px; }
+.meet-kicker { margin: 0 0 4px; color: var(--muted); font-weight: 700; }
+.meet-headline { font-size: clamp(1.6rem, 1rem + 2.2vw, 2.5rem); line-height: 1.12; max-width: 24ch; letter-spacing: -0.015em; margin-bottom: 14px; }
+.meet-chips { list-style: none; padding: 0; margin: 0 0 6px; display: flex; flex-wrap: wrap; gap: 8px; }
+.chip-st { display: inline-flex; align-items: center; gap: 7px; padding: 5px 12px; border-radius: 999px; font-weight: 700; font-size: 0.88rem; background: color-mix(in srgb, var(--tone) 14%, var(--card)); color: var(--ink); border: 1px solid color-mix(in srgb, var(--tone) 45%, transparent); }
+.chip-st i { width: 9px; height: 9px; border-radius: 999px; background: var(--tone); }
+.st-text-good { --tone: var(--good); } .st-text-warn { --tone: var(--warn); } .st-text-bad { --tone: var(--bad); } .st-text-partial { --tone: var(--muted); }
+.meet-stats { margin-top: 18px; }
+.meet-verdict { color: var(--ink-2); max-width: 70ch; margin: 14px 0 0; }
+.meet-chart { margin-top: 18px; }
+.meet-sub { color: var(--ink-2); margin: 0 0 12px; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.meet-plan { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 18px; align-items: start; }
+.ring-track { fill: none; stroke: var(--line-2); stroke-width: 7; }
+.ring-fill { fill: none; stroke: var(--data); stroke-width: 7; stroke-linecap: round; transition: stroke-dasharray 0.4s; }
+.ring-fill.is-done { stroke: var(--good); }
+.ring-text { fill: var(--ink); font-family: var(--display); font-weight: 700; font-size: 15px; }
+@media (prefers-reduced-motion: reduce) { .ring-fill { transition: none; } }
+.talk { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.talk-card { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; padding: 14px 16px; border-radius: var(--r-md); background: var(--card-2); border-left: 4px solid var(--line); }
+@media (min-width: 760px) { .talk-card { grid-template-columns: minmax(0, 1fr) auto; align-items: center; } }
+.talk-card.sev-edge-act { border-left-color: var(--bad); } .talk-card.sev-edge-watch { border-left-color: var(--warn); }
+.talk-text { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 12px; align-items: start; }
+.talk-text p { margin: 2px 0 0; color: var(--ink-2); font-size: 0.95rem; }
+.talk-card .btn { justify-self: start; }
+.meet-keep { display: grid; gap: 2px; padding: 14px 16px; margin-bottom: 14px; border-radius: var(--r-md); background: color-mix(in srgb, var(--tone) 12%, var(--card)); border-left: 4px solid var(--tone); color: var(--ink-2); }
+.meet-keep b { color: var(--ink); }
+.meet-keep-num { font-family: var(--display); font-size: 2rem; line-height: 1.1; }
+
+/* Present mode */
+.present { position: fixed; inset: 0; z-index: 90; background: var(--paper); display: grid; grid-template-rows: auto minmax(0, 1fr) auto; font-size: 1.08rem; }
+.present-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 20px; border-bottom: 1px solid var(--line-2); }
+.present-title { font-weight: 700; color: var(--ink-2); }
+.present-dots { list-style: none; display: flex; gap: 8px; margin: 0; padding: 0; }
+.present-dots button { width: 12px; height: 12px; border-radius: 999px; border: 0; background: var(--line); cursor: pointer; padding: 0; }
+.present-dots button.on { background: var(--euc); width: 28px; }
+.present-body { overflow: auto; padding: 28px 20px 40px; width: 100%; max-width: 1080px; margin: 0 auto; animation: rise 0.2s ease-out; }
+.present-h { display: flex; align-items: center; gap: 12px; font-size: clamp(1.4rem, 1rem + 1.4vw, 2rem); margin-bottom: 18px; }
+.present-h .agenda-n { width: 38px; height: 38px; font-size: 1.05rem; background: var(--euc); color: var(--euc-ink); border-color: var(--euc); }
+.present .meet-headline { font-size: clamp(2rem, 1.2rem + 3vw, 3.4rem); }
+.present-nav { display: flex; justify-content: space-between; gap: 12px; padding: 12px 20px calc(12px + env(safe-area-inset-bottom)); border-top: 1px solid var(--line-2); background: var(--card); }
+@media (max-width: 640px) { .present-title { display: none; } .present-nav .btn { font-size: 0.9rem; } }
+@media (prefers-reduced-motion: reduce) { .present-body { animation: none; } }
+@media print {
+  .meeting-wrap { display: block; }
+  .meet-step { box-shadow: none; border: 0; padding: 0; margin-top: 18px; break-inside: avoid-page; }
+  .present { display: none !important; }
+}
+@media (max-width: 559px) { .present-btn .pb-text { display: none; } .present-btn { padding: 8px 12px; } }
