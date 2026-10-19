@@ -1,9 +1,11 @@
-import type { Category } from './types';
+import type { Category, Settings } from './types';
 
-export const GROUPS = [
+/** Built-in areas. The live list (GROUPS) also has the family's own areas and their renames. */
+export const BUILT_GROUPS = [
   'Home', 'Bills', 'Food', 'Kids & school', 'Health', 'Transport', 'Personal',
-  'Subscriptions & fun', 'Family & giving', 'Travel', 'Admin & fees', 'Other',
-] as const;
+  'Subscriptions & fun', 'Family & giving', 'Travel', 'Government', 'Admin & fees', 'Other',
+];
+export const GROUPS: string[] = [...BUILT_GROUPS];
 
 const c = (id: string, label: string, group: string, type: 'need' | 'want', hint?: string): Category => ({ id, label, group, type, hint });
 
@@ -61,7 +63,9 @@ export const CATEGORIES: Category[] = [
   c('donations', 'Donations & giving', 'Family & giving', 'want'),
 
   c('travel', 'Holidays & flights', 'Travel', 'want'),
-  c('gov-fees', 'Government & official fees', 'Travel', 'need'),
+
+  c('gov-visa', 'Visa, PR & citizenship', 'Government', 'need'),
+  c('gov-fees', 'Government & official fees', 'Government', 'need', 'Passports, licences, registrations'),
 
   c('accountant', 'Accountant & tax', 'Admin & fees', 'need'),
   c('business-fees', 'Company & business fees', 'Admin & fees', 'need'),
@@ -90,17 +94,31 @@ export const KEEP_CATEGORIES = CATEGORIES.filter((x) => x.keep);
 export const label = (id: string | null | undefined) => (id && CATEGORY[id]?.label) || 'Not sorted';
 
 let applied = '';
-/** Add the family's own categories and hide the ones they don't use. Hidden ones keep their name for old transactions. */
-export function applyCustomCategories(custom: Category[] = [], hidden: string[] = []) {
-  const key = JSON.stringify([custom, hidden]);
+type Areas = Pick<Settings, 'customGroups' | 'groupNames' | 'categoryEdits'>;
+
+/** Add the family's own categories and areas, apply their renames and moves, and hide what they don't use.
+ *  Areas are referred to by a key: a built-in area's original name, or a custom area's id. Hidden categories keep their name for old transactions. */
+export function applyCustomCategories(custom: Category[] = [], hidden: string[] = [], areas: Areas = {}) {
+  const key = JSON.stringify([custom, hidden, areas]);
   if (key === applied) return;
   applied = key;
-  const all = [...BUILT_IN, ...custom.map((x) => ({ ...x, custom: true }))];
+  const names: Record<string, string> = { ...Object.fromEntries((areas.customGroups ?? []).map((g) => [g.id, g.label])), ...(areas.groupNames ?? {}) };
+  const area = (k: string) => names[k] ?? k;
+  const all = [...BUILT_IN, ...custom.map((x) => ({ ...x, custom: true }))].map((x) => {
+    const e = areas.categoryEdits?.[x.id];
+    const groupKey = e?.group ?? x.group;
+    return { ...x, label: e?.label ?? x.label, type: e?.type ?? x.type, groupKey, group: area(groupKey) };
+  });
   CATEGORIES.splice(0, CATEGORIES.length, ...all);
   for (const k of Object.keys(CATEGORY)) delete CATEGORY[k];
   for (const x of all) CATEGORY[x.id] = x;
   SPEND_CATEGORIES.splice(0, SPEND_CATEGORIES.length, ...all.filter((x) => !x.system && !hidden.includes(x.id)));
   KEEP_CATEGORIES.splice(0, KEEP_CATEGORIES.length, ...all.filter((x) => x.keep));
+  const keys = [...BUILT_GROUPS.slice(0, -1), ...(areas.customGroups ?? []).map((g) => g.id), 'Other'];
+  GROUPS.splice(0, GROUPS.length, ...keys.map(area));
+  GROUP_KEYS.splice(0, GROUP_KEYS.length, ...keys);
 }
+/** Area keys in the same order as GROUPS. */
+export const GROUP_KEYS: string[] = [...BUILT_GROUPS];
 
 export const isHidden = (id: string, hidden: string[] = []) => hidden.includes(id);

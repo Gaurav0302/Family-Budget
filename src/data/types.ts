@@ -21,6 +21,8 @@ export interface Category {
   keep?: boolean;
   /** Added by the family in Settings. */
   custom?: boolean;
+  /** The area's key (built-in name or custom id); `group` is its display name. Set when categories are applied. */
+  groupKey?: string;
 }
 
 export interface Transaction {
@@ -141,6 +143,12 @@ export interface Settings {
   actions?: Action[];
   customCategories?: Category[];
   hiddenCategories?: string[];
+  /** The family's own areas (groups of categories). */
+  customGroups?: { id: string; label: string }[];
+  /** New names for areas, by area key. */
+  groupNames?: Record<string, string>;
+  /** Renames, moves to another area, and need/want changes for built-in categories. */
+  categoryEdits?: Record<string, { label?: string; group?: string; type?: NeedWant }>;
   /** Which version of the built-in rules last sorted the transactions. */
   rulesVersion?: number;
 }

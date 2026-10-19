@@ -1,10 +1,11 @@
-import { Trash2, X } from 'lucide-react';
+import { Plus, X } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { CategorySelect } from '../components/CategorySelect';
 import { Info, PageHeader, Tabs } from '../components/bits';
 import { average, completeMonths, summarise } from '../data/analysis';
-import { CATEGORIES, GROUPS, label } from '../data/categories';
+import { CATEGORIES, GROUP_KEYS, GROUPS, label } from '../data/categories';
+import { Menu } from '../components/Menu';
 import { findPayee, kindForCategory } from '../data/payees';
 import { useStore } from '../data/store';
 import type { Category, Payee, Transaction } from '../data/types';
@@ -144,6 +145,54 @@ function PayeesTab() {
   );
 }
 
+type Editing = { kind: 'area' | 'cat' | 'move' | 'add'; id: string } | null;
+const slugOf = (t: string) => t.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+
+/** Inline text box for renaming: saves on Enter or when you click away, Escape cancels. */
+function RenameBox({ value, label, onSave, onCancel }: { value: string; label: string; onSave: (v: string) => void; onCancel: () => void }) {
+  const [v, setV] = useState(value);
+  return (
+    <input className="rename" autoFocus aria-label={label} value={v} onChange={(e) => setV(e.target.value)}
+      onBlur={() => (v.trim() && v.trim() !== value ? onSave(v.trim()) : onCancel())}
+      onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); if (e.key === 'Escape') onCancel(); }} />
+  );
+}
+
+function NewCategory({ areaKey, onDone }: { areaKey?: string; onDone: () => void }) {
+  const { data, updateSettings } = useStore();
+  const s = data.settings;
+  const [name, setName] = useState('');
+  const [area, setArea] = useState(areaKey ?? GROUP_KEYS[0]);
+  const [newArea, setNewArea] = useState('');
+  const [type, setType] = useState<'need' | 'want'>('need');
+  return (
+    <form className="new-cat" onSubmit={(e) => {
+      e.preventDefault();
+      if (!name.trim()) return;
+      const id = `custom-${slugOf(name)}`;
+      if (CATEGORIES.some((c) => c.id === id)) return;
+      let groups = s.customGroups ?? [];
+      let group = area;
+      if (area === '__new') {
+        if (!newArea.trim()) return;
+        group = `area-${slugOf(newArea)}`;
+        if (!groups.some((g) => g.id === group)) groups = [...groups, { id: group, label: newArea.trim() }];
+      }
+      updateSettings({ customGroups: groups, customCategories: [...(s.customCategories ?? []), { id, label: name.trim(), group, type }] });
+      onDone();
+    }}>
+      <input autoFocus placeholder="Category name, e.g. India home upkeep" value={name} onChange={(e) => setName(e.target.value)} aria-label="Category name" />
+      {!areaKey && <select value={area} onChange={(e) => setArea(e.target.value)} aria-label="Area">
+        {GROUP_KEYS.map((k, i) => <option key={k} value={k}>{GROUPS[i]}</option>)}
+        <option value="__new">＋ New area…</option>
+      </select>}
+      {area === '__new' && <input placeholder="New area name, e.g. Government" value={newArea} onChange={(e) => setNewArea(e.target.value)} aria-label="New area name" />}
+      <select value={type} onChange={(e) => setType(e.target.value as 'need' | 'want')} aria-label="Need or want"><option value="need">Need</option><option value="want">Want</option></select>
+      <span className="row-gap"><button className="btn small primary">Add</button><button type="button" className="btn small ghost" onClick={onDone}>Cancel</button></span>
+    </form>
+  );
+}
+
 function CategoriesTab() {
   const { data, updateSettings } = useStore();
   const [, setParams] = useSearchParams();
@@ -157,31 +206,95 @@ function CategoriesTab() {
     for (const p of data.payees) m.set(p.category, [...(m.get(p.category) ?? []), p]);
     return m;
   }, [data.payees]);
-  const [newCat, setNewCat] = useState<{ label: string; group: string; type: 'need' | 'want' }>({ label: '', group: GROUPS[0], type: 'want' });
+  const [editing, setEditing] = useState<Editing>(null);
+  const [adding, setAdding] = useState<'cat' | 'area' | null>(null);
+  const [areaName, setAreaName] = useState('');
+  const [allChips, setAllChips] = useState<Set<string>>(new Set());
+  const used = useMemo(() => new Set(data.transactions.map((t) => t.category)), [data.transactions]);
+
+  const isCustomArea = (k: string) => (s.customGroups ?? []).some((g) => g.id === k);
+  const renameArea = (k: string, label: string) => updateSettings(isCustomArea(k)
+    ? { customGroups: (s.customGroups ?? []).map((g) => (g.id === k ? { ...g, label } : g)) }
+    : { groupNames: { ...(s.groupNames ?? {}), [k]: label } });
+  const editCat = (c: Category, patch: { label?: string; group?: string; type?: 'need' | 'want' }) => updateSettings(c.custom
+    ? { customCategories: (s.customCategories ?? []).map((x) => (x.id === c.id ? { ...x, ...patch } : x)) }
+    : { categoryEdits: { ...(s.categoryEdits ?? {}), [c.id]: { ...(s.categoryEdits?.[c.id] ?? {}), ...patch } } });
+  const setHidden = (ids: string[], hide: boolean) => updateSettings({ hiddenCategories: hide ? [...new Set([...hidden, ...ids])] : hidden.filter((h) => !ids.includes(h)) });
 
   return (
     <>
-      {GROUPS.map((g) => {
-        const cats = CATEGORIES.filter((c) => c.group === g && !c.system);
-        if (!cats.length) return null;
+      <div className="btn-row cat-add">
+        <button className="btn small" onClick={() => setAdding(adding === 'cat' ? null : 'cat')}><Plus size={16} aria-hidden /> New category</button>
+        <button className="btn small" onClick={() => setAdding(adding === 'area' ? null : 'area')}><Plus size={16} aria-hidden /> New area</button>
+      </div>
+      {adding === 'cat' && <section className="panel"><NewCategory onDone={() => setAdding(null)} /></section>}
+      {adding === 'area' && (
+        <section className="panel">
+          <form className="new-cat" onSubmit={(e) => {
+            e.preventDefault();
+            if (!areaName.trim()) return;
+            const id = `area-${slugOf(areaName)}`;
+            if (!isCustomArea(id) && !GROUPS.includes(areaName.trim())) updateSettings({ customGroups: [...(s.customGroups ?? []), { id, label: areaName.trim() }] });
+            setAreaName(''); setAdding(null); setEditing({ kind: 'add', id });
+          }}>
+            <input autoFocus placeholder="Area name, e.g. Government" value={areaName} onChange={(e) => setAreaName(e.target.value)} aria-label="Area name" />
+            <span className="row-gap"><button className="btn small primary">Add area</button><button type="button" className="btn small ghost" onClick={() => setAdding(null)}>Cancel</button></span>
+          </form>
+        </section>
+      )}
+      <div className="cat-areas">
+      {GROUP_KEYS.map((key, gi) => {
+        const name = GROUPS[gi];
+        const cats = CATEGORIES.filter((c) => c.groupKey === key && !c.system);
+        const allHidden = cats.length > 0 && cats.every((c) => hidden.includes(c.id));
+        if (!cats.length && !isCustomArea(key)) return null;
         return (
-          <section key={g} className="panel cat-panel">
-            <h2>{g}</h2>
+          <section key={key} className={`panel cat-panel ${allHidden ? 'is-hidden' : ''}`}>
+            <div className="cat-panel-head">
+              {editing?.kind === 'area' && editing.id === key
+                ? <RenameBox value={name} label="Area name" onSave={(v) => { renameArea(key, v); setEditing(null); }} onCancel={() => setEditing(null)} />
+                : <h2>{name} <small>{cats.length} categor{cats.length === 1 ? 'y' : 'ies'}{allHidden ? ', hidden' : ''}</small></h2>}
+              <Menu label={`${name} options`} items={[
+                { label: 'Rename area', onClick: () => setEditing({ kind: 'area', id: key }) },
+                { label: 'Add a category here', onClick: () => setEditing({ kind: 'add', id: key }) },
+                cats.length > 0 && { label: allHidden ? 'Show all its categories' : 'Hide all its categories', onClick: () => setHidden(cats.map((c) => c.id), !allHidden) },
+                isCustomArea(key) && !cats.length && { label: 'Delete area', danger: true, onClick: () => updateSettings({ customGroups: (s.customGroups ?? []).filter((g) => g.id !== key) }) },
+              ]} />
+            </div>
+            {editing?.kind === 'add' && editing.id === key && <NewCategory areaKey={key} onDone={() => setEditing(null)} />}
+            {!cats.length && editing?.id !== key && <p className="muted">No categories yet. Use ⋯ → Add a category here, or move one in.</p>}
             <ul className="cat-rows">
               {cats.map((c) => {
                 const ps = (payeesBy.get(c.id) ?? []).sort((a, b) => a.name.localeCompare(b.name));
                 const isHidden = hidden.includes(c.id);
+                const many = ps.length > 5 && !allChips.has(c.id);
                 return (
                   <li key={c.id} className={isHidden ? 'is-hidden' : ''}>
                     <div className="cat-line">
-                      <span><b>{c.label}</b>{c.custom && <small> yours</small>}<small>{c.type === 'need' ? 'Need' : 'Want'}{avg(c.id) > 0 ? `, about ${money(avg(c.id))} a month` : ''}</small></span>
-                      <span className="cat-actions">
-                        <label className="check small"><input type="checkbox" checked={!isHidden} onChange={(e) => updateSettings({ hiddenCategories: e.target.checked ? hidden.filter((h) => h !== c.id) : [...hidden, c.id] })} /><span>Show</span></label>
-                        {c.custom && !ps.length && <button className="icon-btn" aria-label={`Delete ${c.label}`} onClick={() => updateSettings({ customCategories: (s.customCategories ?? []).filter((x) => x.id !== c.id) })}><Trash2 size={15} /></button>}
-                      </span>
+                      {editing?.kind === 'cat' && editing.id === c.id
+                        ? <RenameBox value={c.label} label="Category name" onSave={(v) => { editCat(c, { label: v }); setEditing(null); }} onCancel={() => setEditing(null)} />
+                        : <span><b>{c.label}</b><small>{c.type === 'need' ? 'Need' : 'Want'}{avg(c.id) > 0 ? ` · about ${money(avg(c.id))} a month` : ''}{isHidden ? ' · hidden' : ''}{c.custom ? ' · yours' : ''}</small></span>}
+                      <Menu label={`${c.label} options`} items={[
+                        { label: 'Rename', onClick: () => setEditing({ kind: 'cat', id: c.id }) },
+                        { label: 'Move to another area', onClick: () => setEditing({ kind: 'move', id: c.id }) },
+                        { label: c.type === 'need' ? 'Count it as a want' : 'Count it as a need', onClick: () => editCat(c, { type: c.type === 'need' ? 'want' : 'need' }) },
+                        { label: isHidden ? 'Show it' : 'Hide it', onClick: () => setHidden([c.id], !isHidden) },
+                        c.custom && !ps.length && !used.has(c.id) && { label: 'Delete', danger: true, onClick: () => updateSettings({ customCategories: (s.customCategories ?? []).filter((x) => x.id !== c.id) }) },
+                      ]} />
                     </div>
+                    {editing?.kind === 'move' && editing.id === c.id && (
+                      <div className="inline-form">
+                        <label className="inline">Move to <select autoFocus defaultValue={key} onChange={(e) => { editCat(c, { group: e.target.value }); setEditing(null); }}>
+                          {GROUP_KEYS.map((k, i) => <option key={k} value={k}>{GROUPS[i]}</option>)}
+                        </select></label>
+                        <button className="btn small ghost" onClick={() => setEditing(null)}>Cancel</button>
+                      </div>
+                    )}
                     {ps.length > 0 && (
-                      <ul className="chips">{ps.map((p) => <li key={p.id}><button className="chip-btn" onClick={() => setParams({ tab: 'payees', payee: p.id }, { replace: true })}>{p.name}</button></li>)}</ul>
+                      <ul className="chips">
+                        {(many ? ps.slice(0, 4) : ps).map((p) => <li key={p.id}><button className="chip-btn" onClick={() => setParams({ tab: 'payees', payee: p.id }, { replace: true })}>{p.name}</button></li>)}
+                        {many && <li><button className="chip-btn more" onClick={() => setAllChips(new Set([...allChips, c.id]))}>+{ps.length - 4} more</button></li>}
+                      </ul>
                     )}
                   </li>
                 );
@@ -190,23 +303,7 @@ function CategoriesTab() {
           </section>
         );
       })}
-      <section className="panel">
-        <h2>Add a category</h2>
-        <form className="inline-form" onSubmit={(e) => {
-          e.preventDefault();
-          if (!newCat.label.trim()) return;
-          const id = `custom-${newCat.label.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')}`;
-          if (CATEGORIES.some((c) => c.id === id)) return;
-          const cat: Category = { id, label: newCat.label.trim(), group: newCat.group, type: newCat.type };
-          updateSettings({ customCategories: [...(s.customCategories ?? []), cat] });
-          setNewCat({ ...newCat, label: '' });
-        }}>
-          <input placeholder="e.g. India home maintenance" value={newCat.label} onChange={(e) => setNewCat({ ...newCat, label: e.target.value })} aria-label="New category name" />
-          <select value={newCat.group} onChange={(e) => setNewCat({ ...newCat, group: e.target.value })} aria-label="Group">{GROUPS.map((g) => <option key={g}>{g}</option>)}</select>
-          <select value={newCat.type} onChange={(e) => setNewCat({ ...newCat, type: e.target.value as 'need' | 'want' })} aria-label="Need or want"><option value="want">Want</option><option value="need">Need</option></select>
-          <button className="btn small primary">Add category</button>
-        </form>
-      </section>
+      </div>
     </>
   );
 }
@@ -217,7 +314,7 @@ export function Categories() {
   return (
     <div className="categories">
       <PageHeader title="Categories & payees">
-        <Info>Every payment belongs to a payee, and every payee to a category. Fix a payee once and its past and future payments follow. Untick "Show" for categories you don't use.</Info>
+        <Info>Every payment belongs to a payee, every payee to a category, and every category to an area. Fix a payee once and its past and future payments follow. Use ⋯ to rename, move or hide.</Info>
         <Tabs value={tab} onChange={(t) => setParams({ tab: t }, { replace: true })} items={[{ id: 'categories', label: 'Categories' }, { id: 'payees', label: 'Payees' }]} />
       </PageHeader>
       {tab === 'categories' ? <CategoriesTab /> : <PayeesTab />}

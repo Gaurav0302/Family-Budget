@@ -83,7 +83,8 @@ export const DEFAULT_RULES: Rule[] = [
 
   // Travel, admin, fees.
   r('Jetstar|QANTAS|VIRGIN AUST|AIR INDIA|SINGAPORE AIR|BOOKING\\.COM|AIRBNB|EXPEDIA|\\bflights?\\b', 'travel'),
-  r('HOME AFFAIRS|VFS|SERVICE VIC|PASSPORT', 'gov-fees'),
+  r('HOME AFFAIRS|IMMI|VFS', 'gov-visa'),
+  r('SERVICE VIC|PASSPORT|VICROADS', 'gov-fees'),
   r('\\bASIC\\b', 'business-fees'),
   r('ACCOUNTANT|H&R BLOCK|TAX AGENT', 'accountant'),
   r('MONTHLY FEE|INTNL TRANSACTION FEE|ACCOUNT FEE|OVERDRAWN', 'bank-fees'),

@@ -1,15 +1,16 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { ChevronRight, Trash2, X } from 'lucide-react';
 import { Info, NumberField, PageHeader, Tabs } from '../components/bits';
-import { LineChart } from '../components/LineChart';
+import { Chart, inRange, type Range } from '../components/Chart';
+import { KIND, OwnerBadge } from './Accounts';
 import { addMonths } from '../data/analysis';
 import { useStore } from '../data/store';
 import type { Every, PayEntry, WealthItem } from '../data/types';
 import {
   expectedIncome, financialYear, grossMonthly, latestSuper, netWorth, ownedSinceOf, PER_MONTH, payChanges, payFor, people, superMonthly, superRoom,
 } from '../data/wealth';
-import { longDate, money, thisMonth } from '../lib/format';
+import { longDate, money, monthName, thisMonth } from '../lib/format';
 
 const today = () => new Date().toLocaleDateString('en-CA');   // local date, YYYY-MM-DD
 const KIND_LABEL: Record<WealthItem['kind'], string> = { home: 'Home', shares: 'Shares', crypto: 'Crypto', other: 'Other asset', loan: 'Home loan', debt: 'Other debt' };
@@ -22,6 +23,81 @@ const monthEnd = (m: string) => {
 };
 
 /** Everything about one thing you own or owe: when it started counting, its values over time, and deleting it. */
+/** The month the app's records start, in words. */
+function useRecordsStart() {
+  const { data } = useStore();
+  const first = data.transactions.reduce((m, t) => (!m || t.date < m ? t.date : m), '');
+  return first ? monthName(first.slice(0, 7)) : 'the start';
+}
+
+/** "Did we already have it, or did we get it on a date?" */
+function When({ debt, start, already, date, onChange }: { debt: boolean; start: string; already: boolean; date: string; onChange: (already: boolean, date: string) => void }) {
+  return (
+    <div className="when" role="radiogroup" aria-label="When">
+      <label className="check small"><input type="radio" checked={already} onChange={() => onChange(true, '')} /><span>We already {debt ? 'owed it' : 'had it'} in {start}</span></label>
+      <label className="check small"><input type="radio" checked={!already} onChange={() => onChange(false, date || today())} /><span>We {debt ? 'took it on' : 'got it'} on</span>
+        <input type="date" value={date} disabled={already} onChange={(e) => e.target.value && onChange(false, e.target.value)} aria-label="Date" /></label>
+    </div>
+  );
+}
+
+function ListSheet({ title, total, children, onClose }: { title: string; total: number; children: ReactNode; onClose: () => void }) {
+  return (
+    <div className="sheet-wrap" role="dialog" aria-modal="true" aria-labelledby="list-title" onClick={onClose}>
+      <div className="sheet" onClick={(e) => e.stopPropagation()}>
+        <div className="sheet-head">
+          <div><h2 id="list-title">{title}</h2><p className="muted">{money(total)} today</p></div>
+          <button className="icon-btn" onClick={onClose} aria-label="Close"><X size={20} /></button>
+        </div>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+function CashSheet({ onClose }: { onClose: () => void }) {
+  const { data } = useStore();
+  const s = data.settings;
+  const n = netWorth(s, today());
+  const open = s.accounts.filter((a) => a.type !== 'loan' && !a.closedOn);
+  return (
+    <ListSheet title="Cash in the bank" total={n.cash} onClose={onClose}>
+      <ul className="acct-list-new">
+        {open.map((a) => {
+          const b = s.balances.filter((x) => x.account === a.key).sort((x, y) => y.date.localeCompare(x.date))[0];
+          return (
+            <li key={a.key} className={`acct kind-${KIND[a.type]}`}>
+              <div className="acct-row cash-row"><OwnerBadge owner={a.owner} s={s} /><div className="acct-main"><b>{a.name.replace(/ \(.*\)$/, '')}</b><small>{b ? `as at ${longDate(b.date)}` : 'no balance yet'}</small></div><span className="num">{b ? money(b.amount) : '–'}</span></div>
+            </li>
+          );
+        })}
+      </ul>
+      <p><Link to="/accounts" className="btn small">Update balances on Accounts</Link></p>
+    </ListSheet>
+  );
+}
+
+function SuperSheet({ onClose }: { onClose: () => void }) {
+  const { data, updateSettings } = useStore();
+  const s = data.settings;
+  const n = netWorth(s, today());
+  const ps = people(s).filter((p) => p !== 'Joint');
+  return (
+    <ListSheet title="Super" total={n.super} onClose={onClose}>
+      <ul className="value-list">
+        {ps.map((p) => {
+          const b = latestSuper(s, p);
+          return (
+            <li key={p}><span className="row-gap"><OwnerBadge owner={p} s={s} /><span><b>{p}</b><small>{b ? `${b.fund ? `${b.fund}, ` : ''}as at ${longDate(b.date)}` : 'no balance yet'}</small></span></span>
+              <NumberField label={`${p}'s super balance today`} value={b?.amount ?? 0} onSave={(v) => updateSettings({ superBalances: [...(s.superBalances ?? []).filter((x) => !(x.person === p && x.date === today())), { person: p, date: today(), amount: v, fund: b?.fund }] })} /></li>
+          );
+        })}
+      </ul>
+      <p className="fine">Type today's balance from your super app; it's saved as at today. Pay, employer super and the yearly limit are on <Link to="/wealth?tab=income">Income &amp; super</Link>.</p>
+    </ListSheet>
+  );
+}
+
 function ItemSheet({ item, onClose }: { item: WealthItem; onClose: () => void }) {
   const { data, updateSettings } = useStore();
   const s = data.settings;
@@ -33,6 +109,7 @@ function ItemSheet({ item, onClose }: { item: WealthItem; onClose: () => void })
   const [amt, setAmt] = useState('');
   const [sure, setSure] = useState(false);
   const owners = [...new Set([...people(s), 'Joint'])];
+  const start = useRecordsStart();
 
   return (
     <div className="sheet-wrap" role="dialog" aria-modal="true" aria-labelledby="item-title" onClick={onClose}>
@@ -47,10 +124,9 @@ function ItemSheet({ item, onClose }: { item: WealthItem; onClose: () => void })
           <label>Whose<select value={w.owner ?? ''} onChange={(e) => set({ owner: e.target.value || undefined })}><option value="">Not set</option>{owners.map((o) => <option key={o}>{o}</option>)}</select></label>
         </div>
 
-        <h3 className="sub">{isDebt(w) ? 'Owed since' : 'Owned since'} <Info>Before this date it counts as nothing in net worth. Tick “before our records” for things you've had a long time, like a house overseas or old shares: their value then counts in every month, so adding them doesn't look like a sudden jump.</Info></h3>
-        <label className="check small"><input type="checkbox" checked={before} onChange={(e) => set({ ownedSince: e.target.checked ? '0000-01-01' : (values[values.length - 1]?.date ?? today()) })} />
-          <span>Before our records start</span></label>
-        {!before && <label className="inline">Date <input type="date" value={ownedSinceOf(w)} onChange={(e) => e.target.value && set({ ownedSince: e.target.value })} /></label>}
+        <h3 className="sub">When did you {isDebt(w) ? 'take it on' : 'get it'}? <Info>Net worth counts it from this date. If you already had it when the app's records start ({start}), it counts in every month at its first value, so adding it now doesn't look like a sudden jump.</Info></h3>
+        <When debt={isDebt(w)} start={start} already={before} date={before ? '' : ownedSinceOf(w)}
+          onChange={(already, d) => set({ ownedSince: already ? '0000-01-01' : (d || values[values.length - 1]?.date || today()) })} />
         <label className="inline">{isDebt(w) ? 'Paid off on' : 'Sold on'} <input type="date" value={w.endedOn ?? ''} onChange={(e) => set({ endedOn: e.target.value || undefined })} /></label>
 
         <h3 className="sub">{isDebt(w) ? 'Balance' : 'Value'} over time</h3>
@@ -94,7 +170,8 @@ function NetWorthTab() {
   const s = data.settings;
   const nw = netWorth(s, '9999-12-31');
   const nowNw = netWorth(s, today());
-  const [range, setRange] = useState<'1y' | '3y' | 'all'>('all');
+  const [range, setRange] = useState<Range>('all');
+  const [split, setSplit] = useState<'total' | 'parts'>('total');
   const [open, setOpen] = useState<WealthItem | null>(null);
 
   // From the first month every bank account's balance is known (before that the total would be missing some cash) up to now.
@@ -110,13 +187,21 @@ function NetWorthTab() {
     }
     return out;
   }, [s]);
-  const series = range === '1y' ? all.slice(-12) : range === '3y' ? all.slice(-36) : all;
-  const change = series.length > 1 ? series[series.length - 1].value - series[0].value : 0;
+  const months = all.map((x) => x.month);
+  const span = inRange(months, range);
+  const first = all.find((x) => x.month === span[0]), last = all[all.length - 1];
+  const change = first && last ? last.value - first.value : 0;
+  const part = (i: number) => all.map((x) => x.parts[i].amount);
+  const chartSeries = split === 'total' ? [{ id: 'total', label: 'Net worth', values: all.map((x) => x.value), color: 'var(--euc)' }]
+    : [{ id: 'cash', label: 'Cash', values: part(0), color: 'var(--s1)' }, { id: 'super', label: 'Super', values: part(1), color: 'var(--s2)' }, { id: 'assets', label: 'Other assets', values: part(2), color: 'var(--s3)' }, { id: 'owed', label: 'Owed', values: part(3), color: 'var(--s8)' }].filter((x) => x.values.some((v) => v !== 0));
 
   const [name, setName] = useState('');
   const [kind, setKind] = useState<WealthItem['kind']>('shares');
   const [amount, setAmount] = useState('');
   const [longHeld, setLongHeld] = useState(true);
+  const [gotOn, setGotOn] = useState('');
+  const [sheet, setSheet] = useState<'cash' | 'super' | null>(null);
+  const start = useRecordsStart();
   const future = nw.total !== nowNw.total;
 
   const row = (w: WealthItem) => {
@@ -144,19 +229,18 @@ function NetWorthTab() {
       </section>
       {all.length > 1 && (
         <section className="panel">
-          <div className="panel-head">
-            <h2>Over time <small className={change >= 0 ? 'good' : 'bad'}>{change >= 0 ? '+' : ''}{money(change)}</small></h2>
-            {all.length > 12 && <Tabs value={range} onChange={setRange} items={[{ id: '1y', label: '1Y' }, ...(all.length > 36 ? [{ id: '3y' as const, label: '3Y' }] : []), { id: 'all', label: 'All' }]} />}
-          </div>
-          <LineChart points={series} label="Net worth" />
+          <Chart kind="lines" tight={split === 'total'} height={240} range={range} onRange={setRange} label="Net worth by month" months={months} series={chartSeries}
+            title={<><h2>Over time <small className={change >= 0 ? 'good' : 'bad'}>{change >= 0 ? '+' : ''}{money(change)}</small></h2>
+              <Tabs value={split} onChange={setSplit} items={[{ id: 'total', label: 'Total' }, { id: 'parts', label: 'Breakdown' }]} /></>}
+            tipExtra={split === 'total' ? (m) => all.find((x) => x.month === m)!.parts.filter((p) => p.amount).map((p) => ({ label: p.label, value: money(p.amount) })) : (m) => [{ label: 'Net worth', value: money(all.find((x) => x.month === m)!.value) }]} />
         </section>
       )}
       <div className="wealth-grid">
         <section className="panel">
           <h2>What you own</h2>
           <ul className="value-list items">
-            <li><Link className="row-btn" to="/accounts"><span><b>Cash in the bank</b><small>From balances on Accounts</small></span><span className="num">{money(nowNw.cash)}<ChevronRight size={16} aria-hidden /></span></Link></li>
-            <li><Link className="row-btn" to="/wealth?tab=income"><span><b>Super</b><small>From the Income & super tab</small></span><span className="num">{money(nowNw.super)}<ChevronRight size={16} aria-hidden /></span></Link></li>
+            <li><button className="row-btn" onClick={() => setSheet('cash')}><span><b>Cash in the bank</b><small>{s.accounts.filter((a) => a.type !== 'loan' && !a.closedOn).length} accounts</small></span><span className="num">{money(nowNw.cash)}<ChevronRight size={16} aria-hidden /></span></button></li>
+            <li><button className="row-btn" onClick={() => setSheet('super')}><span><b>Super</b><small>{people(s).filter((p) => p !== 'Joint').join(' and ')}</small></span><span className="num">{money(nowNw.super)}<ChevronRight size={16} aria-hidden /></span></button></li>
             {(s.wealth ?? []).filter((w) => !isDebt(w)).map(row)}
           </ul>
         </section>
@@ -171,8 +255,8 @@ function NetWorthTab() {
             <form className="stack-form" onSubmit={(e) => {
               e.preventDefault();
               if (!name.trim() || !amount) return;
-              updateSettings({ wealth: [...(s.wealth ?? []), { id: `w${Date.now().toString(36)}`, name: name.trim(), kind, ownedSince: longHeld ? '0000-01-01' : today(), values: [{ date: today(), amount: Number(amount) }] }] });
-              setName(''); setAmount('');
+              updateSettings({ wealth: [...(s.wealth ?? []), { id: `w${Date.now().toString(36)}`, name: name.trim(), kind, ownedSince: longHeld ? '0000-01-01' : (gotOn || today()), values: [{ date: today(), amount: Number(amount) }] }] });
+              setName(''); setAmount(''); setGotOn('');
             }}>
               <div className="inline-form">
                 <input placeholder="Name, e.g. Car" value={name} onChange={(e) => setName(e.target.value)} aria-label="Name" />
@@ -181,13 +265,15 @@ function NetWorthTab() {
                 </select>
                 <span className="money-input"><span aria-hidden>$</span><input inputMode="decimal" placeholder="Value today" value={amount} onChange={(e) => setAmount(e.target.value.replace(/[^\d.]/g, ''))} aria-label="Value today" /></span>
               </div>
-              <label className="check small"><input type="checkbox" checked={longHeld} onChange={(e) => setLongHeld(e.target.checked)} /><span>Had it before our records start <small>Untick if it's new this month.</small></span></label>
+              <When debt={kind === 'loan' || kind === 'debt'} start={start} already={longHeld} date={gotOn} onChange={(a, d) => { setLongHeld(a); setGotOn(d); }} />
               <button className="btn small">Add</button>
             </form>
           </details>
         </section>
       </div>
       {open && <ItemSheet item={open} onClose={() => setOpen(null)} />}
+      {sheet === 'cash' && <CashSheet onClose={() => setSheet(null)} />}
+      {sheet === 'super' && <SuperSheet onClose={() => setSheet(null)} />}
     </>
   );
 }

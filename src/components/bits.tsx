@@ -87,34 +87,6 @@ export function PurseBar({ income, needs, wants, kept, onOpen }: { income: numbe
   );
 }
 
-/** Small monthly column chart with a hover readout. */
-export function MonthColumns({ rows, format = money, target, targetLabel }: {
-  rows: { month: string; value: number; partial?: boolean }[]; format?: (n: number) => string; target?: number; targetLabel?: string;
-}) {
-  const max = Math.max(...rows.map((r) => r.value), target ?? 0, 1);
-  const min = Math.min(0, ...rows.map((r) => r.value));
-  const range = max - min || 1;
-  return (
-    <div className="cols" role="img" aria-label={rows.map((r) => `${monthName(r.month, 'short')} ${format(r.value)}`).join(', ')}>
-      <div className="cols-plot">
-        {target !== undefined && <div className="cols-target" style={{ bottom: `${((target - min) / range) * 100}%` }}><span>{targetLabel}</span></div>}
-        <div className="cols-zero" style={{ bottom: `${((0 - min) / range) * 100}%` }} />
-        {rows.map((r) => {
-          const h = (Math.abs(r.value) / range) * 100;
-          const bottom = r.value >= 0 ? ((0 - min) / range) * 100 : ((r.value - min) / range) * 100;
-          return (
-            <div className="col" key={r.month} tabIndex={0}>
-              <div className={`col-bar ${r.partial ? 'is-partial' : ''} ${r.value < 0 ? 'is-neg' : ''}`} style={{ height: `${h}%`, bottom: `${bottom}%` }} />
-              <div className="col-tip" role="tooltip"><b>{monthName(r.month)}</b>{format(r.value)}{r.partial ? '. Not all accounts loaded' : ''}</div>
-            </div>
-          );
-        })}
-      </div>
-      <div className="cols-axis">{rows.map((r) => <span key={r.month}>{monthName(r.month, 'short').replace(' 20', ' ’')}</span>)}</div>
-    </div>
-  );
-}
-
 export function Empty({ title, children }: { title: string; children?: ReactNode }) {
   return <div className="empty"><h3>{title}</h3>{children}</div>;
 }
@@ -156,5 +128,23 @@ export function NumberField({ value, onSave, label, prefix = '$', suffix, width 
         onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }} />
       {suffix && <span aria-hidden className="suffix">{suffix}</span>}
     </span>
+  );
+}
+
+/** A tiny bar chart for a table row: one bar per month, the chosen month darker, the budget as a faint line. */
+export function Spark({ values, highlight, budget, label }: { values: { month: string; value: number }[]; highlight?: string; budget?: number; label: string }) {
+  if (!values.length) return null;
+  const max = Math.max(...values.map((v) => v.value), budget ?? 0, 1);
+  const w = 12, gap = 3, h = 26;
+  const width = values.length * (w + gap) - gap;
+  return (
+    <svg className="spark" width={width} height={h} viewBox={`0 0 ${width} ${h}`} role="img"
+      aria-label={`${label}: ${values.map((v) => `${monthName(v.month, 'short')} ${money(v.value)}`).join(', ')}`}>
+      {values.map((v, i) => {
+        const bh = Math.max(1.5, (Math.max(v.value, 0) / max) * h);
+        return <rect key={v.month} x={i * (w + gap)} y={h - bh} width={w} height={bh} rx={2} className={v.month === highlight ? 'spark-on' : 'spark-bar'}><title>{`${monthName(v.month)}: ${money(v.value)}`}</title></rect>;
+      })}
+      {budget ? <line x1={0} x2={width} y1={h - (budget / max) * h} y2={h - (budget / max) * h} className="spark-budget" /> : null}
+    </svg>
   );
 }

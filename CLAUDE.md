@@ -17,7 +17,7 @@ Household context, research and private files are in the claude.ai Project "Pers
 - Commit as `Gaurav0302 <Gaurav0302@users.noreply.github.com>`, never with a personal email.
 
 ## Stack
-React 18 + Vite + TypeScript, HashRouter, Supabase (supabase-js, email + password logins, Row Level Security via `members` table). No chart library: small SVG/CSS components in `src/components/bits.tsx`. Fonts: Familjen Grotesk (headings), Atkinson Hyperlegible (text).
+React 18 + Vite + TypeScript, HashRouter, Supabase (supabase-js, email + password logins, Row Level Security via `members` table). No chart library: one SVG chart component, `src/components/Chart.tsx` (spans, tooltips, click-through; colours `--s1`…`--s8` validated for colour-blind separation), plus `Spark` in `bits.tsx`. Fonts: Familjen Grotesk (headings), Atkinson Hyperlegible (text).
 
 ## Where things are
 - `src/data/payees.ts`: the payee list (D13) that decides each transaction's category; `sortTransaction` is the one sorting entry point. Stored as settings key `payees`.
@@ -31,6 +31,8 @@ React 18 + Vite + TypeScript, HashRouter, Supabase (supabase-js, email + passwor
 - A month only counts as complete when every account marked "needed for a complete month" covers it.
 - Grids need `minmax(0, 1fr)` columns, or tables push the phone layout sideways.
 - Pay, super, wealth items, bills, actions and custom categories all live in the `settings` JSON row: no database change needed to add fields there.
+- Areas: `GROUPS` (names) and `GROUP_KEYS` are live lists; a category's `groupKey` is the stable key, `group` its display name. Family changes live in settings `customGroups`, `groupNames`, `categoryEdits`.
+- Actions go behind `Menu` (⋯) from `components/Menu.tsx`; month totals for charts come from `useMonthly()` in `data/useMonthly.ts`.
 - Drill-downs: `DrillLink` with `drillCategory/drillType/drillGroup` from `components/Drill.tsx` opens the payments behind any figure.
 - Keep pages uncluttered: explanations go behind the small `Info` button, not in paragraphs.
 - Super cap and tax-rate tables in `wealth.ts` need updating each July (ATO key super rates and thresholds).

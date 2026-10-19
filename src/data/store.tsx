@@ -66,7 +66,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [saving, setSaving] = useState(false);
   const dataRef = useRef(data);
   dataRef.current = data;
-  applyCustomCategories(data.settings.customCategories, data.settings.hiddenCategories);
+  applyCustomCategories(data.settings.customCategories, data.settings.hiddenCategories, data.settings);
 
   const guard = useCallback(async <T,>(fn: () => Promise<T>): Promise<T> => {
     setSaving(true);
@@ -81,7 +81,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       const settings = withDefaults(l.settings);
       const budgets = l.budgets.length ? l.budgets : DEFAULT_BUDGETS;
       const userRules = l.rules.map((r) => ({ ...r, user: true }));
-      applyCustomCategories(settings.customCategories, settings.hiddenCategories);
+      applyCustomCategories(settings.customCategories, settings.hiddenCategories, settings);
       let payees = l.payees ?? [];
       // New built-in rules: re-sort everything nobody sorted by hand. Otherwise only sort what has no category yet.
       const resortAll = (settings.rulesVersion ?? 1) < RULES_VERSION;
@@ -204,7 +204,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     async importParsed(p) {
       const d = dataRef.current;
       const settings = p.file?.settings ? withDefaults(mergeSettings(d.settings, p.file.settings)) : d.settings;
-      applyCustomCategories(settings.customCategories, settings.hiddenCategories);
+      applyCustomCategories(settings.customCategories, settings.hiddenCategories, settings);
       // Rules and payees in a file: rules with the same id are replaced; payees the family already has are kept as they are.
       const incomingRules = (p.file?.rules ?? []).map((r) => ({ ...r, user: true }));
       const rules = [...incomingRules, ...d.rules.filter((r) => !incomingRules.some((x) => x.id === r.id))];

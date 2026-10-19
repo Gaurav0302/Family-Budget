@@ -1,17 +1,20 @@
 import { AlertTriangle } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Badge, Empty, Meter, MonthColumns, MonthPicker, PurseBar } from '../components/bits';
+import { Badge, Empty, Meter, MonthPicker, PurseBar } from '../components/bits';
+import { Chart } from '../components/Chart';
+import { useMonthly } from '../data/useMonthly';
 import { drillCategory, drillType, useDrill } from '../components/Drill';
-import { allMonths, budgetFor, completeMonths, summarise } from '../data/analysis';
+import { addMonths, allMonths, budgetFor, completeMonths } from '../data/analysis';
 import { CATEGORY } from '../data/categories';
 import { reviewMonth } from '../data/review';
 import { useStore } from '../data/store';
-import { longDate, money, monthName, monthOnly, pct } from '../lib/format';
+import { longDate, money, monthName, monthOnly, pct, thisMonth } from '../lib/format';
 
 export function HomeScreen() {
-  const { data } = useStore();
+  const { data, updateSettings } = useStore();
   const drill = useDrill();
+  const monthly = useMonthly();
   const months = useMemo(() => allMonths(data.transactions), [data.transactions]);
   const complete = useMemo(() => completeMonths(data), [data]);
   const completeSet = useMemo(() => new Set(complete), [complete]);
@@ -29,10 +32,10 @@ export function HomeScreen() {
   const scream = review.findings.filter((f) => f.scream).slice(0, 2);
   const attention = review.findings.filter((f) => !f.scream && (f.severity === 'act' || f.severity === 'watch')).slice(0, 4);
   const top = Object.entries(s.byCategory).filter(([, v]) => v > 0).sort((a, b) => b[1] - a[1]).slice(0, 8);
-  const history = months.slice(-9).map((m) => {
-    const x = summarise(m, data);
-    return { month: m, value: x.keptRate, partial: !completeSet.has(m) };
-  });
+  // Actions agreed at last month's meeting are this month's plan.
+  const actions = data.settings.actions ?? [];
+  const now = thisMonth();
+  const plan = actions.filter((a) => a.month === addMonths(now, -1));
   const h = data.settings.home;
   const daysToSettle = Math.ceil((new Date(h.settlement).getTime() - Date.now()) / 864e5);
 
@@ -73,6 +76,17 @@ export function HomeScreen() {
           ) : <p className="muted">Nothing stands out this month.</p>}
         </section>
 
+        {plan.length > 0 && (
+          <section className="panel" aria-labelledby="plan">
+            <div className="panel-head"><h2 id="plan">Our plan for {monthOnly(now)}</h2><Link to="/reports">Money meeting</Link></div>
+            <ul className="checklist">
+              {plan.map((a) => (
+                <li key={a.id}><label className="check"><input type="checkbox" checked={a.done} onChange={(e) => updateSettings({ actions: actions.map((x) => (x.id === a.id ? { ...x, done: e.target.checked } : x)) })} /><span>{a.text}</span></label></li>
+              ))}
+            </ul>
+          </section>
+        )}
+
         <section className="panel" aria-labelledby="where">
           <div className="panel-head"><h2 id="where">Where it went</h2><Link to={`/transactions?month=${month}`}>All spending</Link></div>
           <ul className="cat-list">
@@ -92,9 +106,12 @@ export function HomeScreen() {
         </section>
 
         <section className="panel" aria-labelledby="kept">
-          <div className="panel-head"><h2 id="kept">Share of income kept</h2></div>
-          <MonthColumns rows={history} format={pct} target={0.1} targetLabel="Babylon's tenth" />
-          <p className="fine">Paler columns: not every account loaded yet.</p>
+          <Chart title={<h2 id="kept">Share of income kept</h2>} label="Share of income kept by month" months={monthly.months} highlight={month} partial={monthly.partial} height={180}
+            series={[{ id: 'kept', label: 'Kept', values: monthly.sums.map((x) => x.keptRate), color: 'var(--euc)' }]}
+            format={pct} axisFormat={pct} target={{ value: 0.1, label: "Babylon's tenth (10%)" }}
+            tipExtra={(m) => { const x = monthly.sums[monthly.months.indexOf(m)]; return [{ label: 'Kept', value: money(x.kept) }, { label: 'Came in', value: money(x.income) }]; }}
+            onPick={setMonth} pickLabel="Show this month" />
+          <p className="fine">Paler bars: not every account loaded yet. Click a month to look at it.</p>
         </section>
 
         <section className="panel coming" aria-labelledby="up">

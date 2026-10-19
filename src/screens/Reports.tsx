@@ -1,9 +1,11 @@
-import { ChevronRight, Printer, Trash2 } from 'lucide-react';
+import { ChevronRight, Maximize2, Minimize2, Printer, Trash2 } from 'lucide-react';
+import { Chart, inRange, RangePicker, seriesColor, type Range } from '../components/Chart';
+import { budgetOf, spendOf, useMonthly } from '../data/useMonthly';
 import { useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Badge, Info, MonthPicker, NumberField, PageHeader, Tabs } from '../components/bits';
-import { DrillLink, drillCategory, drillGroup, drillType } from '../components/Drill';
-import { addMonths, allMonths, average, budgetFor, completeMonths, monthOf, summarise } from '../data/analysis';
+import { Badge, Info, MonthPicker, NumberField, PageHeader, Spark, Tabs } from '../components/bits';
+import { DrillLink, drillCategory, drillGroup, drillType, useDrill } from '../components/Drill';
+import { addMonths, allMonths, budgetFor, completeMonths, monthOf, summarise } from '../data/analysis';
 import { CATEGORIES, CATEGORY, GROUPS } from '../data/categories';
 import { reviewMonth } from '../data/review';
 import { useStore } from '../data/store';
@@ -11,6 +13,69 @@ import { expectedIncome, financialYear, netWorth, payFor, people } from '../data
 import { money, monthName, monthOnly, pct } from '../lib/format';
 
 const endOf = (m: string) => { const [y, mo] = m.split('-').map(Number); return `${m}-${String(new Date(Date.UTC(y, mo, 0)).getUTCDate()).padStart(2, '0')}`; };
+
+/** One small chart per area, sharing one time span; tap an area's name to see its categories stacked. */
+function AreaCharts({ month }: { month: string }) {
+  const { data } = useStore();
+  const drill = useDrill();
+  const m = useMonthly();
+  const upTo = m.months.findIndex((x) => x === month) + 1;
+  const months = m.months.slice(0, upTo), sums = m.sums.slice(0, upTo);
+  const [range, setRange] = useState<Range>('6m');
+  const [big, setBig] = useState<string | null>(null);
+  const shown = new Set(inRange(months, range));
+  const areas = GROUPS.map((g) => {
+    const cats = CATEGORIES.filter((c) => !c.system && c.group === g);
+    const ids = cats.map((c) => c.id);
+    const values = spendOf(sums, ids);
+    const inSpan = values.filter((_, i) => shown.has(months[i])).reduce((a, b) => a + b, 0);
+    return { g, cats, ids, values, inSpan, now: values[values.length - 1] ?? 0, budget: budgetOf(data.budgets, months, ids) };
+  }).filter((a) => a.inSpan > 0).sort((a, b) => b.inSpan - a.inSpan);
+  return (
+    <section className="report-sec">
+      <div className="sec-head">
+        <h3>Each area over time <Info>Bars are what each area cost each month; the dashed line is its budget. Hover or tap a month for the numbers, click it for the payments. Tap ⤢ to split an area into its categories.</Info></h3>
+        <RangePicker months={months} value={range} onChange={setRange} />
+      </div>
+      <div className="area-grid">
+        {areas.map((a) => {
+          const isBig = big === a.g;
+          const bud = a.budget[a.budget.length - 1];
+          return (
+            <div key={a.g} className={`area-card ${isBig ? 'is-big' : ''}`}>
+              <div className="area-head">
+                <span><b>{a.g}</b><small>{money(a.now)} in {monthOnly(month)}{bud ? ` · budget ${money(bud)}` : ''}</small></span>
+                <button className="icon-btn no-print" aria-label={isBig ? `Shrink ${a.g}` : `Split ${a.g} into categories`} aria-expanded={isBig} onClick={() => setBig(isBig ? null : a.g)}>{isBig ? <Minimize2 size={16} /> : <Maximize2 size={16} />}</button>
+              </div>
+              {isBig ? (
+                <Chart noRange range={range} kind="stacked" height={240} label={`${a.g} by category`} months={months} highlight={month} partial={m.partial}
+                  series={a.cats.map((c, i) => ({ id: c.id, label: c.label, values: spendOf(sums, [c.id]), color: seriesColor(i) })).filter((x) => x.values.some((v) => v > 0)).slice(0, 8)}
+                  budget={a.budget} onPick={(mm) => drill(drillGroup(mm, a.g))} />
+              ) : (
+                <Chart compact noRange range={range} height={110} label={`${a.g} by month`} months={months} highlight={month} partial={m.partial}
+                  series={[{ id: a.g, label: a.g, values: a.values, color: 'var(--euc)' }]} budget={a.budget} onPick={(mm) => drill(drillGroup(mm, a.g))} />
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
+/** Money in against money out, month by month, with the share kept. */
+function InOutChart({ month }: { month: string }) {
+  const m = useMonthly();
+  const upTo = m.months.findIndex((x) => x === month) + 1;
+  const months = m.months.slice(0, upTo), sums = m.sums.slice(0, upTo);
+  return (
+    <section className="report-sec">
+      <Chart title={<h3>Came in and spent</h3>} label="Came in and spent by month" months={months} highlight={month} partial={m.partial} height={190}
+        series={[{ id: 'in', label: 'Came in', values: sums.map((x) => x.income), color: 'var(--s1)' }, { id: 'out', label: 'Spent', values: sums.map((x) => x.spend), color: 'var(--s2)' }]}
+        tipExtra={(mm) => { const x = sums[months.indexOf(mm)]; return [{ label: 'Kept', value: `${money(x.kept)} (${pct(x.keptRate)})` }]; }} />
+    </section>
+  );
+}
 
 function MoneyMeeting() {
   const { data, updateSettings, setBudget } = useStore();
@@ -33,18 +98,18 @@ function MoneyMeeting() {
   const nwBefore = before.cash > 0 ? before.total : 0;   // only compare when last month's bank balances are known
   const setActions = (list: typeof actions) => updateSettings({ actions: list });
 
-  // "Usual" is the average of the three complete months before this one.
-  const usualMonths = complete.filter((m) => m < month).slice(-3);
-  const usualSums = usualMonths.map((m) => summarise(m, data));
-  const usual = (c: string) => average(usualSums.map((x) => x.byCategory[c] ?? 0));
+  // The trend shows up to six complete months ending with this one.
+  const trendMonths = [...complete.filter((m) => m < month).slice(-5), month];
+  const trendSums = trendMonths.map((m) => (m === month ? s : summarise(m, data)));
+  const trend = (ids: string[]) => trendMonths.map((m, i) => ({ month: m, value: ids.reduce((a, c) => a + (trendSums[i].byCategory[c] ?? 0), 0) }));
   const groups = GROUPS.map((g) => {
     const cats = CATEGORIES.filter((c) => !c.system && c.group === g)
-      .map((c) => ({ id: c.id, label: c.label, spent: s.byCategory[c.id] ?? 0, budget: budgetFor(data.budgets, c.id, month), usual: usual(c.id), next: budgetFor(data.budgets, c.id, nextMonth) }))
-      .filter((c) => c.spent || c.budget || c.usual || c.next);
-    const sum = (k: 'spent' | 'budget' | 'usual' | 'next') => cats.reduce((a, c) => a + c[k], 0);
-    return { g, cats, spent: sum('spent'), budget: sum('budget'), usual: sum('usual'), next: sum('next') };
+      .map((c) => ({ id: c.id, label: c.label, spent: s.byCategory[c.id] ?? 0, budget: budgetFor(data.budgets, c.id, month), next: budgetFor(data.budgets, c.id, nextMonth) }))
+      .filter((c) => c.spent || c.budget || c.next || trend([c.id]).some((x) => x.value));
+    const sum = (k: 'spent' | 'budget' | 'next') => cats.reduce((a, c) => a + c[k], 0);
+    return { g, cats, spent: sum('spent'), budget: sum('budget'), next: sum('next') };
   }).filter((x) => x.cats.length).sort((a, b) => b.spent - a.spent);
-  const tot = (k: 'spent' | 'budget' | 'usual' | 'next') => groups.reduce((a, g) => a + g[k], 0);
+  const tot = (k: 'spent' | 'budget' | 'next') => groups.reduce((a, g) => a + g[k], 0);
   const toggle = (g: string) => setOpenGroups((o) => { const n = new Set(o); if (n.has(g)) n.delete(g); else n.add(g); return n; });
   const diff = (spent: number, budget: number) => budget ? <span className={spent > budget * 1.05 ? 'bad' : 'good'}>{money(budget - spent, { sign: true })}</span> : '–';
   const share = (n: number) => (s.income ? pct(n / s.income) : '–');
@@ -75,9 +140,11 @@ function MoneyMeeting() {
         </div>
       </section>
 
+      <InOutChart month={month} />
+
       {lastActions.length > 0 && (
         <section className="report-sec">
-          <h3>Did we do what we agreed in {monthOnly(prev)}?</h3>
+          <h3>Did we do what we planned for {monthOnly(month)}?</h3>
           <ul className="checklist">
             {lastActions.map((a) => (
               <li key={a.id}><label className="check"><input type="checkbox" checked={a.done} onChange={(e) => setActions(actions.map((x) => (x.id === a.id ? { ...x, done: e.target.checked } : x)))} /><span>{a.text}</span></label></li>
@@ -93,37 +160,39 @@ function MoneyMeeting() {
         </ul>
       </section>
 
+      <AreaCharts month={month} />
+
       <section className="report-sec">
-        <h3>Budget and next month's targets <Info>Tap an area to open its categories, and a category or amount to check what's in it. “Usual” is the average of the last {usualMonths.length || 3} complete months. Set {monthOnly(nextMonth)}'s target in the last column: it becomes the budget from then on.</Info></h3>
+        <h3>Budget and next month's targets <Info>Tap an area to open its categories, and a category or amount to check what's in it. The trend shows the last {trendMonths.length} complete months, this one darker, with the budget as a faint line. Set {monthOnly(nextMonth)}'s target in the last column: it becomes the budget from then on.</Info></h3>
         <div className="table-wrap">
           <table className="score meeting">
-            <thead><tr><th>Area</th><th>Budget</th><th>Spent</th><th>Left</th><th className="hide-sm">Usual</th><th>{monthOnly(nextMonth)} target</th></tr></thead>
+            <thead><tr><th>Area</th><th className="hide-sm">Budget</th><th>Spent</th><th>Left</th><th>Trend</th><th>{monthOnly(nextMonth)} target</th></tr></thead>
             <tbody>
               {groups.map((g) => {
                 const isOpen = openGroups.has(g.g);
                 return [
                   <tr key={g.g} className="grp-row">
                     <th scope="row"><button className="grp-toggle" aria-expanded={isOpen} onClick={() => toggle(g.g)}><ChevronRight size={15} aria-hidden className={isOpen ? 'rot' : ''} />{g.g}</button></th>
-                    <td>{g.budget ? money(g.budget) : '–'}</td>
+                    <td className="hide-sm">{g.budget ? money(g.budget) : '–'}</td>
                     <td><DrillLink spec={drillGroup(month, g.g)}>{money(g.spent)}</DrillLink></td>
                     <td>{diff(g.spent, g.budget)}</td>
-                    <td className="hide-sm">{money(g.usual)}</td>
+                    <td><Spark label={`${g.g} by month`} values={trend(g.cats.map((c) => c.id))} highlight={month} budget={g.budget} /></td>
                     <td>{g.next ? money(g.next) : '–'}</td>
                   </tr>,
                   ...g.cats.map((c) => (
                     <tr key={c.id} className={`cat-sub ${isOpen ? '' : 'is-folded'}`}>
                       <th scope="row"><DrillLink spec={drillCategory(month, c.id)}>{c.label}</DrillLink></th>
-                      <td>{c.budget ? money(c.budget) : '–'}</td>
+                      <td className="hide-sm">{c.budget ? money(c.budget) : '–'}</td>
                       <td><DrillLink spec={drillCategory(month, c.id)}>{money(c.spent)}</DrillLink></td>
                       <td>{diff(c.spent, c.budget)}</td>
-                      <td className="hide-sm">{money(c.usual)}</td>
+                      <td><Spark label={`${c.label} by month`} values={trend([c.id])} highlight={month} budget={c.budget} /></td>
                       <td><NumberField label={`${c.label} target for ${monthOnly(nextMonth)}`} width="5.5em" value={c.next} onSave={(n) => setBudget(c.id, nextMonth, n)} /></td>
                     </tr>
                   )),
                 ];
               })}
             </tbody>
-            <tfoot><tr><th scope="row">Total</th><td>{money(tot('budget'))}</td><td>{money(tot('spent'))}</td><td>{diff(tot('spent'), tot('budget'))}</td><td className="hide-sm">{money(tot('usual'))}</td><td>{money(tot('next'))}</td></tr></tfoot>
+            <tfoot><tr><th scope="row">Total</th><td className="hide-sm">{money(tot('budget'))}</td><td>{money(tot('spent'))}</td><td>{diff(tot('spent'), tot('budget'))}</td><td><Spark label="All spending by month" values={trend(groups.flatMap((g) => g.cats.map((c) => c.id)))} highlight={month} budget={tot('budget')} /></td><td>{money(tot('next'))}</td></tr></tfoot>
           </table>
         </div>
         <p className="fine no-print">{tot('next') > 0 && s.income > 0 && <>Next month's targets add up to {money(tot('next'))}, leaving about {money(expectedIncome(data.settings, nextMonth) - tot('next'))} of expected pay to keep.</>}</p>

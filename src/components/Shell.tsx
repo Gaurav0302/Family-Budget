@@ -1,4 +1,4 @@
-import { CalendarClock, FileText, Home, LayoutGrid, Loader2, Mountain, ReceiptText, Scale, Settings, Sparkles, Upload, Wallet, Landmark, Tags, CreditCard } from 'lucide-react';
+import { CalendarClock, FileText, Home, LayoutGrid, Loader2, Mountain, ReceiptText, Scale, Settings, Sparkles, Upload, Wallet, Landmark, Tags, CreditCard, TrendingUp } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { NavLink } from 'react-router-dom';
 import { useStore } from '../data/store';
@@ -14,6 +14,7 @@ export const NAV = [
   { section: 'Looking back', items: [
     { to: '/review', label: 'Review', Icon: Scale, hint: 'How the month went' },
     { to: '/reports', label: 'Reports', Icon: FileText, hint: 'Money meeting and tax time' },
+    { to: '/trends', label: 'Trends', Icon: TrendingUp, hint: 'Any area or category over time' },
   ] },
   { section: 'Looking ahead', items: [
     { to: '/goals', label: 'Goals', Icon: Mountain, hint: 'Baby steps, funds, the house' },

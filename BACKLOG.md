@@ -63,8 +63,16 @@ Status: ✅ done · ⬜ to do · 🔄 in progress · ❌ blocked · 🚫 dropped
 - ⬜ User sets "owned since" for anything added on the Wealth page that isn't long-held (default: before records)
 - ⬜ After settlement: add the offset account(s), close the old savings with "money moved to"
 
+## Phase 6d — Easier to read, charts everywhere (approved 19 Oct 2026)
+- ✅ 19 Oct 2026 — Own areas, rename/move/hide via ⋯ menus; Government area (D17)
+- ✅ 19 Oct 2026 — Compact drill-down with a month chart on top (D19)
+- ✅ 19 Oct 2026 — Money meeting: came in vs spent chart, one chart per area, trend column, "planned for" wording; plan on Home
+- ✅ 19 Oct 2026 — Trends page: compare areas or categories, or see the make-up, any time span (D18)
+- ✅ 19 Oct 2026 — Accounts by person with colour by kind; Wealth panels for cash and super; plain "when did you get it" question
+- ⬜ User moves Home Affairs / VFS payees into "Visa, PR & citizenship" if they show under Government & official fees
+- ⬜ PayPal Australia ($6,248 in June) sits in "Other / not sure yet": sort it so the Other spike disappears
+
 ## Phase 7 — Polish
 - ✅ 18 Oct 2026 — Tests (17), phone overflow check on every page, dark mode
-- ⬜ Money meeting table scrolls sideways on narrow phones; consider a stacked phone layout
 - ⬜ Install-to-home-screen (web app manifest + icons)
 - ⬜ PayPal CSV import in the app; PDF import in the app

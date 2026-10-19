@@ -22,10 +22,10 @@ A modern, easy family budget tool replacing a spreadsheet: one view of every acc
 src/
   App.tsx, main.tsx, config.ts
   components/  Shell.tsx (sidebar / phone tab bar), bits.tsx (meter, purse bar, columns chart, badges),
-               Drill.tsx (payments behind a figure), LineChart.tsx, CategorySelect.tsx
+               Drill.tsx (payments behind a figure), Chart.tsx (all charts), Menu.tsx (⋯ menus), CategorySelect.tsx
   data/        types, categories, rules, merchant, analysis, review, importers, defaults, store, adapters/,
-               wealth (pay, super, net worth), bills, whatif, settingsMerge, payees (the payee list)
-  screens/     Home, Transactions, Budget, Bills, Review, Reports, Goals, WhatIf, Wealth, Accounts, Categories,
+               wealth (pay, super, net worth), bills, whatif, settingsMerge, payees (the payee list), useMonthly (month totals for charts)
+  screens/     Home, Transactions, Budget, Bills, Review, Reports, Trends, Goals, WhatIf, Wealth, Accounts, Categories,
                More (phone), Import, Settings, Login
   styles/      app.css (tokens, light + dark)
 tools/         parse_statements.py, prepare-import.ts, review.ts
