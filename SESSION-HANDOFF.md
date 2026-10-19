@@ -28,6 +28,7 @@ Fifth build pushed: no reload on returning, 54 themes (light and dark, per perso
 4. Next session: October statements → monthly routine (AGENT-RUNBOOK.md), using `--payees` with the user's latest backup.
 
 ## Known issues
+- Lines switched to a new frequency before the 19 Oct 20:55 fix kept the monthly total (e.g. martial arts showed $1,230 a term): the user needs to retype those amounts.
 - Theme fonts come from Google Fonts (blocked in this workspace, so local screenshots show fallback fonts).
 - PayPal purchases paid from a PayPal balance never reach the bank, so the app can't see them.
 - The workspace can't reach supabase.co; Supabase saving of the payee list (settings key `payees`) is untested from here. First real use is the test.
