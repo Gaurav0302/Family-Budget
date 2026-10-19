@@ -1054,3 +1054,12 @@ td[class*='st-text-'], dd[class*='st-text-'], span.small[class*='st-text-'], .ah
 .ahead-lines { margin: 0 0 10px; padding-left: 18px; color: var(--ink-2); display: grid; gap: 4px; }
 .job-btns { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
 .meet-keep span { display: block; }
+
+/* ---------- Budget frequencies (D29) ---------- */
+.budget-amt { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; justify-content: flex-end; }
+.budget-amt select { min-height: 38px; }
+.budget-amt small { flex-basis: 100%; text-align: right; }
+.due-in { display: inline-flex; align-items: center; gap: 6px; font-size: 0.85rem; color: var(--ink-2); }
+.due-in input { min-height: 38px; }
+.freq-sug { display: block; margin-top: 6px; font-size: 0.82rem; color: var(--ink-2); background: color-mix(in srgb, var(--warn) 10%, var(--card)); border-radius: var(--r-sm, 8px); padding: 6px 8px; }
+@media (max-width: 759px) { .budget-amt { grid-column: 1 / -1; justify-content: flex-start; } .budget-amt small { text-align: left; } }

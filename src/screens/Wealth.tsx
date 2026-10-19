@@ -14,7 +14,7 @@ import { longDate, money, monthName, thisMonth } from '../lib/format';
 
 const today = () => new Date().toLocaleDateString('en-CA');   // local date, YYYY-MM-DD
 const KIND_LABEL: Record<WealthItem['kind'], string> = { home: 'Home', shares: 'Shares', crypto: 'Crypto', other: 'Other asset', loan: 'Home loan', debt: 'Other debt' };
-const EVERY_LABEL: Record<Every, string> = { week: 'week', fortnight: 'fortnight', month: 'month', quarter: 'quarter', year: 'year' };
+const EVERY_LABEL: Record<Every, string> = { week: 'week', fortnight: 'fortnight', month: 'month', term: 'term', quarter: 'quarter', year: 'year' };
 
 const isDebt = (w: WealthItem) => w.kind === 'loan' || w.kind === 'debt';
 const monthEnd = (m: string) => {

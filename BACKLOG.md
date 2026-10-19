@@ -96,6 +96,9 @@ Status: ✅ done · ⬜ to do · 🔄 in progress · ❌ blocked · 🚫 dropped
 - ⬜ User (optional): Loan Planner → Settings → Save a backup file, send it to bring saved plans across
 - ⬜ After settlement: add the loan and offset accounts, pick them on Property → Loan so real balances drive the payoff date
 - ⬜ Investment properties: tax (negative gearing, depreciation) not modelled yet
+- ✅ 19 Oct 2026 — Budget frequencies (D29): week/fortnight/month/term/quarter/year per line, suggestions from statements, fair over-budget checks, forecast timing
+- ⬜ User: Budget page → tap "Use this" on the suggestions (cleaner weekly, swimming fortnightly, school/tennis/martial arts/scouts per term), check the per-term amounts
+- ⬜ User: add yearly costs with their due month (car rego, life insurance if not via super, accountant, holidays, Christmas)
 
 ## Phase 7 — Polish
 - ✅ 18 Oct 2026 — Tests (17), phone overflow check on every page, dark mode

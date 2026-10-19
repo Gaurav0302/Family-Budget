@@ -17,6 +17,7 @@ import { expectedIncome, financialYear, netWorth, payFor, people } from '../data
 import { CashChart } from './Property';
 import { outgoings, type Basis } from '../data/forecast';
 import { useForecast } from '../data/useProperties';
+import { EVERY_UNIT, freqOf, meterLimit, monthlyOf, perTime } from '../data/frequency';
 import { keepBudget, totalBudget } from '../data/analysis';
 import { money, monthName, monthOnly, pct } from '../lib/format';
 
@@ -181,10 +182,10 @@ function MoneyMeeting() {
   const trend = (ids: string[]) => trendMonths.map((m, i) => ({ month: m, value: ids.reduce((a, c) => a + (trendSums[i].byCategory[c] ?? 0), 0) }));
   const groups = GROUPS.map((g) => {
     const cats = CATEGORIES.filter((c) => !c.system && c.group === g)
-      .map((c) => ({ id: c.id, label: c.label, spent: s.byCategory[c.id] ?? 0, budget: budgetFor(data.budgets, c.id, month), next: budgetFor(data.budgets, c.id, nextMonth) }))
+      .map((c) => { const spent = s.byCategory[c.id] ?? 0, f = freqOf(data.settings, c.id); return { id: c.id, label: c.label, spent, budget: budgetFor(data.budgets, c.id, month), next: budgetFor(data.budgets, c.id, nextMonth), limit: meterLimit(data, c.id, month, spent), every: f.every }; })
       .filter((c) => c.spent || c.budget || c.next || trend([c.id]).some((x) => x.value));
-    const sum = (k: 'spent' | 'budget' | 'next') => cats.reduce((a, c) => a + c[k], 0);
-    return { g, cats, spent: sum('spent'), budget: sum('budget'), next: sum('next') };
+    const sum = (k: 'spent' | 'budget' | 'next' | 'limit') => cats.reduce((a, c) => a + c[k], 0);
+    return { g, cats, spent: sum('spent'), budget: sum('budget'), next: sum('next'), limit: sum('limit') };
   }).filter((x) => x.cats.length).sort((a, b) => b.spent - a.spent);
   const tot = (k: 'spent' | 'budget' | 'next') => groups.reduce((a, g) => a + g[k], 0);
   const toggle = (g: string) => setOpenGroups((o) => { const n = new Set(o); if (n.has(g)) n.delete(g); else n.add(g); return n; });
@@ -281,24 +282,24 @@ function MoneyMeeting() {
                     <th scope="row"><button className="grp-toggle" aria-expanded={isOpen} onClick={() => toggle(g.g)}><ChevronRight size={15} aria-hidden className={isOpen ? 'rot' : ''} />{g.g}</button></th>
                     <td className="hide-sm">{g.budget ? money(g.budget) : '–'}</td>
                     <td><DrillLink spec={drillGroup(month, g.g)}>{money(g.spent)}</DrillLink></td>
-                    <td>{diff(g.spent, g.budget)}</td>
+                    <td>{diff(g.spent, g.limit)}</td>
                     <td><Spark label={`${g.g} by month`} values={trend(g.cats.map((c) => c.id))} highlight={month} budget={g.budget} /></td>
                     <td>{g.next ? money(g.next) : '–'}</td>
                   </tr>,
                   ...g.cats.map((c) => (
                     <tr key={c.id} className={`cat-sub ${isOpen ? '' : 'is-folded'}`}>
                       <th scope="row"><DrillLink spec={drillCategory(month, c.id)}>{c.label}</DrillLink></th>
-                      <td className="hide-sm">{c.budget ? money(c.budget) : '–'}</td>
+                      <td className="hide-sm">{c.budget ? (c.every === 'month' ? money(c.budget) : `${money(perTime(c.budget, c.every))}/${EVERY_UNIT[c.every]}`) : '–'}</td>
                       <td><DrillLink spec={drillCategory(month, c.id)}>{money(c.spent)}</DrillLink></td>
-                      <td>{diff(c.spent, c.budget)}</td>
+                      <td>{diff(c.spent, c.limit)}</td>
                       <td><Spark label={`${c.label} by month`} values={trend([c.id])} highlight={month} budget={c.budget} /></td>
-                      <td><NumberField label={`${c.label} target for ${monthOnly(nextMonth)}`} width="5.5em" value={c.next} onSave={(n) => setBudget(c.id, nextMonth, n)} /></td>
+                      <td><NumberField label={`${c.label} target for ${monthOnly(nextMonth)}`} width="5.5em" value={perTime(c.next, c.every)} suffix={c.every === 'month' ? undefined : `/${EVERY_UNIT[c.every]}`} onSave={(n) => setBudget(c.id, nextMonth, monthlyOf(n, c.every))} /></td>
                     </tr>
                   )),
                 ];
               })}
             </tbody>
-            <tfoot><tr><th scope="row">Total</th><td className="hide-sm">{money(tot('budget'))}</td><td>{money(tot('spent'))}</td><td>{diff(tot('spent'), tot('budget'))}</td><td><Spark label="All spending by month" values={trend(groups.flatMap((g) => g.cats.map((c) => c.id)))} highlight={month} budget={tot('budget')} /></td><td>{money(tot('next'))}</td></tr></tfoot>
+            <tfoot><tr><th scope="row">Total</th><td className="hide-sm">{money(tot('budget'))}</td><td>{money(tot('spent'))}</td><td>{diff(tot('spent'), groups.reduce((a, g) => a + g.limit, 0))}</td><td><Spark label="All spending by month" values={trend(groups.flatMap((g) => g.cats.map((c) => c.id)))} highlight={month} budget={tot('budget')} /></td><td>{money(tot('next'))}</td></tr></tfoot>
           </table>
         </div>
       </>

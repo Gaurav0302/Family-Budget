@@ -6,9 +6,10 @@ import {
 import { findBills } from './bills';
 import { merchantOf } from './merchant';
 import { expectedIncome, grossMonthly, payChanges, superMonthly } from './wealth';
-import type { Data, Transaction } from './types';
+import type { Data, Every, Transaction } from './types';
 import { forecast, story } from './forecast';
 import { homeOf, homeProperty, runningMonthly, uniStart } from './property';
+import { allowance, EVERY_UNIT, lumpy } from './frequency';
 
 export type Severity = 'act' | 'watch' | 'good' | 'info';
 
@@ -36,7 +37,13 @@ export interface ScoreRow {
   usual: number;
   average: number;
   status: 'under' | 'near' | 'over' | 'no-budget' | 'unused';
+  /** Spending against what the plan allows: this month, or for term/quarter/year lines the period up to this month. */
   diff: number;
+  every: Every;
+  /** Planned amount each time it's paid. */
+  per: number;
+  /** For term/quarter/year lines: paid over the period, and what the plan allowed over it. */
+  period?: { spent: number; allowed: number; months: string[] };
 }
 
 export interface Check { title: string; rule: string; status: Severity; detail: string }
@@ -89,12 +96,13 @@ export function aheadFindings(data: Data, month: string, from?: string): Finding
   // Can we carry what's coming? Settlement, overlaps, the lowest point.
   if (st.settlements.length || st.squeezes.length) {
     const sev = st.verdict === 'yes' ? 'watch' : 'act';
-    const keptAfter = st.after ? st.after.kept / Math.max(1, st.after.pay) : 1;
+    // A tenth, give or take $20, counts as a tenth.
+    const keptAfter = st.after ? (st.after.kept + 20) / Math.max(1, st.after.pay) : 1;
     const shortOfTenth = st.after ? Math.max(0, st.after.pay * 0.1 - st.after.kept) : 0;
     out.push({ id: 'ahead:carry', source: 'Looking ahead', severity: keptAfter < 0.1 ? 'act' : sev, scream: st.verdict !== 'yes' || keptAfter < 0.1,
       impact: Math.max(st.squeezes.reduce((a, q) => a + q.perMonth, 0), shortOfTenth),
       title: st.verdict === 'yes' && st.after && keptAfter < 0.1
-        ? `From ${fmtMonthShort(st.after.month)} you'd keep about ${money(st.after.kept)} a month (${pct(keptAfter)}), under Babylon's tenth`
+        ? `From ${fmtMonthShort(st.after.month)} you'd keep about ${money(st.after.kept)} a month (${pct(st.after.kept / Math.max(1, st.after.pay))}), under Babylon's tenth`
         : `${st.headline}${st.low ? ` Cash bottoms out at about ${money(st.low.cash)} in ${fmtMonthShort(st.low.month)}.` : ''}`,
       detail: st.verdict === 'yes' && st.after && keptAfter < 0.1
         ? `Settlement${st.squeezes.length ? ' and the months of rent and mortgage together' : ''} are covered: cash is lowest${st.low ? ` in ${fmtMonthShort(st.low.month)}, at about ${money(st.low.cash)} (${st.cover.toFixed(1)} months of spending)` : ''}. After that, about ${money(shortOfTenth)} a month less spending gets you back to a tenth.`
@@ -188,18 +196,34 @@ export function reviewMonth(data: Data, month: string): ReviewResult {
 
   // ---- Scorecard
   const scorecard: ScoreRow[] = [];
+  const sums = new Map<string, MonthSummary>([[month, summary]]);
+  const sumOf = (m: string) => { if (!sums.has(m)) sums.set(m, summarise(m, data)); return sums.get(m)!; };
   for (const c of SPEND_CATEGORIES) {
     const budget = budgetFor(data.budgets, c.id, month);
     const actual = summary.byCategory[c.id] ?? 0;
     const usual = summary.byCategoryUsual[c.id] ?? 0;
     const avg = average(base.map((b) => b.byCategoryUsual[c.id] ?? 0));
     if (!budget && !actual && !avg) continue;
-    const diff = usual - budget;
+    // Compare like with like: a weekly line may see five payments in a month; a term fee is checked over its term.
+    const al = allowance(data, c.id, month);
+    const lump = lumpy(al.freq.every);
+    const spent = lump ? al.months.reduce((a, m) => a + (sumOf(m).byCategoryUsual[c.id] ?? 0), 0) : usual;
+    const limit = lump ? al.allowed : Math.max(budget, al.allowed);
+    const diff = spent - limit;
     const status: ScoreRow['status'] = !budget ? 'no-budget'
-      : usual === 0 && avg === 0 ? 'unused'
-      : diff > Math.max(budget * 0.1, 25) ? 'over'
-      : diff > -Math.max(budget * 0.1, 25) ? 'near' : 'under';
-    scorecard.push({ category: c.id, label: c.label, group: c.group, budget, actual, usual, average: avg, status, diff });
+      : spent === 0 && avg === 0 && !(lump && !al.allowed) ? 'unused'
+      : diff > Math.max(limit * 0.1, 25) ? 'over'
+      : diff > -Math.max(limit * 0.1, 25) ? 'near' : 'under';
+    const unit = EVERY_UNIT[al.freq.every];
+    scorecard.push({ category: c.id, label: c.label, group: c.group, budget, actual, usual, average: avg, status, diff, every: al.freq.every, per: al.per,
+      ...(lump ? { period: { spent, allowed: al.allowed, months: al.months } } : {}) });
+    if (lump && status === 'over') {
+      findings.push({ id: `over:${c.id}`, category: c.id, source: 'Budget', severity: diff > Math.max(limit * 0.25, 100) ? 'act' : 'watch', impact: diff,
+        title: `${c.label}: ${money(diff)} more than planned this ${unit}`,
+        detail: `${money(spent)} paid from ${fmtMonthShort(al.months[0])} to ${fmtMonthShort(month)}, against ${money(al.per)} a ${unit}. If the fee has gone up, change it on the Budget page.` });
+      continue;
+    }
+    if (lump) continue;
 
     const overEveryMonth = base.length >= 2 && base.every((b) => (b.byCategoryUsual[c.id] ?? 0) > budget * 1.1);
     if (status === 'over') {

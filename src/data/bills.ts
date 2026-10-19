@@ -26,7 +26,7 @@ export function addEvery(d: string, every: Every): string {
   const x = new Date(d + 'T00:00:00Z');
   if (every === 'week') x.setUTCDate(x.getUTCDate() + 7);
   else if (every === 'fortnight') x.setUTCDate(x.getUTCDate() + 14);
-  else x.setUTCMonth(x.getUTCMonth() + (every === 'month' ? 1 : every === 'quarter' ? 3 : 12));
+  else x.setUTCMonth(x.getUTCMonth() + (every === 'month' ? 1 : every === 'quarter' || every === 'term' ? 3 : 12));
   return x.toISOString().slice(0, 10);
 }
 

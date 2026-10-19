@@ -5,6 +5,7 @@ import { Badge, Empty, Meter, MonthPicker, PurseBar } from '../components/bits';
 import { Chart } from '../components/Chart';
 import { MonthBanner } from '../components/MonthBanner';
 import { useForecast } from '../data/useProperties';
+import { EVERY_UNIT, freqOf, meterLimit } from '../data/frequency';
 import { CashChart } from './Property';
 import { useMonthly } from '../data/useMonthly';
 import { drillCategory, drillType, useDrill } from '../components/Drill';
@@ -101,8 +102,8 @@ export function HomeScreen() {
                 <li key={cat}>
                   <button type="button" onClick={() => drill(drillCategory(month, cat))} className="cat-row">
                     <span className="cat-name">{CATEGORY[cat]?.label ?? cat}</span>
-                    <span className="cat-num">{money(v)}<small>{b ? ` of ${money(b)}` : ' no budget'}</small></span>
-                    <Meter actual={v} budget={b} />
+                    <span className="cat-num">{money(v)}<small>{b ? ` of ${money(meterLimit(data, cat, month, v))}${freqOf(data.settings, cat).every !== 'month' ? ` (${EVERY_UNIT[freqOf(data.settings, cat).every]})` : ''}` : ' no budget'}</small></span>
+                    <Meter actual={v} budget={b ? meterLimit(data, cat, month, v) : 0} />
                   </button>
                 </li>
               );

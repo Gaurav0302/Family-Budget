@@ -18,7 +18,7 @@ const TABS: { id: Tab; label: string }[] = [
   { id: 'overview', label: 'Overview' }, { id: 'buying', label: 'Buying' }, { id: 'loan', label: 'Loan' },
   { id: 'costs', label: 'Costs & rent' }, { id: 'scenarios', label: 'Scenarios' },
 ];
-const EVERY: Every[] = ['week', 'fortnight', 'month', 'quarter', 'year'];
+const EVERY: Every[] = ['week', 'fortnight', 'month', 'term', 'quarter', 'year'];
 const yrs = (months: number) => { const y = Math.floor(Math.abs(months) / 12), m = Math.abs(months) % 12; return [y && `${y} year${y > 1 ? 's' : ''}`, m && `${m} month${m > 1 ? 's' : ''}`].filter(Boolean).join(' ') || '0 months'; };
 const idxName = (i: number) => monthName(toYM(i));
 const newId = () => Math.random().toString(36).slice(2, 8);
@@ -311,6 +311,7 @@ export function CashChart({ height = 200, basis = 'recent' }: { height?: number;
       tipExtra={(m) => { const x = ms.find((y) => y.month === m)!; return [
         { label: 'Pay in', value: money(x.pay + x.rentIn) }, { label: 'Going out', value: money(outgoings(x)) },
         ...x.oneOffs.map((o) => ({ label: o.label.replace(/ \(.*\)$/, ''), value: money(-o.amount) })),
+        ...x.timed.map((t) => ({ label: `incl. ${t.label}`, value: money(t.amount) })),
         { label: x.kept >= 0 ? 'Kept' : 'From savings', value: money(Math.abs(x.kept)) },
       ]; }} />
   );

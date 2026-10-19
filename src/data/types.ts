@@ -210,6 +210,9 @@ export interface Settings {
     /** Money expected in the offset on day one (from the Loan Planner). */
     offsetStart?: number;
   };
+  /** How often each budget line is paid (default each month), and a month it's due for quarterly, term and yearly lines.
+   *  The budget amount itself stays the monthly equivalent, so totals add up. */
+  budgetEvery?: Record<string, { every: Every; due?: string }>;
   /** Properties owned or being bought. When empty, the old `home` details stand in for the family home. */
   properties?: Property[];
   babySteps: Record<string, boolean>;
@@ -245,7 +248,8 @@ export interface Settings {
   rulesVersion?: number;
 }
 
-export type Every = 'week' | 'fortnight' | 'month' | 'quarter' | 'year';
+/** How often something is paid. A school term is counted like a quarter (four a year), due January, April, July and October. */
+export type Every = 'week' | 'fortnight' | 'month' | 'term' | 'quarter' | 'year';
 
 export interface PayEntry {
   person: string;

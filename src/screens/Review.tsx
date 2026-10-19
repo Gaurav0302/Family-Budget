@@ -8,6 +8,7 @@ import { merchantOf } from '../data/merchant';
 import { reviewMonth, reviewText, type Finding, type Severity } from '../data/review';
 import { useStore } from '../data/store';
 import { Markdown } from '../lib/markdown';
+import { EVERY_UNIT } from '../data/frequency';
 import { dayName, money, monthName, monthOnly, pct } from '../lib/format';
 
 const SECTIONS: { sev: Severity; title: string }[] = [
@@ -100,11 +101,11 @@ export function Review() {
                   {r.scorecard.map((row) => (
                     <tr key={row.category} className={`st-${row.status}`}>
                       <th scope="row"><DrillLink spec={drillCategory(month, row.category)}>{row.label}</DrillLink></th>
-                      <td>{row.budget ? money(row.budget) : <span className="muted">none</span>}</td>
+                      <td>{row.budget ? (row.every === 'month' ? money(row.budget) : <>{money(row.per)}<small className="muted">/{EVERY_UNIT[row.every]}</small></>) : <span className="muted">none</span>}</td>
                       <td>{money(row.usual)}{row.actual !== row.usual && <small className="muted"> +{money(row.actual - row.usual)} one-off</small>}</td>
                       <td>{row.average ? money(row.average) : <span className="muted">–</span>}</td>
                       <td className="diff">{row.status === 'over' ? <Badge severity="act" short /> : row.status === 'near' ? null : row.status === 'under' ? <Badge severity="good" short /> : null}
-                        {row.budget ? money(row.diff, { sign: true }) : ''}</td>
+                        {row.budget ? money(row.diff, { sign: true }) : ''}{row.period && <small className="muted"> over the {EVERY_UNIT[row.every]}</small>}</td>
                     </tr>
                   ))}
                 </tbody>

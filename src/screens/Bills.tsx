@@ -7,7 +7,7 @@ import { useStore } from '../data/store';
 import type { Every } from '../data/types';
 import { dayName, money } from '../lib/format';
 
-const EVERY: Record<Every, string> = { week: 'Weekly', fortnight: 'Fortnightly', month: 'Monthly', quarter: 'Quarterly', year: 'Yearly' };
+const EVERY: Record<Every, string> = { week: 'Weekly', fortnight: 'Fortnightly', month: 'Monthly', term: 'Each school term', quarter: 'Quarterly', year: 'Yearly' };
 
 export function Bills() {
   const { data, updateSettings } = useStore();

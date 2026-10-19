@@ -41,5 +41,6 @@ React 18 + Vite + TypeScript, HashRouter, Supabase (supabase-js, email + passwor
 - Steps pane: `components/StepPane.tsx` (Shell shows it on hover over Reports, docks it on click). The meeting tells it the current step via `usePane().setInfo`; the pane sends steps as `/reports?step=…` and Present as `?present=1`.
 - Drill-downs: `DrillLink` with `drillCategory/drillType/drillGroup` from `components/Drill.tsx` opens the payments behind any figure.
 - Anything about the future (settlement, overlap, what's kept after, money without a job, uni funds) comes from `forecast()`/`story()` or `aheadFindings()` in review.ts: never work it out again on a page. Recent spending leaves out `HOUSING_CATS` and an investment's own area; each property's running costs go back in.
+- Budget frequencies (D29): `frequency.ts` (`freqOf`, `perTime`/`monthlyOf`, `dueIn`, `allowance`, `meterLimit`, `scheduled`, `suggest`, `paidAhead`). Budget amounts are always monthly equivalents; settings `budgetEvery[cat] = { every, due }`. A term is a quarter due Jan/Apr/Jul/Oct. Compare spending to `allowance()`/`meterLimit()`, never straight to the monthly budget.
 - Keep pages uncluttered: explanations go behind the small `Info` button, not in paragraphs.
 - Super cap and tax-rate tables in `wealth.ts` need updating each July (ATO key super rates and thresholds).

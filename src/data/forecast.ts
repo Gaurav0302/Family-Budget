@@ -1,6 +1,8 @@
 import { simulate } from '../loan';
-import { addMonths, budgetFor, cashOnHand, keepBudget, lastDay, monthOf, totalBudget } from './analysis';
-import { loanInputs, ownedIn, propertiesOf, propertyCats, rentIn, runningMonthly, toIdx, usualLiving } from './property';
+import { addMonths, budgetFor, cashOnHand, keepBudget, lastDay, monthOf, totalBudget, withSplits } from './analysis';
+import { loanInputs, ownedIn, propertiesOf, propertyCats, rentIn, runningMonthly, timedCats, toIdx, usualLiving } from './property';
+import { scheduled } from './frequency';
+import { CATEGORY } from './categories';
 import type { Data, Property } from './types';
 import { expectedIncome } from './wealth';
 import { money, monthName, monthOnly, pct, thisMonth } from '../lib/format';
@@ -17,8 +19,10 @@ export interface ForecastMonth {
   pay: number;
   /** Rent received from investment properties. */
   rentIn: number;
-  /** Spending on everything except housing and properties. */
+  /** Spending on everything except housing and properties, including lines due this month that are paid by the term, quarter or year. */
   living: number;
+  /** Those term, quarter and year payments due this month (already inside `living`). */
+  timed: { category: string; label: string; amount: number }[];
   /** Rent the family pays. */
   rent: number;
   repayments: number;
@@ -61,12 +65,15 @@ export function forecast(data: Data, opts: { basis?: Basis; months?: number; fro
   const basis = opts.basis ?? 'recent';
   const s = data.settings;
   const props = propertiesOf(s, data.budgets);
-  const usual = usualLiving(data);
+  const today0 = opts.from ?? thisMonth();
+  // Lines paid by the term, quarter or year come out of the average and go back in the month they're due.
+  const timed = timedCats(data, today0);
+  const usual = usualLiving(data, 3, timed);
   const recentOk = basis === 'recent' && usual.from.length > 0;
-  const skip = propertyCats(s);
+  const skip = new Set([...propertyCats(s), ...timed]);
   const held = cashOnHand(s);
   const start = { cash: held.total, asOf: held.asOf };
-  const today = opts.from ?? thisMonth();
+  const today = today0;
   const first = start.asOf && monthOf(start.asOf) < today ? monthOf(start.asOf) : today;
   const end = addMonths(today, (opts.months ?? 9) - 1);
   const repay = new Map(props.map((p) => {
@@ -74,13 +81,20 @@ export function forecast(data: Data, opts: { basis?: Basis; months?: number; fro
     return [p.id, inp ? simulate(inp.setup, inp.changes, inp.lumps, { extras: false }) : null];
   }));
   const costs = props.flatMap((p) => p.costs.filter((c) => !inBalances(c, data)).map((c) => ({ ...c, property: p.name, settles: monthOf(c.date) === monthOf(p.settlement) })));
+  // A term or quarter fee due soon may already have gone out (tennis for October paid in September): don't count it twice.
+  const spentIn = (cat: string, months: string[]) => -withSplits(data.transactions, s.splits)
+    .filter((t) => t.category === cat && t.kind === 'spend' && months.includes(monthOf(t.date))).reduce((a, t) => a + t.amount, 0);
+  const paidEarly = (cat: string, m: string, amount: number) => m <= addMonths(today0, 1) && spentIn(cat, [addMonths(m, -2), addMonths(m, -1), m]) >= amount * 0.8;
   let cash = start.cash;
   const out: ForecastMonth[] = [];
   for (let m = first; m <= end; m = addMonths(m, 1)) {
     const day = start.asOf && monthOf(start.asOf) === m ? Number(start.asOf.slice(8, 10)) : 0;
     const part = day ? Math.max(0, 1 - day / Number(lastDay(m).slice(8, 10))) : 1;
     const pay = expectedIncome(s, m);
-    const living = recentOk ? usual.living : totalBudget(data.budgets, m) - [...skip].reduce((a, c) => a + budgetFor(data.budgets, c, m), 0);
+    const lumps = [...timed].map((c) => ({ category: c, label: CATEGORY[c]?.label ?? c, amount: scheduled(data, c, m) }))
+      .filter((x) => x.amount > 0 && !paidEarly(x.category, m, x.amount));
+    const living = (recentOk ? usual.living : totalBudget(data.budgets, m) - [...skip].reduce((a, c) => a + budgetFor(data.budgets, c, m), 0))
+      + lumps.reduce((a, x) => a + x.amount, 0);
     const owned = props.filter((p) => ownedIn(p, m));
     const repayments = props.reduce((a, p) => a + (repay.get(p.id)?.points.find((x) => x.idx === toIdx(m))?.paidOut ?? 0), 0);
     const running = owned.reduce((a, p) => a + runningMonthly(p), 0);
@@ -93,7 +107,7 @@ export function forecast(data: Data, opts: { basis?: Basis; months?: number; fro
     const kept = flow - oneOffs.reduce((a, c) => a + c.amount, 0);
     cash += kept;
     const unassigned = pay - totalBudget(data.budgets, m) - keepBudget(data.budgets, m);
-    if (m >= today) out.push({ month: m, pay, rentIn: rentInM, living, rent, repayments, running, invest, oneOffs, kept, cash, unassigned, ...(part < 1 ? { part } : {}) });
+    if (m >= today) out.push({ month: m, pay, rentIn: rentInM, living, timed: lumps, rent, repayments, running, invest, oneOffs, kept, cash, unassigned, ...(part < 1 ? { part } : {}) });
   }
   return { basis: recentOk ? 'recent' : 'budget', start, months: out, living: { amount: usual.living, from: usual.from } };
 }
@@ -141,7 +155,9 @@ export function story(f: Forecast): Story {
     i = j;
   }
   const lastSqueeze = squeezes.at(-1)?.to;
-  const after = ms.find((x) => !x.part && (!lastSqueeze || x.month > lastSqueeze) && (!settlements.length || x.month > settlements.at(-1)!.month)) ?? null;
+  // What's kept once things settle down: the average of the months after any squeeze (term fees and quarterly bills make single months uneven).
+  const settled = ms.filter((x) => !x.part && (!lastSqueeze || x.month > lastSqueeze) && (!settlements.length || x.month > settlements.at(-1)!.month));
+  const after = settled.length ? { ...settled[0], kept: settled.reduce((a, x) => a + x.kept, 0) / settled.length, pay: settled.reduce((a, x) => a + x.pay, 0) / settled.length } : null;
   const low = ms.length ? ms.reduce((a, b) => (b.cash < a.cash ? b : a)) : null;
   const steady = ms.filter((x) => !x.part).slice(-3);
   const monthly = steady.length ? steady.reduce((a, x) => a + outgoings(x), 0) / steady.length : 0;
@@ -154,7 +170,7 @@ export function story(f: Forecast): Story {
   for (const q of squeezes) lines.push(`${span(q.from, q.to)}: about ${money(q.perMonth)} a month more going out than coming in, ${money(q.total)} in all.`);
   if (after) {
     const rate = after.pay ? after.kept / after.pay : 0;
-    lines.push(`From ${monthName(after.month)} you'd keep about ${money(after.kept)} a month (${pct(rate)})${rate < 0.1 ? `, under Babylon's tenth of ${money(after.pay * 0.1)}` : ''}.`);
+    lines.push(`From ${monthName(after.month)} you'd keep about ${money(after.kept)} a month${settled.length > 1 ? ' on average' : ''} (${pct(rate)})${after.kept < after.pay * 0.1 - 20 ? `, under Babylon's tenth of ${money(after.pay * 0.1)}` : ''}.`);
   }
   if (low) lines.push(`Cash is lowest in ${monthName(low.month)}, at about ${money(low.cash)}: ${cover.toFixed(1)} months of spending. Ramsey's emergency fund is 3 to 6.`);
   const headline = verdict === 'yes' ? 'Yes, you can carry it.' : verdict === 'tight' ? 'You can carry it, but it gets tight.' : 'Not as things stand: cash runs out.';

@@ -1,8 +1,8 @@
 import { monthOf } from './analysis';
 import type { Data, Every, PayEntry, Settings, Transaction, WealthItem } from './types';
 
-export const PER_MONTH: Record<Every, number> = { week: 52 / 12, fortnight: 26 / 12, month: 1, quarter: 1 / 3, year: 1 / 12 };
-export const PER_YEAR: Record<Every, number> = { week: 52, fortnight: 26, month: 12, quarter: 4, year: 1 };
+export const PER_MONTH: Record<Every, number> = { week: 52 / 12, fortnight: 26 / 12, month: 1, term: 1 / 3, quarter: 1 / 3, year: 1 / 12 };
+export const PER_YEAR: Record<Every, number> = { week: 52, fortnight: 26, month: 12, term: 4, quarter: 4, year: 1 };
 
 export function people(s: Settings): string[] {
   const fromPay = (s.pay ?? []).map((p) => p.person);

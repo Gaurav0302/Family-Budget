@@ -3,6 +3,7 @@ import { addMonths, average, budgetFor, completeMonths, monthOf, summarise } fro
 import { CATEGORIES } from './categories';
 import type { Data, Property, PropertyLoan, Settings, UniFund } from './types';
 import { earners, PER_MONTH } from './wealth';
+import { lumpy } from './frequency';
 
 /** Categories that are about where the family lives. Recent spending leaves these out, and each property's own costs go back in,
  *  so a move from renting to owning is counted once. */
@@ -54,12 +55,17 @@ export function propertyCats(s: Settings): Set<string> {
 }
 
 /** Usual monthly spending on everything except housing and properties, from the last few complete months (one-offs left out). */
-export function usualLiving(data: Pick<Data, 'transactions' | 'coverage' | 'settings'>, months = 3): { living: number; invest: number; from: string[] } {
-  const skip = propertyCats(data.settings);
+export function usualLiving(data: Pick<Data, 'transactions' | 'coverage' | 'settings'>, months = 3, also: Set<string> = new Set()): { living: number; invest: number; from: string[] } {
+  const skip = new Set([...propertyCats(data.settings), ...also]);
   const recent = completeMonths(data).slice(-months);
   const sums = recent.map((m) => summarise(m, data));
   const living = average(sums.map((s) => Object.entries(s.byCategoryUsual).filter(([c]) => !skip.has(c)).reduce((a, [, v]) => a + v, 0)));
   return { living, invest: average(sums.map((s) => s.invest)), from: recent };
+}
+
+/** Budget lines paid by the term, quarter or year (with an amount): the forecast times these instead of averaging them. */
+export function timedCats(data: Pick<Data, 'budgets' | 'settings'>, month: string): Set<string> {
+  return new Set(Object.entries(data.settings.budgetEvery ?? {}).filter(([c, f]) => lumpy(f.every) && budgetFor(data.budgets, c, month) > 0).map(([c]) => c));
 }
 
 /** When a child's fund starts: its own start, else the first month the budget puts money into the uni funds. */
@@ -81,7 +87,9 @@ export function loanInputs(data: Data, p: Property, opts: { offsetStart?: number
   const start = l.firstRepayment || monthOf(p.settlement);
   const pays = earners(s, start).map((e) => e.takeHome * PER_MONTH[e.every]).sort((a, b) => b - a);
   const others = propertiesOf(s, data.budgets).filter((q) => q.id !== p.id);
-  const living0 = opts.living ?? usualLiving(data).living;
+  // Lines paid by the term, quarter or year count at their monthly equivalent here (the loan looks years ahead).
+  const timed = timedCats(data, start);
+  const living0 = opts.living ?? usualLiving(data, 3, timed).living + [...timed].reduce((a, c) => a + budgetFor(data.budgets, c, start), 0);
   // Everything that isn't this loan's repayment: living, every property's running costs, other loans, less rent received.
   const outgoings = (m: string) => living0 + propertiesOf(s, data.budgets).filter((q) => ownedIn(q, m)).reduce((a, q) => a + runningMonthly(q) - rentIn(q, m), 0)
     + others.filter((q) => q.loan && ownedIn(q, m)).reduce((a, q) => a + repaymentOf(q.loan!), 0)
