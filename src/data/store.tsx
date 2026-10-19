@@ -27,6 +27,8 @@ interface Store {
   addRule(rule: Omit<Rule, 'id' | 'user'>): Promise<number>;
   deleteRule(id: string): Promise<void>;
   setBudget(category: string, from: string, amount: number): Promise<void>;
+  /** Budget lines and settings changed together in one step, so the screen never shows one without the other. */
+  setBudgetWith(lines: BudgetLine[], patch: Partial<Settings>): Promise<void>;
   updateSettings(patch: Partial<Settings>): Promise<void>;
   importParsed(p: ParsedImport): Promise<{ added: number; duplicates: number }>;
   addReview(r: Review): Promise<void>;
@@ -206,6 +208,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       const line: BudgetLine = { category, from, amount };
       setData((d) => ({ ...d, budgets: [...d.budgets.filter((b) => !(b.category === category && b.from === from)), line] }));
       await guard(() => adapter.upsertBudgets([line]));
+    },
+    async setBudgetWith(lines, patch) {
+      const settings = { ...dataRef.current.settings, ...patch };
+      const same = (b: BudgetLine) => lines.some((l) => l.category === b.category && l.from === b.from);
+      setData((d) => ({ ...d, settings, budgets: [...d.budgets.filter((b) => !same(b)), ...lines] }));
+      await guard(async () => { if (lines.length) await adapter.upsertBudgets(lines); await adapter.saveSettings(settings); });
     },
     async updateSettings(patch) {
       const settings = { ...dataRef.current.settings, ...patch };

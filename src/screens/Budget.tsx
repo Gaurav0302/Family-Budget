@@ -30,7 +30,7 @@ function BudgetInput({ value, onSave, label }: { value: number; onSave: (n: numb
 }
 
 export function Budget() {
-  const { data, setBudget, updateSettings } = useStore();
+  const { data, setBudget, setBudgetWith, updateSettings } = useStore();
   const months = useMemo(() => {
     const have = allMonths(data.transactions);
     const end = addMonths(thisMonth(), 6);
@@ -52,25 +52,24 @@ export function Budget() {
     const today = new Date().toISOString().slice(0, 10);
     return new Map(SPEND_CATEGORIES.map((c) => [c.id, suggest(data, c.id, today)] as const).filter((x): x is [string, Suggestion] => !!x[1]));
   }, [data.transactions, data.settings.splits]);
-  const setFreq = (cat: string, every: Every, due?: string) => {
+  /** The frequency settings with one line changed (monthly lines are the default, so they're removed). */
+  const freqPatch = (cat: string, every: Every, due?: string) => {
     const cur = data.settings.budgetEvery ?? {};
     const prev = cur[cat];
     const next = { ...cur, [cat]: { every, ...(lumpy(every) ? { due: due ?? (prev?.every === every ? prev.due : suggestions.get(cat)?.due) } : {}) } };
     if (every === 'month') delete next[cat];
-    return updateSettings({ budgetEvery: next });
+    return { budgetEvery: next };
   };
-  /** A new frequency keeps the amount shown: $410 each month → $410 each term. */
-  const changeEvery = async (cat: string, every: Every) => {
+  const setFreq = (cat: string, every: Every, due?: string) => updateSettings(freqPatch(cat, every, due));
+  /** A new frequency keeps the amount shown ($410 each month → $410 each term). Amount and frequency are saved together. */
+  const changeEvery = (cat: string, every: Every) => {
     const from = freqOf(data.settings, cat).every;
     if (from === every) return;
     const monthly = budgetFor(data.budgets, cat, month);
-    if (monthly) await setBudget(cat, month, switchEvery(monthly, from, every));
-    await setFreq(cat, every);
+    return setBudgetWith(monthly ? [{ category: cat, from: month, amount: switchEvery(monthly, from, every) }] : [], freqPatch(cat, every));
   };
-  const applySuggestion = async (cat: string, sg: Suggestion) => {
-    await setFreq(cat, sg.every, sg.due);
-    await setBudget(cat, month, monthlyOf(sg.per, sg.every));
-  };
+  const applySuggestion = (cat: string, sg: Suggestion) =>
+    setBudgetWith([{ category: cat, from: month, amount: monthlyOf(sg.per, sg.every) }], freqPatch(cat, sg.every, sg.due));
 
   return (
     <div>
