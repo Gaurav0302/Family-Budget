@@ -192,7 +192,7 @@ function NetWorthTab() {
   const first = all.find((x) => x.month === span[0]), last = all[all.length - 1];
   const change = first && last ? last.value - first.value : 0;
   const part = (i: number) => all.map((x) => x.parts[i].amount);
-  const chartSeries = split === 'total' ? [{ id: 'total', label: 'Net worth', values: all.map((x) => x.value), color: 'var(--euc)' }]
+  const chartSeries = split === 'total' ? [{ id: 'total', label: 'Net worth', values: all.map((x) => x.value), color: 'var(--data)' }]
     : [{ id: 'cash', label: 'Cash', values: part(0), color: 'var(--s1)' }, { id: 'super', label: 'Super', values: part(1), color: 'var(--s2)' }, { id: 'assets', label: 'Other assets', values: part(2), color: 'var(--s3)' }, { id: 'owed', label: 'Owed', values: part(3), color: 'var(--s8)' }].filter((x) => x.values.some((v) => v !== 0));
 
   const [name, setName] = useState('');

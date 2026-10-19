@@ -49,7 +49,7 @@ export function Meter({ actual, budget }: { actual: number; budget: number }) {
   const max = Math.max(actual, budget, 1);
   const within = Math.min(actual, budget);
   const over = Math.max(0, actual - budget);
-  const state = !budget ? 'nobudget' : actual > budget * 1.1 ? 'over' : actual > budget * 0.9 ? 'near' : 'under';
+  const state = !budget ? 'nobudget' : actual > budget * 1.1 ? 'over' : actual > budget + 0.5 ? 'near' : 'under';   // near = a little over (up to 10%)
   return (
     <div className={`meter meter-${state}`} role="img" aria-label={`${money(actual)} spent of ${money(budget)} budget`}>
       <div className="meter-track" style={{ width: `${(budget / max) * 100}%` }} />

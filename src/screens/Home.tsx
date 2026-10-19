@@ -57,8 +57,8 @@ export function HomeScreen() {
       <section className="hero" aria-labelledby="hero-title">
         <h1 id="hero-title">
           {s.kept >= 0
-            ? <>In {monthOnly(month)} you kept <span className="num">{money(s.kept)}</span> of the <span className="num">{money(s.income)}</span> that came in.</>
-            : <>In {monthOnly(month)} you spent <span className="num">{money(-s.kept)}</span> more than came in.</>}
+            ? <>In {monthOnly(month)} you kept <span className={`num is-${s.keptRate >= 0.2 ? 'good' : s.keptRate >= 0.1 ? 'warn' : 'bad'}`}>{money(s.kept)}</span> of the <span className="num">{money(s.income)}</span> that came in.</>
+            : <>In {monthOnly(month)} you spent <span className="num is-bad">{money(-s.kept)}</span> more than came in.</>}
         </h1>
         <PurseBar income={s.income} needs={s.needs} wants={s.wants} kept={s.kept} onOpen={(t) => drill(drillType(month, t))} />
         <p className={`verdict tone-${review.verdict.tone}`}>{review.verdict.text}</p>
@@ -107,7 +107,7 @@ export function HomeScreen() {
 
         <section className="panel" aria-labelledby="kept">
           <Chart title={<h2 id="kept">Share of income kept</h2>} label="Share of income kept by month" months={monthly.months} highlight={month} partial={monthly.partial} height={180}
-            series={[{ id: 'kept', label: 'Kept', values: monthly.sums.map((x) => x.keptRate), color: 'var(--euc)' }]}
+            series={[{ id: 'kept', label: 'Kept', values: monthly.sums.map((x) => x.keptRate), color: 'var(--data)' }]}
             format={pct} axisFormat={pct} target={{ value: 0.1, label: "Babylon's tenth (10%)" }}
             tipExtra={(m) => { const x = monthly.sums[monthly.months.indexOf(m)]; return [{ label: 'Kept', value: money(x.kept) }, { label: 'Came in', value: money(x.income) }]; }}
             onPick={setMonth} pickLabel="Show this month" />

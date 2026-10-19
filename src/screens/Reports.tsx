@@ -53,7 +53,7 @@ function AreaCharts({ month }: { month: string }) {
                   budget={a.budget} onPick={(mm) => drill(drillGroup(mm, a.g))} />
               ) : (
                 <Chart compact noRange range={range} height={110} label={`${a.g} by month`} months={months} highlight={month} partial={m.partial}
-                  series={[{ id: a.g, label: a.g, values: a.values, color: 'var(--euc)' }]} budget={a.budget} onPick={(mm) => drill(drillGroup(mm, a.g))} />
+                  series={[{ id: a.g, label: a.g, values: a.values, color: 'var(--data)' }]} budget={a.budget} onPick={(mm) => drill(drillGroup(mm, a.g))} />
               )}
             </div>
           );

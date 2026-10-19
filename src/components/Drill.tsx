@@ -115,7 +115,7 @@ function Sheet({ spec: first, onClose }: { spec: DrillSpec; onClose: () => void 
         </div>
         {spec.cats && spec.make && (
           <div className="drill-chart">
-            <Chart compact height={120} label={`${spec.title} by month`} months={monthly.months} series={[{ id: 'x', label: spec.title, values: spendOf(monthly.sums, spec.cats), color: 'var(--euc)' }]}
+            <Chart compact height={120} label={`${spec.title} by month`} months={monthly.months} series={[{ id: 'x', label: spec.title, values: spendOf(monthly.sums, spec.cats), color: 'var(--data)' }]}
               budget={budgetOf(data.budgets, monthly.months, spec.cats)} highlight={spec.month} partial={monthly.partial}
               onPick={(m) => { setSpec(spec.make!(m)); setOpen(new Set()); setMoving(null); }} pickLabel="Show this month" />
           </div>

@@ -2,6 +2,21 @@ import { describe, expect, it } from 'vitest';
 import { contrast } from './color';
 import { buildTheme, THEMES } from './themes';
 
+const rgb = (hex: string) => [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16));
+
+describe('meaning never depends on the theme', () => {
+  it('keeps good green, warning amber and bad red in every theme, and never touches data colours', () => {
+    for (const t of THEMES) for (const mode of ['light', 'dark'] as const) {
+      const v = buildTheme(t, mode);
+      const [gr, gg, gb] = rgb(v.good), [br, bg, bb] = rgb(v.bad), [wr, wg, wb] = rgb(v.warn);
+      expect(gg > gr && gg > gb, `${t.id} ${mode} good ${v.good}`).toBe(true);
+      expect(br > bg && br > bb, `${t.id} ${mode} bad ${v.bad}`).toBe(true);
+      expect(wr > wb && wg > wb && wr >= wg, `${t.id} ${mode} warn ${v.warn}`).toBe(true);
+      expect(Object.keys(v).some((k) => /^(data|s\d|k-|p\d|pj)/.test(k))).toBe(false);
+    }
+  });
+});
+
 describe('every theme is readable in light and dark', () => {
   it('has 54 themes with unique ids', () => {
     expect(THEMES).toHaveLength(54);
