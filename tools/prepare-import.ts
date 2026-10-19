@@ -8,6 +8,7 @@
  *     --household private/household.json   (accounts, budget and the family's own sorting rules — never commit it)
  *     --review 2026-10:review.md            (the monthly note, shown on the Review page)
  *     (month-end balances before each closing balance are worked out from the transactions)
+ *     --statement g-salary=2026-09-01..2026-09-30:6950.69:6070.51   (opening and closing balance as printed, for the Statements checks)
  *     --payees backup.json                  (sort with the family's payee list from their latest backup)
  *
  * Prints a short month-by-month summary so you can sanity-check the numbers.
@@ -27,6 +28,7 @@ if (!input || !output) {
 }
 const coverage: Coverage[] = [];
 const balances: Balance[] = [];
+const statements: { account: string; from: string; to: string; opening: number; closing: number }[] = [];
 let cardItemisedFrom = DEFAULT_SETTINGS.cardItemisedFrom;
 const reviews: Review[] = [];
 let payees: Payee[] = [];
@@ -41,6 +43,12 @@ for (let i = 0; i < rest.length; i += 2) {
     const [account, rhs] = value.split('=');
     const [date, amount] = rhs.split(':');
     balances.push({ account, date, amount: Number(amount) });
+  } else if (flag === '--statement') {
+    // --statement g-salary=2026-09-01..2026-09-30:6950.69:6070.51 (opening and closing as printed on the statement)
+    const [account, rhs] = value.split('=');
+    const [range, opening, closing] = rhs.split(':');
+    const [from, to] = range.split('..');
+    statements.push({ account, from, to, opening: Number(opening), closing: Number(closing) });
   } else if (flag === '--card-itemised-from') cardItemisedFrom = value;
   else if (flag === '--household') household = JSON.parse(readFileSync(value, 'utf8'));
   else if (flag === '--payees') payees = (JSON.parse(readFileSync(value, 'utf8')) as DataFile).payees ?? [];
@@ -67,7 +75,7 @@ const allBalances = [...(household.settings?.balances ?? []), ...balances, ...mo
 const file: DataFile = {
   app: 'family-budget', version: 1, exported: new Date().toISOString(),
   transactions: sorted, coverage, ...(reviews.length ? { reviews } : {}),
-  settings: { ...(household.settings ?? {}), cardItemisedFrom, ...(allBalances.length ? { balances: allBalances } : {}) },
+  settings: { ...(household.settings ?? {}), cardItemisedFrom, ...(allBalances.length ? { balances: allBalances } : {}), ...(statements.length ? { statements } : {}) },
   ...(household.budgets ? { budgets: household.budgets } : {}),
   ...(household.rules ? { rules: household.rules } : {}),
 };

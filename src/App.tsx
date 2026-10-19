@@ -14,6 +14,7 @@ import { More } from './screens/More';
 import { Reports } from './screens/Reports';
 import { Review } from './screens/Review';
 import { SettingsScreen } from './screens/Settings';
+import { Statements } from './screens/Statements';
 import { Transactions } from './screens/Transactions';
 import { Trends } from './screens/Trends';
 import { Wealth } from './screens/Wealth';
@@ -44,6 +45,7 @@ function Gate() {
         <Route path="/bills" element={<Bills />} />
         <Route path="/reports" element={<Reports />} />
         <Route path="/trends" element={<Trends />} />
+        <Route path="/statements" element={<Statements />} />
         <Route path="/what-if" element={<WhatIf />} />
         <Route path="/wealth" element={<Wealth />} />
         <Route path="/more" element={<More />} />

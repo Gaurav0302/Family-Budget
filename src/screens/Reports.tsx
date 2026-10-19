@@ -6,6 +6,7 @@ import { useSearchParams } from 'react-router-dom';
 import { Badge, Info, MonthPicker, NumberField, PageHeader, PurseBar, Spark, Tabs } from '../components/bits';
 import { tone, type Tone } from '../data/guide';
 import { usePane } from '../components/StepPane';
+import { MonthBanner } from '../components/MonthBanner';
 import { DrillLink, drillCategory, drillGroup, drillType, useDrill } from '../components/Drill';
 import { addMonths, allMonths, budgetFor, completeMonths, monthOf, summarise } from '../data/analysis';
 import { CATEGORIES, CATEGORY, GROUPS } from '../data/categories';
@@ -185,7 +186,7 @@ function MoneyMeeting() {
   const usualAll = base.length ? base.reduce((a, b) => a + b.spend, 0) / base.length : 0;
   const change = usualAll ? (s.spend - usualAll) / usualAll : 0;
   const k = s.income ? s.kept / s.income : 0, w = s.income ? s.wants / s.income : 0;
-  const spendTone: Tone = !usualAll ? 'partial' : change <= 0.03 ? 'good' : change <= 0.1 ? 'warn' : 'bad';
+  const spendTone: Tone = !usualAll || !s.complete ? 'partial' : change <= 0.03 ? 'good' : change <= 0.1 ? 'warn' : 'bad';
   const facts = [
     { tone: spendTone, short: !usualAll ? `Spent ${money(s.spend)}.` : Math.abs(change) <= 0.03 ? 'Spent about usual.' : `Spent ${money(Math.abs(s.spend - usualAll))} ${change > 0 ? 'more' : 'less'} than usual.`, chip: `Spending ${!usualAll ? money(s.spend) : Math.abs(change) <= 0.03 ? 'as usual' : `${change > 0 ? '+' : '−'}${pct(Math.abs(change))}`}` },
     { tone: tone('wants', w, s.complete), short: w > 0.3 ? 'Wants ran high.' : 'Wants under control.', chip: `Wants ${pct(w)}` },
@@ -197,7 +198,8 @@ function MoneyMeeting() {
   const steps: Step[] = [
     { id: 'm-month', title: 'The month', body: (
       <>
-        <p className="meet-kicker">{monthName(month)}</p>
+        <MonthBanner month={month} />
+        <p className="meet-kicker">{monthName(month)}{!s.complete ? ' · Draft: not every statement is in' : ''}</p>
         <h2 className="meet-headline">{facts.map((f) => f.short).join(' ')}</h2>
         <ul className="meet-chips">{facts.map((f) => <li key={f.chip} className={`chip-st st-text-${f.tone}`}><i aria-hidden />{f.chip}</li>)}</ul>
         <PurseBar income={s.income} needs={s.needs} wants={s.wants} kept={s.kept} complete={s.complete} onOpen={(t) => drill(drillType(month, t))} />

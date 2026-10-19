@@ -1,6 +1,7 @@
 # SESSION-HANDOFF.md
 
 ## Current status (19 Oct 2026, evening)
+Latest: Statements page with month checks (D27). Private file 'Family Purse - statement balances 19 Oct 2026' carries each statement's opening/closing balance (all tie to the cent). Feb–June are missing Reeti's two accounts and the card (before 22 June); July is fully checked; Aug/Sep only need payments sorted.
 Also pushed since: theme-independent meaning colours (D24), 50/30/20 green-within colours (D25), money meeting agenda with Present mode (D26).
 
 ## Earlier status (19 Oct 2026, late afternoon)

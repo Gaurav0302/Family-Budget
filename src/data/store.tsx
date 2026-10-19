@@ -214,7 +214,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     },
     async importParsed(p) {
       const d = dataRef.current;
-      const settings = p.file?.settings ? withDefaults(mergeSettings(d.settings, p.file.settings)) : d.settings;
+      const incomingSettings = p.file?.settings || p.statements ? { ...(p.file?.settings ?? {}), ...(p.statements ? { statements: [...(p.file?.settings?.statements ?? []), ...p.statements] } : {}) } : null;
+      const settings = incomingSettings ? withDefaults(mergeSettings(d.settings, incomingSettings)) : d.settings;
       applyCustomCategories(settings.customCategories, settings.hiddenCategories, settings);
       // Rules and payees in a file: rules with the same id are replaced; payees the family already has are kept as they are.
       const incomingRules = (p.file?.rules ?? []).map((r) => ({ ...r, user: true }));
@@ -242,7 +243,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         await adapter.replaceCoverage(coverage);
         if (reviews.length) await adapter.upsertReviews(reviews);
         if (budgets.length) await adapter.upsertBudgets(budgets);
-        if (p.file?.settings) await adapter.saveSettings(settings);
+        if (incomingSettings) await adapter.saveSettings(settings);
       });
       await load();
       return { added: fresh.length, duplicates };

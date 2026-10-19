@@ -25,7 +25,7 @@ src/
                Drill.tsx (payments behind a figure), Chart.tsx (all charts), Menu.tsx (⋯ menus), CategorySelect.tsx
   data/        types, categories, rules, merchant, analysis, review, importers, defaults, store, adapters/,
                wealth (pay, super, net worth), bills, whatif, settingsMerge, payees (the payee list), useMonthly (month totals for charts), paypal (PayPal activity CSV)
-  screens/     Home, Transactions, Budget, Bills, Review, Reports, Trends, Goals, WhatIf, Wealth, Accounts, Categories,
+  screens/     Home, Transactions, Budget, Bills, Review, Reports, Trends, Statements, Goals, WhatIf, Wealth, Accounts, Categories,
                More (phone), Import, Settings, Login
   styles/      app.css (tokens, light + dark)
   theme/       themes.ts (54 themes), color.ts (OKLCH + contrast), useLook.ts, ThemePicker.tsx

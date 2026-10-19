@@ -82,6 +82,9 @@ export interface BudgetLine {
   from: string;          // YYYY-MM — applies from this month until a later line replaces it
 }
 
+/** A statement's own opening and closing balance, so the app can prove every transaction in it was read. */
+export interface StatementBalance { account: string; from: string; to: string; opening: number; closing: number }
+
 export interface Coverage {
   account: string;
   from: string;          // YYYY-MM-DD
@@ -137,6 +140,8 @@ export interface Settings {
   /** Gross pay per month for both of you, before tax. */
   grossMonthly: number;
   theme: 'auto' | 'light' | 'dark';
+  /** Opening and closing balances of each statement added (for the Statements checks). */
+  statements?: StatementBalance[];
   /** Payments divided into parts, by transaction id. */
   splits?: Record<string, SplitPart[]>;
   /** Each person's own theme and light/dark choice, by sign-in email. */

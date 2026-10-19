@@ -1,7 +1,8 @@
-import { CalendarClock, FileText, Home, LayoutGrid, Loader2, Mountain, ReceiptText, Scale, Settings, Sparkles, Upload, Wallet, Landmark, Tags, CreditCard, TrendingUp } from 'lucide-react';
+import { CalendarClock, FileText, Home, LayoutGrid, Loader2, Mountain, ReceiptText, Scale, Settings, Sparkles, Upload, Wallet, Landmark, Tags, CreditCard, TrendingUp, ClipboardCheck } from 'lucide-react';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { useStore } from '../data/store';
+import { useAudits } from '../data/useAudit';
 import { DrillProvider } from './Drill';
 import { PaneProvider, StepPane } from './StepPane';
 
@@ -24,6 +25,7 @@ export const NAV = [
   ] },
   { section: 'Tools', items: [
     { to: '/import', label: 'Add statements', Icon: Upload, hint: 'Bring in new transactions' },
+    { to: '/statements', label: 'Statements', Icon: ClipboardCheck, hint: 'What’s in for each month, and what’s missing' },
     { to: '/categories', label: 'Categories & payees', Icon: Tags, hint: 'Where each payee is sorted' },
     { to: '/accounts', label: 'Accounts', Icon: CreditCard, hint: 'Bank accounts, cards, offsets' },
     { to: '/settings', label: 'Settings', Icon: Settings, hint: 'Look, logins, backup' },
@@ -59,7 +61,11 @@ function ShellInner({ children }: { children: ReactNode }) {
   const leave = () => { window.clearTimeout(timer.current); timer.current = window.setTimeout(() => setPeek(false), 250); };
   const openStep = (id: string) => { setPinned(true); setPeek(false); navigate(`/reports?step=${id}`); };
   const toSort = data.transactions.filter((t) => t.needsReview).length;
-  const badge = (to: string) => (to === '/transactions' && toSort > 0 ? <em className="count" aria-label={`${toSort} to sort`}>{toSort}</em> : null);
+  // Statements still missing for last month: a gentle count on the Statements menu item.
+  const { audits, lastFinished } = useAudits();
+  const missingLast = audits.get(lastFinished)?.state === 'missing' ? audits.get(lastFinished)!.missing.length : 0;
+  const badge = (to: string) => (to === '/transactions' && toSort > 0 ? <em className="count" aria-label={`${toSort} to sort`}>{toSort}</em>
+    : to === '/statements' && missingLast > 0 ? <em className="count" aria-label={`${missingLast} statements missing`}>{missingLast}</em> : null);
   return (
     <div className={`shell ${pinned ? 'has-pane' : ''}`}>
       <a className="skip" href="#main">Skip to content</a>

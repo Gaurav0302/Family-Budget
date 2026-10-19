@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Badge, Empty, Info, MonthPicker, PageHeader } from '../components/bits';
+import { MonthBanner } from '../components/MonthBanner';
 import { tone, type Part } from '../data/guide';
 import { DrillLink, drillCategory, drillType, type DrillSpec } from '../components/Drill';
 import { allMonths, completeMonths } from '../data/analysis';
@@ -68,7 +69,7 @@ export function Review() {
       <PageHeader title={`${monthName(month)} review`}>
         <MonthPicker months={months} value={month} onChange={setMonth} completeSet={completeSet} />
       </PageHeader>
-      {!r.summary.complete && <p className="partial-note">Not every account is loaded for {monthOnly(month)} ({r.summary.missing.join(', ')} missing). Treat this review as a preview.</p>}
+      <MonthBanner month={month} />
 
       <section className={`verdict-card tone-${r.verdict.tone}`}>
         <h2>{r.verdict.tone === 'better' ? 'Heading the right way' : r.verdict.tone === 'worse' ? 'Drifting the wrong way' : r.verdict.tone === 'steady' ? 'Holding steady' : 'A first look'}</h2>

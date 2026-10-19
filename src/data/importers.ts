@@ -1,5 +1,5 @@
 import { tidyDescription } from './merchant';
-import type { Coverage, DataFile, Transaction } from './types';
+import type { Coverage, DataFile, StatementBalance, Transaction } from './types';
 
 /** Same id whether a transaction came from a PDF, a CSV or a backup: account, date, amount, nth on that day. */
 export function assignIds<T extends Omit<Transaction, 'id'>>(rows: T[]): (T & { id: string })[] {
@@ -53,6 +53,8 @@ export interface ParsedImport {
   coverage: Coverage[];
   file?: DataFile;
   problems: string[];
+  /** Opening and closing balance, when the file has a running balance column. */
+  statements?: StatementBalance[];
 }
 
 /** Read a bank CSV. Works with CommBank's export (no header: date, amount, description, balance)
@@ -63,7 +65,7 @@ export function parseCsv(text: string, account: string, source: string): ParsedI
   if (!lines.length) return { transactions: [], coverage: [], problems: ['The file is empty.'] };
   const first = splitCsvLine(lines[0]).map((h) => h.toLowerCase());
   const hasHeader = first.some((h) => /date/.test(h)) && !toIsoDate(first[0]);
-  let idx = { date: 0, amount: 1, desc: 2, debit: -1, credit: -1 };
+  let idx = { date: 0, amount: 1, desc: 2, debit: -1, credit: -1, balance: 3 };
   if (hasHeader) {
     const find = (re: RegExp) => first.findIndex((h) => re.test(h));
     idx = {
@@ -72,12 +74,14 @@ export function parseCsv(text: string, account: string, source: string): ParsedI
       desc: find(/desc|details|narrative|memo|name|payee/),
       debit: find(/debit|withdraw|money out/),
       credit: find(/credit|deposit|money in/),
+      balance: find(/balance/),
     };
     if (idx.date < 0 || idx.desc < 0 || (idx.amount < 0 && idx.debit < 0)) {
       return { transactions: [], coverage: [], problems: ["Couldn't find the date, amount and description columns in this file."] };
     }
   }
   const rows: Omit<Transaction, 'id'>[] = [];
+  const bals: { amount: number; balance: number; date: string }[] = [];
   for (const line of lines.slice(hasHeader ? 1 : 0)) {
     const cells = splitCsvLine(line);
     const date = toIsoDate(cells[idx.date] ?? '');
@@ -89,11 +93,25 @@ export function parseCsv(text: string, account: string, source: string): ParsedI
     }
     if (!date || Number.isNaN(amount) || amount === 0) { if (line.trim()) problems.push(`Skipped: ${line.slice(0, 60)}`); continue; }
     rows.push({ date, account, amount: Math.round(amount * 100) / 100, description: tidyDescription(cells[idx.desc] ?? ''), category: null, kind: null, source });
+    const bal = idx.balance >= 0 ? toNumber(cells[idx.balance] ?? '') : NaN;
+    if (!Number.isNaN(bal)) bals.push({ amount: Math.round(amount * 100) / 100, balance: bal, date });
   }
   rows.sort((a, b) => a.date.localeCompare(b.date));
   const transactions = assignIds(rows);
   const coverage = transactions.length ? [{ account, from: transactions[0].date, to: transactions[transactions.length - 1].date }] : [];
-  return { transactions, coverage, problems };
+  const statements = coverage.length && bals.length === rows.length ? statementFrom(bals, account, coverage[0].from, coverage[0].to) : undefined;
+  return { transactions, coverage, problems, ...(statements ? { statements: [statements] } : {}) };
+}
+
+/** Opening and closing balance from a running-balance column, whichever way round the bank lists the rows. */
+export function statementFrom(rows: { amount: number; balance: number }[], account: string, from: string, to: string): StatementBalance | undefined {
+  if (!rows.length) return undefined;
+  const near = (a: number, b: number) => Math.abs(a - b) < 0.005;
+  const oldestFirst = rows.length < 2 || rows.slice(1).every((r, i) => near(r.balance, rows[i].balance + r.amount));
+  const newestFirst = rows.length >= 2 && rows.slice(1).every((r, i) => near(rows[i].balance, r.balance + rows[i].amount));
+  if (!oldestFirst && !newestFirst) return undefined;   // the column doesn't run cleanly, so don't guess
+  const first = oldestFirst ? rows[0] : rows[rows.length - 1], last = oldestFirst ? rows[rows.length - 1] : rows[0];
+  return { account, from, to, opening: Math.round((first.balance - first.amount) * 100) / 100, closing: last.balance };
 }
 
 export function parseDataFile(text: string): ParsedImport {

@@ -3,6 +3,7 @@ import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Badge, Empty, Meter, MonthPicker, PurseBar } from '../components/bits';
 import { Chart } from '../components/Chart';
+import { MonthBanner } from '../components/MonthBanner';
 import { useMonthly } from '../data/useMonthly';
 import { drillCategory, drillType, useDrill } from '../components/Drill';
 import { addMonths, allMonths, budgetFor, completeMonths } from '../data/analysis';
@@ -36,6 +37,7 @@ export function HomeScreen() {
   const actions = data.settings.actions ?? [];
   const now = thisMonth();
   const plan = actions.filter((a) => a.month === addMonths(now, -1));
+  const lastMonth = addMonths(now, -1);
   const h = data.settings.home;
   const daysToSettle = Math.ceil((new Date(h.settlement).getTime() - Date.now()) / 864e5);
 
@@ -43,8 +45,10 @@ export function HomeScreen() {
     <div className="home">
       <div className="home-head">
         <MonthPicker months={months} value={month} onChange={setMonth} completeSet={completeSet} />
-        {!s.complete && <p className="partial-note">Not every account is loaded for {monthOnly(month)} yet ({s.missing.join(', ')} missing), so totals are incomplete.</p>}
       </div>
+      {/* Last month still missing statements: a to-do at the top until it's done. Then the month being viewed, if it isn't complete. */}
+      {lastMonth !== month && <MonthBanner month={lastMonth} nudge />}
+      <MonthBanner month={month} />
 
       {scream.length > 0 && (
         <section className="scream" aria-label="Needs attention now">

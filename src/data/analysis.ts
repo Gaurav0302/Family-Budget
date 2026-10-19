@@ -16,12 +16,12 @@ export function monthRange(from: string, to: string): string[] {
   return out;
 }
 
-const lastDay = (month: string) => {
+export const lastDay = (month: string) => {
   const [y, m] = month.split('-').map(Number);
   return `${month}-${String(new Date(Date.UTC(y, m, 0)).getUTCDate()).padStart(2, '0')}`;
 };
 
-const shiftDays = (date: string, days: number) => {
+export const shiftDays = (date: string, days: number) => {
   const d = new Date(date + 'T00:00:00Z');
   d.setUTCDate(d.getUTCDate() + days);
   return d.toISOString().slice(0, 10);

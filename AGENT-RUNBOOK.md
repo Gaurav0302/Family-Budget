@@ -26,6 +26,7 @@ npm run prepare-import -- private/parsed.json private/import.json \
   --coverage ACCOUNT=YYYY-MM-DD..YYYY-MM-DD   # one per statement: the period it covers
   --balance ACCOUNT=YYYY-MM-DD:CLOSING        # closing balance of EVERY account (earlier month-ends are worked out from it)
   --payees private/backup.json                # sort with the family's payee list, so imports follow their choices
+  --statement ACCOUNT=FROM..TO:OPENING:CLOSING # each statement's printed opening and closing balance (the app's Statements checks prove nothing was missed)
 ```
 The printout shows each month as complete or partial, with income, spending and money kept.
 
@@ -46,6 +47,7 @@ Then rebuild the file with the note attached: add `--review YYYY-MM:private/revi
 ## 4. Deliver
 - Send `private/import.json` to the user with step-by-step: app → Add statements → choose the file → Add.
 - Or, if the Supabase connector is on, upsert the rows into `transactions`, `coverage` and `reviews` (column names in `supabase/setup.sql`).
+- Check the app's Statements page for that month: every account in, every check green. Tell the user exactly which statement is missing if not.
 - Remind them to sort anything under "Needs your input" (and new payees under Categories & payees → To check) and to download a fresh backup.
 - Update `SESSION-HANDOFF.md` and `BACKLOG.md` (here) and the Project docs if household facts changed.
 

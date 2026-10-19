@@ -81,6 +81,9 @@ Status: ✅ done · ⬜ to do · 🔄 in progress · ❌ blocked · 🚫 dropped
 - ✅ 19 Oct 2026 — Theme colours never carry meaning; fixed status/data colours across the app (D24)
 - ✅ 19 Oct 2026 — Guide colours: green within, amber/red past it (D25)
 - ✅ 19 Oct 2026 — Money meeting as an agenda with Present mode and one-tap actions (D26)
+- ✅ 19 Oct 2026 — Statements page: month-by-month checklist and six checks; banners and Draft marking (D27)
+- ⬜ User adds the statement balances file (proves Feb–Oct statements add up)
+- ⬜ Reeti's statements before July and the card before 22 June, if they can be downloaded, to complete Feb–June
 - ⬜ Font loading is from Google Fonts; consider self-hosting fonts if offline use matters
 
 ## Phase 7 — Polish
