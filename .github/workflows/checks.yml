@@ -1,22 +1,19 @@
-name: Publish app
+name: Checks
 
+# Tests (including the privacy check) and a test build on every change. Publishing is done by Vercel, which builds
+# the app itself from the main branch.
 on:
   push:
     branches: [main]
     paths-ignore: ['.github/heartbeat.txt', '**.md']
+  pull_request:
   workflow_dispatch:
 
 permissions:
   contents: read
-  pages: write
-  id-token: write
-
-concurrency:
-  group: pages
-  cancel-in-progress: true
 
 jobs:
-  build:
+  check:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -30,15 +27,3 @@ jobs:
           # The private words the privacy check looks for (a repository secret, never in the code).
           PRIVACY_WORDS: ${{ secrets.PRIVACY_WORDS }}
       - run: npm run build
-      - uses: actions/upload-pages-artifact@v3
-        with:
-          path: dist
-  deploy:
-    needs: build
-    runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
-      - id: deployment
-        uses: actions/deploy-pages@v4

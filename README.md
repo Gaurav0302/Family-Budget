@@ -2,7 +2,7 @@
 
 A family budget app: every account in one place, sorted into categories, checked against a budget, and reviewed each month against Dave Ramsey's baby steps, The Richest Man in Babylon and the 50/30/20 guide.
 
-Works on desktop, tablet and phone. Published to GitHub Pages; the family's data lives in a private Supabase database that only their logins can open. **No personal data is ever stored in this repository.**
+Works on desktop, tablet and phone, and installs on a phone home screen. Published by Vercel; each household's data lives in a Supabase database where only that household's logins can open it. **No personal data is ever stored in this repository.**
 
 ## Pages
 
