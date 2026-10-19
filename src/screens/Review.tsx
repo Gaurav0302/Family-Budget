@@ -5,7 +5,8 @@ import { tone, type Part } from '../data/guide';
 import { DrillLink, drillCategory, drillType, type DrillSpec } from '../components/Drill';
 import { allMonths, completeMonths } from '../data/analysis';
 import { merchantOf } from '../data/merchant';
-import { reviewMonth, reviewText, type Finding, type Severity } from '../data/review';
+import { reviewText, type Finding, type Severity } from '../data/review';
+import { reviewFor } from '../data/reviewCache';
 import { useStore } from '../data/store';
 import { Markdown } from '../lib/markdown';
 import { EVERY_UNIT } from '../data/frequency';
@@ -61,7 +62,7 @@ export function Review() {
   const [copied, setCopied] = useState(false);
   if (!months.length) return <Empty title="Nothing to review yet"><p>Add statements first.</p></Empty>;
 
-  const r = reviewMonth(data, month);
+  const r = reviewFor(data, month);
   const notes = data.reviews.filter((x) => x.month === month);
   const byGroup = (sev: Severity): Finding[] => r.findings.filter((f) => f.severity === sev);
 
@@ -94,7 +95,7 @@ export function Review() {
 
           <section className="panel" aria-labelledby="score">
             <div className="panel-head"><h2 id="score">Category by category</h2><Info>Tap a category to see its payments and move any that belong somewhere else.</Info></div>
-            <div className="table-wrap">
+            <div className="table-wrap" tabIndex={0} role="region" aria-label="Category by category (table)">
               <table className="score">
                 <thead><tr><th>Category</th><th>Budget</th><th>Spent</th><th>Recent average</th><th>Difference</th></tr></thead>
                 <tbody>
@@ -135,7 +136,7 @@ export function Review() {
                   <li key={tx.id}>
                     <div><b>{merchantOf(tx.description)}</b><small>{dayName(tx.date)}. {reason}</small></div>
                     <span className="num">{money(tx.amount, { cents: true })}</span>
-                    <button className="btn small" onClick={() => updateTransaction(tx.id, { oneOff: true })}>Mark as one-off</button>
+                    <button className="btn small" onClick={() => updateTransaction(tx.splitOf ?? tx.id, { oneOff: true })}>Mark as one-off</button>
                   </li>
                 ))}
               </ul>
@@ -143,7 +144,7 @@ export function Review() {
           )}
         </div>
 
-        <aside className="review-side">
+        <aside className="review-side" aria-label="Checks against the money rules">
           <section className="panel" aria-labelledby="split">
             <h2 id="split">Needs, wants and kept</h2>
             <Info>The 50/30/20 guide: about half of take-home pay on needs, no more than 30% on wants, and at least 20% kept. Tap needs or wants to see what's in them.</Info>

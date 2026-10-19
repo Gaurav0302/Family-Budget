@@ -3,7 +3,7 @@ import type { Session } from '@supabase/supabase-js';
 import { isDemo } from '../config';
 import type { Adapter } from './adapters/adapter';
 import { localAdapter } from './adapters/local';
-import { supabase, supabaseAdapter } from './adapters/supabase';
+import { rebasePayees, supabase, supabaseAdapter } from './adapters/supabase';
 import { DEFAULT_BUDGETS, DEFAULT_SETTINGS } from './defaults';
 import { mergeCoverage, splitNew, type ParsedImport } from './importers';
 import { applyCustomCategories } from './categories';
@@ -11,6 +11,7 @@ import { categorise, RULES_VERSION } from './rules';
 import { indexPayees, payeesFor, sortTransaction, type PayeeIndex } from './payees';
 import { mergeSettings } from './settingsMerge';
 import type { BudgetLine, Data, DataFile, Payee, Review, Rule, Settings, Transaction } from './types';
+import { today as todayLocal } from '../lib/format';
 
 interface Store {
   data: Data;
@@ -19,6 +20,10 @@ interface Store {
   mode: Adapter['kind'];
   email: string | null;
   saving: boolean;
+  /** A change that didn't save (shown as a banner with Try again). */
+  saveError: string | null;
+  retrySave(): Promise<void>;
+  dismissSaveError(): void;
   signIn(email: string, password: string): Promise<string | null>;
   signOut(): Promise<void>;
   reload(): Promise<void>;
@@ -68,16 +73,50 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [error, setError] = useState<string | null>(null);
   const [email, setEmail] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const dataRef = useRef(data);
   dataRef.current = data;
   applyCustomCategories(data.settings.customCategories, data.settings.hiddenCategories, data.settings);
 
-  const guard = useCallback(async <T,>(fn: () => Promise<T>): Promise<T> => {
-    setSaving(true);
+  // Saves in flight (several can overlap) and the last one that failed, so it can be tried again.
+  const inFlight = useRef(0);
+  const failed = useRef<(() => Promise<unknown>)[]>([]);
+  /** Run a save. A failure never passes silently: it waits in a list and a banner offers "Try again" (the screen keeps the
+   *  change; trying again re-applies just that change to the latest saved data). Later saves that work don't clear it.
+   *  `rethrow` is for callers that show their own message (adding statements). */
+  const guard = useCallback(async <T,>(fn: () => Promise<T>, rethrow = false): Promise<T | undefined> => {
+    inFlight.current++; setSaving(true);
     try { return await fn(); }
-    catch (e: any) { setError(e?.message ?? String(e)); throw e; }
-    finally { setSaving(false); }
+    catch (e: any) {
+      if (rethrow) throw e;
+      failed.current = [...failed.current, fn];
+      setSaveError(e?.message ?? String(e));
+      return undefined;
+    }
+    finally { inFlight.current--; if (!inFlight.current) setSaving(false); }
   }, []);
+
+  // Closing the page while something is still saving asks first.
+  useEffect(() => {
+    const warn = (e: BeforeUnloadEvent) => { if (inFlight.current || failed.current.length) { e.preventDefault(); e.returnValue = ''; } };
+    window.addEventListener('beforeunload', warn);
+    return () => window.removeEventListener('beforeunload', warn);
+  }, []);
+
+  /** After a save: the screen takes what's now stored (someone else's changes included), except anything changed on this
+   *  screen since this save was sent, which is still on its way and must not flicker back. */
+  const adoptSettings = (stored: Settings, sent: Settings) => {
+    if (JSON.stringify(stored) === JSON.stringify(sent)) return;
+    setData((d) => {
+      const out: any = { ...stored };
+      for (const k of Object.keys(d.settings)) if (JSON.stringify((d.settings as any)[k]) !== JSON.stringify((sent as any)[k])) out[k] = (d.settings as any)[k];
+      return { ...d, settings: withDefaults(out) };
+    });
+  };
+  const adoptPayees = (stored: Payee[], sent: Payee[]) => {
+    if (stored === sent || JSON.stringify(stored) === JSON.stringify(sent)) return;
+    setData((d) => ({ ...d, payees: rebasePayees(d.payees, sent, stored) }));
+  };
 
   /** `quiet`: a background refresh. It never shows the loading or error screen. */
   const load = useCallback(async (quiet = false) => {
@@ -103,9 +142,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       }
       // Every transaction gets a payee. The first time, this builds the whole list from the existing categories.
       const added = payeesFor(transactions, payees);
-      if (added.length) { payees = [...payees, ...added]; await adapter.savePayees(payees); }
+      if (added.length) { const base = payees; payees = [...payees, ...added]; payees = await adapter.savePayees(payees, base); }
       // Things dated in the future (a house at settlement) must keep that start date once the date has passed.
-      const today = new Date().toISOString().slice(0, 10);
+      const today = todayLocal();
       let fixWealth = false;
       settings.wealth = (settings.wealth ?? []).map((w) => {
         const first = [...w.values].sort((a, b) => a.date.localeCompare(b.date))[0];
@@ -113,9 +152,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         return w;
       });
       if (resortAll) settings.rulesVersion = RULES_VERSION;
-      if (resortAll || fixWealth) await adapter.saveSettings(settings);
+      if (resortAll || fixWealth) Object.assign(settings, withDefaults(await adapter.saveSettings(settings, { rulesVersion: settings.rulesVersion, wealth: settings.wealth })));
       if (!l.budgets.length) await adapter.upsertBudgets(DEFAULT_BUDGETS);
-      if (!l.settings) await adapter.saveSettings(settings);
+      if (!l.settings) await adapter.saveSettings(settings, settings);
       transactions.sort((a, b) => b.date.localeCompare(a.date) || a.id.localeCompare(b.id));
       setData({ transactions, rules: userRules, budgets, coverage: l.coverage, settings, reviews: l.reviews, payees });
       setStatus('ready');
@@ -174,7 +213,20 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       const { error } = await supabase().auth.signInWithPassword({ email: e.trim(), password });
       return error ? (error.message.includes('Invalid') ? 'That email and password don\'t match. Check them and try again.' : error.message) : null;
     },
-    async signOut() { if (adapter.kind === 'supabase') await supabase().auth.signOut(); },
+    async signOut() {
+      // Leave nothing behind on a shared computer: unsaved plan drafts, failed saves and the data on screen go too.
+      try { for (const k of Object.keys(localStorage)) if (k.startsWith('fb:draft:')) localStorage.removeItem(k); } catch { /* storage off */ }
+      failed.current = []; setSaveError(null);
+      if (adapter.kind === 'supabase') { await supabase().auth.signOut(); setData(empty); }
+    },
+    saveError,
+    async retrySave() {
+      const list = failed.current;
+      failed.current = [];
+      setSaveError(null);
+      for (const fn of list) await guard(fn);   // anything that fails again goes back on the list
+    },
+    dismissSaveError() { failed.current = []; setSaveError(null); },
     reload: () => load(),
     async updateTransaction(id, patch) {
       const cur = dataRef.current.transactions.find((t) => t.id === id);
@@ -213,12 +265,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       const settings = { ...dataRef.current.settings, ...patch };
       const same = (b: BudgetLine) => lines.some((l) => l.category === b.category && l.from === b.from);
       setData((d) => ({ ...d, settings, budgets: [...d.budgets.filter((b) => !same(b)), ...lines] }));
-      await guard(async () => { if (lines.length) await adapter.upsertBudgets(lines); await adapter.saveSettings(settings); });
+      await guard(async () => { if (lines.length) await adapter.upsertBudgets(lines); adoptSettings(await adapter.saveSettings(settings, patch), settings); });
     },
     async updateSettings(patch) {
       const settings = { ...dataRef.current.settings, ...patch };
       setData((d) => ({ ...d, settings }));
-      await guard(() => adapter.saveSettings(settings));
+      await guard(async () => adoptSettings(await adapter.saveSettings(settings, patch), settings));
     },
     async importParsed(p) {
       const d = dataRef.current;
@@ -244,16 +296,19 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       const coverage = mergeCoverage([...d.coverage, ...p.coverage]);
       const reviews = p.file?.reviews ?? [];
       const budgets = p.file?.budgets ?? [];
-      await guard(async () => {
-        if (incomingRules.length) await adapter.upsertRules(incomingRules);
-        if (payees.length !== d.payees.length) await adapter.savePayees(payees);
-        if (fresh.length || resorted.length) await adapter.upsertTransactions([...fresh, ...resorted]);
-        await adapter.replaceCoverage(coverage);
-        if (reviews.length) await adapter.upsertReviews(reviews);
-        if (budgets.length) await adapter.upsertBudgets(budgets);
-        if (incomingSettings) await adapter.saveSettings(settings);
-      });
-      await load();
+      // Transactions first, settings last. If something fails part-way, adding the same file again is safe: what's already
+      // in is skipped and the rest is added. The screen reloads either way, so it shows what was really saved.
+      try {
+        await guard(async () => {
+          if (fresh.length || resorted.length) await adapter.upsertTransactions([...fresh, ...resorted]);
+          await adapter.replaceCoverage(coverage);
+          if (incomingRules.length) await adapter.upsertRules(incomingRules);
+          if (payees.length !== d.payees.length) await adapter.savePayees(payees, d.payees);
+          if (reviews.length) await adapter.upsertReviews(reviews);
+          if (budgets.length) await adapter.upsertBudgets(budgets);
+          if (incomingSettings) await adapter.saveSettings(settings, Object.fromEntries(Object.keys(incomingSettings).map((k) => [k, (settings as any)[k]])) as Partial<Settings>);
+        }, true);
+      } finally { await load(true); }
       return { added: fresh.length, duplicates };
     },
     async addReview(r) {
@@ -273,7 +328,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         ({ all: transactions, changed } = resortFor(d.transactions, payees, new Set([id]), d.settings, d.rules));
       }
       setData({ ...d, payees, transactions });
-      await guard(async () => { await adapter.savePayees(payees); if (changed.length) await adapter.upsertTransactions(changed); });
+      await guard(async () => { adoptPayees(await adapter.savePayees(payees, d.payees), payees); if (changed.length) await adapter.upsertTransactions(changed); });
       return changed.length;
     },
     async markChecked(ids) {
@@ -281,7 +336,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       const set = new Set(ids);
       const payees = d.payees.map((p) => (set.has(p.id) ? { ...p, checked: true } : p));
       setData({ ...d, payees });
-      await guard(() => adapter.savePayees(payees));
+      await guard(async () => adoptPayees(await adapter.savePayees(payees, d.payees), payees));
     },
     async mergePayees(fromId, intoId) {
       const d = dataRef.current;
@@ -291,7 +346,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       const payees = d.payees.filter((p) => p.id !== fromId).map((p) => (p.id === intoId ? merged : p));
       const { all, changed } = resortFor(d.transactions, payees, new Set([intoId]), d.settings, d.rules);
       setData({ ...d, payees, transactions: all });
-      await guard(async () => { await adapter.savePayees(payees); if (changed.length) await adapter.upsertTransactions(changed); });
+      await guard(async () => { adoptPayees(await adapter.savePayees(payees, d.payees), payees); if (changed.length) await adapter.upsertTransactions(changed); });
       return changed.length;
     },
     async namePayPal(list) {
@@ -311,7 +366,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       const added = payeesFor(changed, d.payees);
       const payees = added.length ? [...d.payees, ...added] : d.payees;
       setData({ ...d, transactions, payees });
-      await guard(async () => { await adapter.upsertTransactions(changed); if (added.length) await adapter.savePayees(payees); });
+      await guard(async () => { await adapter.upsertTransactions(changed); if (added.length) adoptPayees(await adapter.savePayees(payees, d.payees), payees); }, true);
       return changed.length;
     },
     backup() {
@@ -325,7 +380,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       clearLocal();
       await load();
     },
-  }), [data, status, error, adapter, email, saving, guard, load, payeeIdx]);
+  }), [data, status, error, adapter, email, saving, saveError, guard, load, payeeIdx]);
 
   return <Ctx.Provider value={store}>{children}</Ctx.Provider>;
 }

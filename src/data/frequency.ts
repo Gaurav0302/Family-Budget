@@ -77,7 +77,7 @@ export interface Allowance {
 
 /** What the budget allows for a category, compared like with like: a weekly line allows up to five payments in a month,
  *  a fortnightly one three, and a term, quarter or year line its payments over the period (one paid a month early is fine). */
-export function allowance(data: Pick<Data, 'budgets' | 'settings'>, cat: string, month: string): Allowance {
+export function allowance(data: Pick<Data, 'budgets' | 'settings'> & Partial<Pick<Data, 'transactions'>>, cat: string, month: string): Allowance {
   const freq = freqOf(data.settings, cat);
   const monthly = budgetFor(data.budgets, cat, month);
   const per = perTime(monthly, freq.every);
@@ -89,7 +89,10 @@ export function allowance(data: Pick<Data, 'budgets' | 'settings'>, cat: string,
   const n = freq.every === 'year' ? 12 : 3;
   const months = Array.from({ length: n }, (_, i) => addMonths(month, i - n + 1));
   if (freq.every === 'year' && !anchor(freq)) return { freq, per, months, allowed: per, due: false };
-  const dues = [...months, addMonths(month, 1)].filter((m) => dueIn(freq, m)).length;
+  // Next month's payment counts only if it has actually been paid early (otherwise the month before a due date got double).
+  const next = addMonths(month, 1);
+  const early = data.transactions && dueIn(freq, next) && paidAhead(data as Pick<Data, 'transactions' | 'settings' | 'budgets'>, cat, next) ? 1 : 0;
+  const dues = months.filter((m) => dueIn(freq, m)).length + early;
   return { freq, per, months, allowed: per * dues, due: dueIn(freq, month) };
 }
 
@@ -130,7 +133,7 @@ export function suggest(data: Pick<Data, 'transactions' | 'settings'>, cat: stri
 
 /** The figure to draw a month's bar against: the month's budget, up to five weekly or three fortnightly payments,
  *  or for a term, quarter or year line the amount due (once something is paid or it's due). */
-export function meterLimit(data: Pick<Data, 'budgets' | 'settings'>, cat: string, month: string, spent: number): number {
+export function meterLimit(data: Pick<Data, 'budgets' | 'settings'> & Partial<Pick<Data, 'transactions'>>, cat: string, month: string, spent: number): number {
   const al = allowance(data, cat, month);
   if (!lumpy(al.freq.every)) return al.allowed;
   return al.due || spent > 0 ? al.per : budgetFor(data.budgets, cat, month);

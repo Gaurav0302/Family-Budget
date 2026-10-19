@@ -128,7 +128,7 @@ export function PlansTab({ p }: { p: Property }) {
       {rows.length > 1 && (
         <section className="panel" aria-labelledby="side">
           <h2 id="side">Side by side</h2>
-          <div className="table-wrap">
+          <div className="table-wrap" tabIndex={0} role="region" aria-label="Plans side by side (table)">
             <table className="score lp-compare">
               <thead><tr><td />{rows.map((r) => <th key={r.plan.id} scope="col"><i className="lp-dot" style={{ background: r.plan.color }} aria-hidden /> {r.plan.name}</th>)}</tr></thead>
               <tbody>
@@ -563,7 +563,7 @@ function CheckIns({ p }: { p: Property }) {
       <section className="panel" aria-labelledby="ci-hist">
         <h2 id="ci-hist">Check-in history</h2>
         {!history.length ? <p className="lp-empty">No check-ins yet.</p> : (
-          <div className="table-wrap">
+          <div className="table-wrap" tabIndex={0} role="region" aria-label="Check-in history (table)">
             <table className="score">
               <thead><tr><th>Month</th><th>Owed after the offset</th><th>Against plan</th><th /></tr></thead>
               <tbody>{history.map(({ c, net, diff }) => (

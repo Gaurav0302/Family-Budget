@@ -12,6 +12,7 @@ import { money, monthName } from '../lib/format';
 import { CategorySelect } from './CategorySelect';
 import { Menu } from './Menu';
 import { SplitEditor } from './SplitEditor';
+import { FocusTrap } from './FocusTrap';
 
 export interface DrillSpec {
   title: string; subtitle?: string; filter: (t: Transaction) => boolean; link?: string;
@@ -108,6 +109,7 @@ function Sheet({ spec: first, onClose }: { spec: DrillSpec; onClose: () => void 
 
   return (
     <div className="sheet-wrap" role="dialog" aria-modal="true" aria-labelledby="drill-title" onClick={onClose}>
+      <FocusTrap onClose={onClose} />
       <div className="sheet drill" onClick={(e) => e.stopPropagation()}>
         <div className="sheet-head">
           <div><h2 id="drill-title">{spec.title}</h2><p className="muted">{spec.subtitle ? `${spec.subtitle} · ` : ''}{money(total)} · {txs.length} payment{txs.length === 1 ? '' : 's'}</p></div>

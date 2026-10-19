@@ -1,3 +1,4 @@
+import { execSync } from 'node:child_process';
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { budgetFor, completeMonths, findRecurring, summarise } from './analysis';
@@ -138,14 +139,23 @@ describe('monthly numbers', () => {
 });
 
 describe('privacy', () => {
-  // The words to look for are themselves private, so they live in private/privacy-words.txt (git-ignored, one per line).
-  // Claude sessions get that file from the Project; without it this check is skipped.
-  const list = existsSync('private/privacy-words.txt') ? readFileSync('private/privacy-words.txt', 'utf8').split('\n').map((w) => w.trim()).filter(Boolean) : [];
+  // The words to look for are themselves private: private/privacy-words.txt locally (git-ignored, one per line; Claude sessions
+  // get it from the Project), or the PRIVACY_WORDS secret when GitHub publishes. Without either this check is skipped.
+  const fromFile = existsSync('private/privacy-words.txt') ? readFileSync('private/privacy-words.txt', 'utf8') : '';
+  const list = (fromFile || process.env.PRIVACY_WORDS || '').split(/\r?\n/).map((w) => w.trim()).filter(Boolean);
   it.skipIf(!list.length)('keeps personal details out of the public code', () => {
-    const walk = (d: string): string[] => readdirSync(d).flatMap((f) => (statSync(`${d}/${f}`).isDirectory() ? walk(`${d}/${f}`) : [`${d}/${f}`]));
-    const files = [...walk('src'), ...walk('tools'), ...walk('supabase'), ...walk('.github'), 'README.md', 'CLAUDE.md', 'AGENT-RUNBOOK.md', 'PROJECT.md', 'DECISIONS.md', 'BACKLOG.md', 'SESSION-HANDOFF.md', 'index.html']
-      .filter((f) => existsSync(f));
-    const text = files.map((f) => readFileSync(f, 'utf8')).join('\n').toLowerCase();
-    for (const word of list) expect(text.includes(word.toLowerCase()), `found a private word in the public code`).toBe(false);
+    // Every file git would publish (tracked, plus new files not ignored), not a fixed list of folders.
+    let files: string[];
+    try { files = execSync('git ls-files -co --exclude-standard', { encoding: 'utf8' }).split('\n').filter(Boolean); }
+    catch {
+      const walk = (d: string): string[] => readdirSync(d).flatMap((f) => (statSync(`${d}/${f}`).isDirectory() ? walk(`${d}/${f}`) : [`${d}/${f}`]));
+      files = [...walk('src'), ...walk('tools'), ...walk('supabase'), ...walk('.github'), ...walk('public'), ...readdirSync('.').filter((f) => statSync(f).isFile())];
+    }
+    // package-lock.json is only package hashes, which can contain any short letter run by chance.
+    files = files.filter((f) => existsSync(f) && f !== 'package-lock.json' && !/\.(png|jpe?g|gif|ico|woff2?)$/i.test(f));
+    for (const f of files) {
+      const text = `${f}\n${readFileSync(f, 'utf8')}`.toLowerCase();
+      for (const word of list) expect(text.includes(word.toLowerCase()), `found a private word in ${f}`).toBe(false);
+    }
   });
 });

@@ -7,6 +7,7 @@ import { parseCsv, parseDataFile, splitNew, type ParsedImport } from '../data/im
 import { useStore } from '../data/store';
 import { isPayPalCsv, matchPayPal, parsePayPalCsv } from '../data/paypal';
 import { download, longDate, money } from '../lib/format';
+import { today as todayLocal } from '../lib/format';
 
 export function Import() {
   const { data, importParsed, backup, namePayPal } = useStore();
@@ -72,7 +73,7 @@ export function Import() {
               const n = await namePayPal(pp.matches.map((m) => ({ id: m.tx.id, description: m.description, note: m.purchase.item })));
               setResult(`Named ${n} PayPal payment${n === 1 ? '' : 's'}. Each is now sorted by its shop; check them under “Needs your input” if any weren't recognised.`);
               setFile(null);
-            } catch (e: any) { setResult(`Nothing was changed: ${e?.message ?? e}`); }
+            } catch (e: any) { setResult(`Not everything was saved (${e?.message ?? e}). Doing it again is safe: what's already in is skipped.`); }
             setBusy(false);
           }}>{busy ? 'Naming…' : `Name ${pp.matches.length} PayPal payment${pp.matches.length === 1 ? '' : 's'}`}</button>
         </div>
@@ -102,7 +103,7 @@ export function Import() {
               const r = await importParsed(parsed!);
               setResult(`Added ${r.added} transaction${r.added === 1 ? '' : 's'}${r.duplicates ? `, skipped ${r.duplicates} already here` : ''}.`);
               setFile(null); setParsed(null);
-            } catch (e: any) { setResult(`Nothing was added: ${e?.message ?? e}`); }
+            } catch (e: any) { setResult(`Not everything was saved (${e?.message ?? e}). Adding the same file again is safe: what's already in is skipped.`); }
             setBusy(false);
           }}>{busy ? 'Adding…' : `Add ${preview.fresh} transactions`}</button>
         </div>
@@ -113,7 +114,7 @@ export function Import() {
           <button className="btn primary" disabled={busy} onClick={async () => {
             setBusy(true);
             try { await importParsed(parsed!); setResult('Updated.'); setFile(null); setParsed(null); }
-            catch (e: any) { setResult(`Nothing was changed: ${e?.message ?? e}`); }
+            catch (e: any) { setResult(`Not everything was saved (${e?.message ?? e}). Doing it again is safe: what's already in is skipped.`); }
             setBusy(false);
           }}>{busy ? 'Updating…' : 'Apply update'}</button>
         </div>
@@ -152,7 +153,7 @@ export function Import() {
         <section className="panel">
           <h2>Backup</h2>
           <p>The free database has no automatic backups. Download one each month and keep it somewhere safe. Adding the file here restores everything.</p>
-          <button className="btn" onClick={() => download(`family-budget-backup-${new Date().toISOString().slice(0, 10)}.json`, JSON.stringify(backup()))}>Download a backup</button>
+          <button className="btn" onClick={() => download(`family-budget-backup-${todayLocal()}.json`, JSON.stringify(backup()))}>Download a backup</button>
         </section>
       </div>
     </div>

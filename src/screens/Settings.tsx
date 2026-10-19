@@ -5,6 +5,7 @@ import { label } from '../data/categories';
 import { useStore } from '../data/store';
 import { ThemePicker } from '../theme/ThemePicker';
 import { download } from '../lib/format';
+import { today as todayLocal } from '../lib/format';
 
 export function SettingsScreen() {
   const { data, deleteRule, signOut, email, mode, backup, resetLocal } = useStore();
@@ -44,7 +45,7 @@ export function SettingsScreen() {
         <h2>Your data</h2>
         <p>{mode === 'supabase' ? <>Stored in your private Supabase database. Signed in as <b>{email}</b>.</> : 'Demo mode: everything is kept in this browser only.'}</p>
         <div className="btn-row">
-          <button className="btn" onClick={() => download(`family-budget-backup-${new Date().toISOString().slice(0, 10)}.json`, JSON.stringify(backup()))}>Download a backup</button>
+          <button className="btn" onClick={() => download(`family-budget-backup-${todayLocal()}.json`, JSON.stringify(backup()))}>Download a backup</button>
           {mode === 'supabase' && <button className="btn" onClick={() => signOut()}>Sign out</button>}
           {mode === 'local' && <button className="btn danger" onClick={() => { if (confirm('Delete all demo data in this browser?')) resetLocal(); }}>Clear demo data</button>}
         </div>

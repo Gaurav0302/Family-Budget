@@ -58,7 +58,7 @@ export function offsetAtStart(p: Property, st: ReturnType<typeof story>, cashNow
 /** Cash in the bank at the end of the settlement month, once every open account has a balance from then or later. */
 export function cashAfterSettlement(s: Settings, p: Property): number | null {
   const end = lastDay(monthOf(p.settlement));
-  const live = s.accounts.filter((a) => a.type !== 'loan' && (!a.closedOn || a.closedOn > end) && (!a.openedOn || a.openedOn <= end));
+  const live = s.accounts.filter((a) => a.type !== 'loan' && a.type !== 'card' && (!a.closedOn || a.closedOn > end) && (!a.openedOn || a.openedOn <= end));
   if (!live.length || !live.every((a) => s.balances.some((b) => b.account === a.key && b.date >= end))) return null;
   let total = 0;
   for (const a of live) {

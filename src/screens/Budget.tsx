@@ -10,6 +10,7 @@ import { Link } from 'react-router-dom';
 import { Info } from '../components/bits';
 import { DrillLink, drillCategory } from '../components/Drill';
 import { money, monthName, monthOnly, thisMonth } from '../lib/format';
+import { today as todayLocal } from '../lib/format';
 
 const show = (v: number) => String(Math.round(v * 100) / 100);
 
@@ -49,7 +50,7 @@ export function Budget() {
   const income = expectedIncome(data.settings, month);
   const left = income - total;
   const suggestions = useMemo(() => {
-    const today = new Date().toISOString().slice(0, 10);
+    const today = todayLocal();
     return new Map(SPEND_CATEGORIES.map((c) => [c.id, suggest(data, c.id, today)] as const).filter((x): x is [string, Suggestion] => !!x[1]));
   }, [data.transactions, data.settings.splits]);
   /** The frequency settings with one line changed (monthly lines are the default, so they're removed). */
@@ -152,6 +153,8 @@ export function Budget() {
                     <div className="fr-amt">
                       <BudgetInput label={`${c.label}, ${EVERY_WORDS[f.every].toLowerCase()}`} value={per} onSave={(n) => setBudget(c.id, month, monthlyOf(n, f.every))} />
                       {f.every !== 'month' && <small>{money(b)} a month</small>}
+                      {(() => { const later = data.budgets.filter((x) => x.category === c.id && x.from > month).sort((x, y) => x.from.localeCompare(y.from))[0];
+                        return later && <small className="fr-later">{money(perTime(later.amount, f.every))} from {monthName(later.from, 'short')}</small>; })()}
                     </div>
                     <div className="fr-every">
                       <select aria-label={`How often ${c.label} is paid`} value={f.every} onChange={(e) => changeEvery(c.id, e.target.value as Every)}>

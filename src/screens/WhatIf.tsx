@@ -1,12 +1,13 @@
 import { useMemo, useState } from 'react';
 import { Info, NumberField, PageHeader } from '../components/bits';
-import { average, completeMonths, findRecurring, summarise } from '../data/analysis';
+import { average, completeMonths, findRecurring, summarise, withSplits } from '../data/analysis';
 import { CATEGORY, SPEND_CATEGORIES } from '../data/categories';
 import { useStore } from '../data/store';
 import { expectedIncome } from '../data/wealth';
 import { yearsMonths } from '../data/whatif';
-import { homeProperty, runLoan } from '../data/property';
-import { offsetAtStart, useForecast, useLoan } from '../data/useProperties';
+import { homeProperty } from '../data/property';
+import { simulate } from '../loan';
+import { useForecast, useLoan } from '../data/useProperties';
 import { money, monthName, pct } from '../lib/format';
 
 export function WhatIf() {
@@ -17,14 +18,12 @@ export function WhatIf() {
   const sums = useMemo(() => recent.map((m) => summarise(m, data)), [recent.join(), data]);
   const avg = (c: string) => average(sums.map((x) => x.byCategoryUsual[c] ?? 0));
   const wants = SPEND_CATEGORIES.filter((c) => c.type === 'want' && !['other', 'card-unitemised'].includes(c.id) && avg(c.id) >= 40).sort((a, b) => avg(b.id) - avg(a.id));
-  const subs = recent.length ? findRecurring(data.transactions, recent.at(-1)).filter((x) => x.every === 'month') : [];
+  const subs = recent.length ? findRecurring(withSplits(data.transactions, s.splits), recent.at(-1)).filter((x) => x.every === 'month') : [];
   const [targets, setTargets] = useState<Record<string, number>>({});
   const [cancel, setCancel] = useState<Record<string, boolean>>({});
-  const { f, st } = useForecast();
+  const { st } = useForecast();
   const home = homeProperty(s, data.budgets);
   const base = useLoan(home);
-
-  if (!recent.length) return <div><PageHeader title="What if" /><p className="muted">Needs at least one complete month of statements.</p></div>;
 
   const cutSaving = wants.reduce((a, c) => a + Math.max(0, avg(c.id) - (targets[c.id] ?? avg(c.id))), 0);
   const subSaving = subs.filter((x) => cancel[x.merchant]).reduce((a, x) => a + x.monthly, 0);
@@ -32,9 +31,20 @@ export function WhatIf() {
 
   // Life after settlement and the loan come from the same forecast and loan calculator as Property and the money meeting.
   const after = st.after;
-  const income = after?.pay ?? expectedIncome(s, recent.at(-1)!);
+  const income = after?.pay ?? (recent.length ? expectedIncome(s, recent.at(-1)!) : 0);
   const keptNow = after?.kept ?? 0, keptNew = keptNow + extra;
-  const better = home && base ? runLoan(data, home, { offsetStart: offsetAtStart(home, st, f.start.cash, undefined, data.settings), changes: extra > 0 ? [{ id: 'cut', month: base.inputs.setup.start, type: 'living', value: base.inputs.setup.living - extra }] : [] }) : null;
+  // The money freed goes into the offset for the whole loan: living costs fall by it and every amount the plan puts into the
+  // offset (at the start and at each later change) rises by it, unless the plan already sweeps all spare money in.
+  const better = useMemo(() => {
+    if (!home || !base) return null;
+    if (extra <= 0) return base;
+    const i = base.inputs;
+    const setup = { ...i.setup, living: i.setup.living - extra, extra: i.setup.sweep ? i.setup.extra : i.setup.extra + extra };
+    const changes = i.changes.map((c) => (c.type === 'living' ? { ...c, value: c.value - extra } : c.type === 'extra' ? { ...c, value: c.value + extra } : c));
+    const now = simulate(setup, changes, i.lumps, i.anchor ? { anchor: i.anchor } : {});
+    return { ...base, now };
+  }, [home, base, extra]);
+  if (!recent.length) return <div><PageHeader title="What if" /><p className="muted">Needs at least one complete month of statements.</p></div>;
   const hasHome = !!(home && base && after);
   const gone = (v: NonNullable<typeof base>) => yearsMonths(v.now.paidMonth);
 
@@ -77,7 +87,7 @@ export function WhatIf() {
           <span><b>{money(extra)}</b> a month freed</span>
           {hasHome && base && better && <span>{extra > 0 ? <>loan <b>{yearsMonths(base.now.paidMonth - better.now.paidMonth)}</b> sooner</> : <>keep <b>{pct(keptNew / income)}</b> after settlement</>}</span>}
         </div>
-        <aside className="panel whatif-result" aria-live="polite">
+        <aside className="panel whatif-result" aria-live="polite" aria-label="What this frees up">
           <p className="kicker">This frees up</p>
           <p className="big-num">{money(extra)}<small> a month</small></p>
           <p className="muted">{money(extra * 12)} a year.</p>
@@ -86,7 +96,7 @@ export function WhatIf() {
               <hr />
               <p>From {monthName(after!.month)} you'd keep <b>{money(keptNew)}</b> a month ({pct(keptNew / income)}), {keptNew >= income * 0.1 ? 'above' : 'below'} Babylon's tenth of {money(income * 0.1)}.{extra > 0 && <> Without the changes: {money(keptNow)} ({pct(keptNow / income)}).</>}</p>
               {base && better && (
-                <p>With everything left over going into the offset, {home!.name} is paid off in <b>{gone(better)}</b>
+                <p>{base.inputs.setup.sweep ? <>With all spare money going into the offset</> : <>With {money(base.inputs.setup.extra)} a month extra into the offset{extra > 0 ? `, plus the ${money(extra)} freed` : ''}</>}, {home!.name} is paid off in <b>{gone(better)}</b>
                   {extra > 0 && <> instead of {gone(base)}: <b>{yearsMonths(base.now.paidMonth - better.now.paidMonth)} sooner</b> and about <b>{money(base.now.totalInterest - better.now.totalInterest)}</b> less interest</>}.
                   <Info>The same loan calculator as the Property page, with your real pay and spending. Rates will change, so treat it as a guide.</Info></p>
               )}

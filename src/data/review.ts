@@ -1,13 +1,13 @@
 import { CATEGORY, SPEND_CATEGORIES } from './categories';
 import {
-  average, budgetFor, cashOnHand, completeMonths, findRecurring, monthOf, summarise,
+  average, budgetFor, cashOnHand, completeMonths, findRecurring, monthOf, summarise, withSplits,
   type MonthSummary, type Recurring,
 } from './analysis';
 import { findBills } from './bills';
 import { merchantOf } from './merchant';
 import { expectedIncome, grossMonthly, payChanges, superMonthly } from './wealth';
 import type { Data, Every, Transaction } from './types';
-import { forecast, story } from './forecast';
+import { forecast, story, type Forecast, type Story } from './forecast';
 import { homeOf, homeProperty, runningMonthly, uniStart } from './property';
 import { allowance, EVERY_UNIT, lumpy } from './frequency';
 
@@ -57,7 +57,7 @@ export interface ReviewResult {
   scorecard: ScoreRow[];
   findings: Finding[];
   babylon: Check[];
-  ramsey: { steps: (Check & { n: number; current: boolean })[]; housingShare: number; housingAfter: number };
+  ramsey: { steps: (Check & { n: number; current: boolean; auto: boolean })[]; housingShare: number; housingAfter: number };
   split: { needs: number; wants: number; kept: number };
   subscriptions: (Recurring & { overlap?: string })[];
   unusual: { tx: Transaction; reason: string }[];
@@ -85,11 +85,11 @@ const fmtMonthShort = (m: string) => new Date(m + '-01T00:00:00').toLocaleDateSt
 const spanText = (a: string, b: string) => (a === b ? fmtMonth(a) : `${fmtMonthShort(a)} to ${fmtMonth(b)}`);
 
 /** What the forecast says about the months ahead, as findings for the review and the money meeting. */
-export function aheadFindings(data: Data, month: string, from?: string): Finding[] {
+export function aheadFindings(data: Data, month: string, from?: string, given?: { f: Forecast; st: Story }): Finding[] {
   const out: Finding[] = [];
   const s = data.settings;
-  const f = forecast(data, { from });
-  const st = story(f);
+  const f = given?.f ?? forecast(data, { from });
+  const st = given?.st ?? story(f);
   const next = addMonthsLocal(month, 1);
   const ahead = f.months.filter((x) => x.month >= next);
 
@@ -99,7 +99,7 @@ export function aheadFindings(data: Data, month: string, from?: string): Finding
     // A tenth, give or take $20, counts as a tenth.
     const keptAfter = st.after ? (st.after.kept + 20) / Math.max(1, st.after.pay) : 1;
     const shortOfTenth = st.after ? Math.max(0, st.after.pay * 0.1 - st.after.kept) : 0;
-    out.push({ id: 'ahead:carry', source: 'Looking ahead', severity: keptAfter < 0.1 ? 'act' : sev, scream: st.verdict !== 'yes' || keptAfter < 0.1,
+    out.push({ id: 'ahead:carry', source: 'Looking ahead', severity: keptAfter < 0.1 ? 'act' : sev, scream: st.verdict !== 'yes',
       impact: Math.max(st.squeezes.reduce((a, q) => a + q.perMonth, 0), shortOfTenth),
       title: st.verdict === 'yes' && st.after && keptAfter < 0.1
         ? `From ${fmtMonthShort(st.after.month)} you'd keep about ${money(st.after.kept)} a month (${pct(st.after.kept / Math.max(1, st.after.pay))}), under Babylon's tenth`
@@ -152,6 +152,8 @@ export function aheadFindings(data: Data, month: string, from?: string): Finding
 /** The full monthly review: budget scorecard, trends, Babylon's seven cures, Ramsey's baby steps, 50/30/20. */
 export function reviewMonth(data: Data, month: string): ReviewResult {
   const summary = summarise(month, data);
+  // Split payments count as their parts everywhere in the review (a PayPal payment split into groceries and a gift).
+  const txs = withSplits(data.transactions, data.settings.splits);
   const complete = completeMonths(data);
   const baselineMonths = complete.filter((m) => m < month).slice(-3);
   const base = baselineMonths.map((m) => summarise(m, data));
@@ -198,7 +200,9 @@ export function reviewMonth(data: Data, month: string): ReviewResult {
   const scorecard: ScoreRow[] = [];
   const sums = new Map<string, MonthSummary>([[month, summary]]);
   const sumOf = (m: string) => { if (!sums.has(m)) sums.set(m, summarise(m, data)); return sums.get(m)!; };
-  for (const c of SPEND_CATEGORIES) {
+  // Hidden categories still show when money was spent in them, so the rows add up to the month's spending.
+  const shown = [...SPEND_CATEGORIES, ...Object.keys(summary.byCategory).filter((id) => (summary.byCategory[id] ?? 0) !== 0 && !SPEND_CATEGORIES.some((c) => c.id === id) && CATEGORY[id] && !CATEGORY[id].system).map((id) => CATEGORY[id])];
+  for (const c of shown) {
     const budget = budgetFor(data.budgets, c.id, month);
     const actual = summary.byCategory[c.id] ?? 0;
     const usual = summary.byCategoryUsual[c.id] ?? 0;
@@ -252,13 +256,14 @@ export function reviewMonth(data: Data, month: string): ReviewResult {
   scorecard.sort((a, b) => b.diff - a.diff);
 
   // ---- 50/30/20 split
-  const inc = summary.income || 1;
-  const split = { needs: summary.needs / inc, wants: summary.wants / inc, kept: summary.kept / inc };
-  if (split.wants > 0.3) findings.push({ id: 'split:wants', source: '50/30/20', severity: split.wants > 0.35 ? 'act' : 'watch', impact: summary.wants - inc * 0.3,
+  // A month with no pay in it (pay landed on the 1st of the next month) has no meaningful shares: skip the 50/30/20 check.
+  const inc = summary.income > 0 ? summary.income : 0;
+  const split = inc ? { needs: summary.needs / inc, wants: summary.wants / inc, kept: summary.kept / inc } : { needs: 0, wants: 0, kept: 0 };
+  if (inc && split.wants > 0.3) findings.push({ id: 'split:wants', source: '50/30/20', severity: split.wants > 0.35 ? 'act' : 'watch', impact: summary.wants - inc * 0.3,
     title: `Wants took ${pct(split.wants)} of income`, detail: `The 50/30/20 guide keeps wants to about 30%. That would be ${money(inc * 0.3)} this month; you spent ${money(summary.wants)}.` });
 
   // ---- Subscriptions
-  const subscriptions: ReviewResult['subscriptions'] = findRecurring(data.transactions, month).map((r) => ({ ...r }));
+  const subscriptions: ReviewResult['subscriptions'] = findRecurring(txs, month).map((r) => ({ ...r }));
   for (const [what, re] of OVERLAPS) {
     const hits = subscriptions.filter((x) => re.test(x.merchant) && x.every === 'month');
     if (hits.length >= 2) {
@@ -278,12 +283,19 @@ export function reviewMonth(data: Data, month: string): ReviewResult {
 
   // ---- Unusual spending
   const unusual: ReviewResult['unusual'] = [];
-  const history = data.transactions.filter((t) => t.kind === 'spend' && t.amount < 0 && monthOf(t.date) < month);
-  for (const t of data.transactions) {
+  // Past amounts per merchant, worked out once (looking them up per payment made the review slow as history grew).
+  const history = new Map<string, number[]>();
+  for (const h of txs) {
+    if (h.kind !== 'spend' || h.amount >= 0 || monthOf(h.date) >= month) continue;
+    const m = merchantOf(h.description);
+    const list = history.get(m);
+    if (list) list.push(-h.amount); else history.set(m, [-h.amount]);
+  }
+  for (const t of txs) {
     if (monthOf(t.date) !== month || t.kind !== 'spend' || t.amount >= 0 || t.oneOff) continue;
     const cat = CATEGORY[t.category ?? 'other'];
     const m = merchantOf(t.description);
-    const past = history.filter((h) => merchantOf(h.description) === m).map((h) => -h.amount).sort((a, b) => a - b);
+    const past = [...(history.get(m) ?? [])].sort((a, b) => a - b);
     const median = past.length ? past[Math.floor(past.length / 2)] : 0;
     const amt = -t.amount;
     if (past.length >= 2 && amt > Math.max(median * 2.5, 150)) unusual.push({ tx: t, reason: `About ${Math.round(amt / median)}× the usual ${money(median)} at ${m}` });
@@ -304,13 +316,20 @@ export function reviewMonth(data: Data, month: string): ReviewResult {
   const settleMonth = hasHome ? monthOf(h.settlement) : '9999-12';
   const housingNow = (summary.byCategory['rent'] ?? 0) + (summary.byCategory['mortgage'] ?? 0) + (summary.byCategory['council-rates'] ?? 0) + (summary.byCategory['water'] ?? 0) + (summary.byCategory['home-insurance'] ?? 0);
   const hp = homeProperty(s, data.budgets);
+  const offsetKey = hp?.loan?.offsetAccount;
+  const offsetHeld = offsetKey ? (s.balances.filter((b) => b.account === offsetKey && b.date <= `${month}-31`).sort((a, b) => b.date.localeCompare(a.date))[0]?.amount ?? 0) : 0;
   const housingAfterCost = h.repayment + (hp ? runningMonthly(hp) : 0);
   const housingShare = summary.income ? housingNow / summary.income : 0;
   const incAfter = expectedIncome(s, settleMonth > month ? settleMonth : month);
   const housingAfter = incAfter ? housingAfterCost / incAfter : 0;
   // ---- Babylon's seven cures for a lean purse
-  const cash = cashOnHand(s);
+  const cash = cashOnHand(s, data.transactions);
   const avgSpend = base.length ? average(base.map((b) => b.spend)) : summary.spend;
+  // The look ahead, worked out once: the emergency fund is judged at the lowest point coming up, not just today.
+  const latestMonth = month >= (complete.at(-1) ?? month);
+  const aheadF = latestMonth ? forecast(data) : null;
+  const ahead = aheadF ? { f: aheadF, st: story(aheadF) } : null;
+  const lowCover = ahead?.st.low && ahead.st.settlements.length ? ahead.st.cover : null;
   const monthsCovered = avgSpend ? cash.total / (avgSpend + (month < settleMonth ? Math.max(0, housingAfterCost - (budgetFor(data.budgets, 'rent', month))) : 0)) : 0;
   const insured = ['health-insurance', 'car-insurance'].filter((c) => (summary.byCategory[c] ?? 0) > 0 || base.some((b) => (b.byCategory[c] ?? 0) > 0));
   const incomeStart = complete.length ? summarise(complete[0], data).income : summary.income;
@@ -322,9 +341,12 @@ export function reviewMonth(data: Data, month: string): ReviewResult {
       status: usualSpend <= summary.income * 0.9 && scorecard.filter((r) => r.status === 'over').length <= 3 ? 'good' : 'watch',
       detail: `${scorecard.filter((r) => r.status === 'over').length} categories went over budget this month. Wants came to ${money(summary.wants)}.` },
     { title: 'Make thy gold multiply', rule: 'Put saved money to work so it earns more.',
-      status: (summary.byCategory['interest'] ?? 0) >= 0 && month >= settleMonth ? 'good' : 'info',
+      // After settlement, savings are working when the loan has an offset account holding money.
+      status: month < settleMonth ? 'info' : offsetHeld > 0 ? 'good' : 'watch',
       detail: month >= settleMonth
-        ? `Money in the offset saves ${h.rate}% interest on the loan, more than any savings account pays after tax.`
+        ? offsetHeld > 0
+          ? `${money(offsetHeld)} in the offset saves ${h.rate}% interest on the loan, more than any savings account pays after tax.`
+          : `Money in the offset saves ${h.rate}% on the loan. Add the offset account on Accounts and pick it on Property so the app can see it working.`
         : `From settlement, savings moved into the offset save ${h.rate}% on the loan. Until then, keep them in the best-paying savings accounts.` },
     { title: 'Guard thy treasures from loss', rule: 'Protect what you have: emergency money and insurance.',
       status: monthsCovered >= 3 && insured.length >= 2 ? 'good' : 'watch',
@@ -354,8 +376,10 @@ export function reviewMonth(data: Data, month: string): ReviewResult {
       detail: cash.asOf ? `${money(cash.total)} in cash.` : 'Add your balances on the Goals page.' },
     { n: 2, title: 'Pay off all debt except the house', rule: 'Clear credit cards, car and personal loans smallest first.', done: !!s.babySteps['2'],
       detail: s.babySteps['2'] ? 'Marked as done.' : 'Tick this on the Goals page if the credit card is paid in full every month and there are no other loans.' },
-    { n: 3, title: '3–6 months of expenses saved', rule: 'A full emergency fund.', done: monthsCovered >= 3 || !!s.babySteps['3'],
-      detail: cash.asOf ? `Covers about ${monthsCovered.toFixed(1)} months, counting the mortgage from settlement.` : 'Add your balances on the Goals page.' },
+    { n: 3, title: '3–6 months of expenses saved', rule: 'A full emergency fund.', done: Math.min(monthsCovered, lowCover ?? Infinity) >= 3 || !!s.babySteps['3'],
+      detail: !cash.asOf ? 'Add your balances on the Goals page.'
+        : lowCover !== null && ahead?.st.low ? `About ${monthsCovered.toFixed(1)} months today; at the lowest point coming up (${fmtMonth(ahead.st.low.month)}), about ${lowCover.toFixed(1)} months.`
+        : `Covers about ${monthsCovered.toFixed(1)} months, counting the mortgage from settlement.` },
     { n: 4, title: 'Invest 15% for retirement', rule: 'Your reading: super only, until the house is paid off.', done: sup / (gross || 1) >= 0.15 || !!s.babySteps['4'],
       detail: `Super is ${pct(sup / (gross || 1))} of gross pay. 15% would be ${money(gross * 0.15)} a month.` },
     { n: 5, title: "Save for the children's university", rule: 'Build a fund for each child.', done: !!s.babySteps['5'],
@@ -365,11 +389,14 @@ export function reviewMonth(data: Data, month: string): ReviewResult {
     { n: 7, title: 'Build wealth and give', rule: 'Invest and give generously.', done: !!s.babySteps['7'],
       detail: giving ? `${money(giving)} given this month.` : 'Giving this month: none recorded.' },
   ];
+  // One status per step: done (ticked, or met on your figures), the step you're on, or later. Steps are a sequence, so
+  // "You are here" is the first step not done.
   let currentFound = false;
   const ramseySteps = steps.map((st) => {
     const current = !st.done && !currentFound;
     if (current) currentFound = true;
-    return { n: st.n, title: st.title, rule: st.rule, detail: st.detail, current, status: (st.done ? 'good' : current ? 'watch' : 'info') as Severity };
+    const auto = st.done && !s.babySteps[String(st.n)];
+    return { n: st.n, title: st.title, rule: st.rule, detail: st.detail, current, auto, status: (st.done ? 'good' : current ? 'watch' : 'info') as Severity };
   });
   if (hasHome && housingAfter > 0.25) findings.push({ id: 'ramsey:housing', source: 'Ramsey', severity: 'watch', impact: 0,
     title: `Housing will take ${pct(housingAfter)} of take-home pay`, detail: `Ramsey suggests keeping it to 25% or less. From settlement, the repayment, rates, water and insurance come to about ${money(housingAfterCost)} a month on ${money(incAfter)} take-home. It makes keeping other spending on budget more important.` });
@@ -381,7 +408,7 @@ export function reviewMonth(data: Data, month: string): ReviewResult {
 
   // ---- Looking ahead: the same forecast as Home, Property and the money meeting, so every page tells one story.
   // Only from the latest complete month on: older reviews stay about their own month.
-  if (month >= (complete.at(-1) ?? month)) findings.push(...aheadFindings(data, month));
+  if (ahead) findings.push(...aheadFindings(data, month, undefined, ahead));
 
   // Three rises in a row.
   const three = complete.filter((m) => m <= month).slice(-3).map((m) => (m === month ? summary : summarise(m, data)));
@@ -408,7 +435,7 @@ export function reviewMonth(data: Data, month: string): ReviewResult {
 
   // Bills that went up.
   const monthEnd = `${month}-31`;
-  for (const b of findBills(data.transactions.filter((t) => t.date <= monthEnd), `${month}-28`))
+  for (const b of findBills(txs.filter((t) => t.date <= monthEnd), `${month}-28`))
     if (b.rise && b.rise.since >= `${addMonthsLocal(month, -2)}-01` && ((b.rise.to - b.rise.from) * b.yearly) / b.amount >= 50) findings.push({ id: `rise:${b.key}`, source: 'Bills', severity: 'watch', impact: (b.rise.to - b.rise.from) * (b.yearly / b.amount) / 12,
       title: `${b.name} went up`, detail: `From ${money2(b.rise.from)} to ${money2(b.rise.to)} per payment, about ${money(((b.rise.to - b.rise.from) * b.yearly) / b.amount)} a year more. Worth a call to ask for a better price.` });
 

@@ -1,4 +1,4 @@
-import { Building2, GraduationCap, CalendarClock, FileText, Home, LayoutGrid, Loader2, Mountain, ReceiptText, Scale, Settings, Sparkles, Upload, Wallet, Landmark, Tags, CreditCard, TrendingUp, ClipboardCheck } from 'lucide-react';
+import { Building2, GraduationCap, CalendarClock, FileText, Home, LayoutGrid, Loader2, Mountain, ReceiptText, Scale, Settings, Sparkles, Upload, Wallet, Landmark, Tags, CreditCard, TrendingUp, ClipboardCheck, AlertTriangle } from 'lucide-react';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { useStore } from '../data/store';
@@ -50,7 +50,17 @@ export function Shell({ children }: { children: ReactNode }) {
 }
 
 function ShellInner({ children }: { children: ReactNode }) {
-  const { data, saving, mode } = useStore();
+  const { data, saving, mode, saveError, retrySave, dismissSaveError, reload } = useStore();
+  const [retrying, setRetrying] = useState(false);
+  // Each page gets its own tab title, and moving to a new page moves keyboard and screen-reader focus to its content.
+  const where = useLocation().pathname;
+  const firstPage = useRef(true);
+  useEffect(() => {
+    const item = NAV.flatMap((g) => g.items).find((i) => (i.to === '/' ? where === '/' : where.startsWith(i.to)));
+    document.title = item && item.to !== '/' ? `${item.label} – Family Purse` : 'Family Purse';
+    if (firstPage.current) { firstPage.current = false; return; }
+    document.getElementById('main')?.focus({ preventScroll: true });
+  }, [where]);
   const { pathname } = useLocation();
   const navigate = useNavigate();
   const onReports = pathname === '/reports';
@@ -70,7 +80,8 @@ function ShellInner({ children }: { children: ReactNode }) {
     : to === '/statements' && missingLast > 0 ? <em className="count" aria-label={`${missingLast} statements missing`}>{missingLast}</em> : null);
   return (
     <div className={`shell ${pinned ? 'has-pane' : ''}`}>
-      <a className="skip" href="#main">Skip to content</a>
+      {/* A button, not href="#main": with hash routing that link would open the Home page. */}
+      <button type="button" className="skip" onClick={() => document.getElementById('main')?.focus()}>Skip to content</button>
       <aside className="side">
         <div className="brand"><Purse /><div><strong>Family Purse</strong><span>{data.settings.household}</span></div></div>
         {NAV.map((g) => (
@@ -99,7 +110,19 @@ function ShellInner({ children }: { children: ReactNode }) {
         </div>
       </header>
 
-      <main id="main" className="main"><DrillProvider>{children}</DrillProvider></main>
+      <main id="main" className="main" tabIndex={-1}>
+        {saveError && (
+          <div className="save-error" role="alert">
+            <AlertTriangle size={18} aria-hidden />
+            <p><b>Your last change wasn't saved.</b> {saveError}</p>
+            <div className="save-error-actions">
+              <button className="btn small primary" disabled={retrying} onClick={async () => { setRetrying(true); await retrySave(); setRetrying(false); }}>{retrying ? 'Trying…' : 'Try again'}</button>
+              <button className="btn small" onClick={() => { dismissSaveError(); reload(); }}>Undo it</button>
+            </div>
+          </div>
+        )}
+        <DrillProvider>{children}</DrillProvider>
+      </main>
 
       <nav className="tabbar" aria-label="Main">
         {TABS.map(({ to, label, Icon }) => (

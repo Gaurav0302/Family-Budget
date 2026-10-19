@@ -15,6 +15,8 @@ import { offsetAtStart, useForecast, useLoan, useProperties } from '../data/useP
 import { yearRows } from '../loan';
 import { longDate, money, monthName, pct, thisMonth } from '../lib/format';
 import { PER_MONTH } from '../data/wealth';
+import { today as todayLocal } from '../lib/format';
+import { FocusTrap } from '../components/FocusTrap';
 
 type Tab = 'overview' | 'plans' | 'edit' | 'record' | 'buying' | 'costs';
 const TABS: { id: Tab; label: string }[] = [
@@ -56,7 +58,7 @@ function PropertyList() {
 function PropertyCard({ p }: { p: Property }) {
   const v = useLoan(p);
   const now = v && thisMonth() >= v.inputs.setup.start ? pointIn(v.now, thisMonth()) : undefined;
-  const owned = p.settlement <= new Date().toISOString().slice(0, 10);
+  const owned = p.settlement <= todayLocal();
   return (
     <Link className="prop-card panel" to={`/property/${p.id}`}>
       <div className="prop-card-head">
@@ -246,7 +248,7 @@ function YearByYear({ v, kids }: { v: LoanView; kids: boolean }) {
   return (
     <details className="panel year-table">
       <summary><h2>Year by year</h2><span className="muted small">Balances at the end of each year</span></summary>
-      <div className="table-wrap">
+      <div className="table-wrap" tabIndex={0} role="region" aria-label="Year by year (table)">
         <table className="score">
           <thead><tr><th>Year</th><th>Rate</th><th>Repayment</th><th>Loan</th><th>Offset</th><th>Owed after offset</th>{kids && <th>Uni funds</th>}<th>Interest that year</th></tr></thead>
           <tbody>{rows.map(({ year, point, interest }) => (
@@ -267,7 +269,7 @@ function Buying({ p, set }: { p: Property; set: (x: Partial<Property>) => void }
   const accounts = data.settings.accounts.filter((a) => a.type !== 'loan' && a.type !== 'card');
   const setCost = (id: string, patch: Partial<PropertyCost>) => set({ costs: p.costs.map((c) => (c.id === id ? { ...c, ...patch } : c)) });
   const total = p.costs.reduce((a, c) => a + c.amount, 0);
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todayLocal();
   const paid = p.costs.filter((c) => c.date <= today).reduce((a, c) => a + c.amount, 0);
   const settle = st.settlements.find((x) => x.property === p.name);
   return (
@@ -285,7 +287,7 @@ function Buying({ p, set }: { p: Property; set: (x: Partial<Property>) => void }
 
       <section className="panel" aria-labelledby="costs">
         <div className="panel-head"><h2 id="costs">Buying costs</h2><span className="muted small">{money(total)} in all, {money(paid)} paid so far</span></div>
-        <div className="table-wrap">
+        <div className="table-wrap" tabIndex={0} role="region" aria-label="Buying costs (table)">
           <table className="score edit-table">
             <thead><tr><th>What</th><th>Amount</th><th>Paid or due</th><th className="hide-sm">From <Info>Pick the account it comes out of, if you know it. Once that account's balance is read after this date, the forecast knows it's already gone.</Info></th><th /></tr></thead>
             <tbody>
@@ -344,7 +346,7 @@ function CostsTab({ p, set }: { p: Property; set: (x: Partial<Property>) => void
     <>
       <section className="panel" aria-labelledby="running">
         <div className="panel-head"><h2 id="running">Running costs</h2><span className="muted small">About {money(runningMonthly(p))} a month{ownedIn(p, thisMonth()) ? '' : ', from settlement'}</span></div>
-        <div className="table-wrap">
+        <div className="table-wrap" tabIndex={0} role="region" aria-label="Running costs (table)">
           <table className="score edit-table">
             <thead><tr><th>What</th><th>Amount</th><th>How often</th><th>A month</th><th /></tr></thead>
             <tbody>{p.running.map((c) => (
@@ -408,6 +410,7 @@ function AddProperty({ onClose }: { onClose: () => void }) {
   };
   return (
     <div className="sheet-wrap" role="dialog" aria-modal="true" aria-labelledby="add-prop" onClick={onClose}>
+      <FocusTrap onClose={onClose} />
       <div className="sheet" onClick={(e) => e.stopPropagation()}>
         <div className="sheet-head"><h2 id="add-prop">Add a property</h2><button className="icon-btn" onClick={onClose} aria-label="Close"><X size={20} /></button></div>
         <Tabs value={use} onChange={setUse} items={[{ id: 'home', label: 'Our home' }, { id: 'investment', label: 'Investment' }]} />

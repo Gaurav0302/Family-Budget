@@ -104,6 +104,16 @@ Status: ✅ done · ⬜ to do · 🔄 in progress · ❌ blocked · 🚫 dropped
 - ⬜ After settlement: add the loan and offset accounts on Accounts, pick them in Property → Edit plan → Loan; check in balances each month (or let statements do it)
 - ⬜ Uni funds: set goals if wanted (backup had none); check in the fund balances once saving starts
 
+## Phase 8 — Audit (19 Oct 2026; list in the Project: research/app-audit-2026-10-19.md)
+- ✅ 19 Oct 2026 — Block 1 (D31): wrong numbers and data safety (1–20), numbers agree across pages (21–28), speed (70), accessibility basics (74–77)
+- ⬜ Public history: replace the family member's name in git history (rewrite ready; needs the user to approve the force-push)
+- ⬜ User: add the PRIVACY_WORDS secret on GitHub (Settings → Secrets → Actions) so the privacy check runs when publishing
+- ⬜ Block 2: new structure (29–34): Home / Money / Monthly check-in / Plans / Setup; merge Review + money meeting; fold What if into Property; one subscriptions list
+- ⬜ Block 3: page clean-ups (35–50)
+- ⬜ Block 4: features (51–62): bank feeds (CDR), PDF import in the app, reminders, sinking funds, safe-to-spend, two-person features, tax pack, export, install on phone, assistant
+- ⬜ Launch track (78–86): households and invitations, paid hosting and monitoring, privacy policy, advice rules, security headers, positioning, pricing, brand
+- ⬜ Code (63–73 remaining): split the settings record, data version and upgrades, categories per household, shared fields/sheet, logic out of screens, tests for store and screens, CSS split
+
 ## Phase 7 — Polish
 - ✅ 18 Oct 2026 — Tests (17), phone overflow check on every page, dark mode
 - ⬜ Install-to-home-screen (web app manifest + icons)

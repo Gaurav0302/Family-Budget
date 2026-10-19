@@ -11,7 +11,7 @@ const TYPES: Record<Account['type'], string> = { everyday: 'Everyday', savings: 
 /** The colour family each type belongs to. */
 export const KIND: Record<Account['type'], 'spend' | 'save' | 'offset' | 'loan'> = { everyday: 'spend', card: 'spend', paypal: 'spend', savings: 'save', offset: 'offset', loan: 'loan' };
 const KIND_LABEL = { spend: 'Spending', save: 'Savings', offset: 'Offset', loan: 'Loan' };
-const today = () => new Date().toLocaleDateString('en-CA');   // local date, YYYY-MM-DD
+import { today } from '../lib/format';
 
 /** "G", "R" or "G+R": who an account belongs to, coloured the same way everywhere. */
 export function OwnerBadge({ owner, s }: { owner: string; s: Settings }) {

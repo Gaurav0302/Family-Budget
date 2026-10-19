@@ -8,9 +8,10 @@ import { tone, type Tone } from '../data/guide';
 import { usePane } from '../components/StepPane';
 import { MonthBanner } from '../components/MonthBanner';
 import { DrillLink, drillCategory, drillGroup, drillType, useDrill } from '../components/Drill';
-import { addMonths, allMonths, budgetFor, completeMonths, monthOf, summarise } from '../data/analysis';
+import { addMonths, allMonths, budgetFor, completeMonths, monthOf, summarise, withSplits } from '../data/analysis';
 import { CATEGORIES, CATEGORY, GROUPS } from '../data/categories';
-import { reviewMonth, type Finding } from '../data/review';
+import { type Finding } from '../data/review';
+import { reviewFor } from '../data/reviewCache';
 import { useStore } from '../data/store';
 import type { Data } from '../data/types';
 import { expectedIncome, financialYear, netWorth, payFor, people } from '../data/wealth';
@@ -141,7 +142,7 @@ function MoneyMeeting() {
     const step = params.get('step'), pres = params.get('present');
     if (!step && !pres) return;
     if (pres) setPresent(0);
-    if (step) requestAnimationFrame(() => document.getElementById(step)?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
+    if (step) requestAnimationFrame(() => document.getElementById(step)?.scrollIntoView({ behavior: smooth(), block: 'start' }));
     setParams({}, { replace: true });
   }, [params]);
 
@@ -160,7 +161,7 @@ function MoneyMeeting() {
   useEffect(() => { document.querySelector(`.agenda a[href="#${active}"]`)?.scrollIntoView({ block: 'nearest', inline: 'nearest' }); }, [active]);
 
   if (!month) return <p className="muted">Add statements first.</p>;
-  const r = reviewMonth(data, month);
+  const r = reviewFor(data, month);
   const s = r.summary;
   const actions = data.settings.actions ?? [];
   const prev = addMonths(month, -1);
@@ -271,7 +272,7 @@ function MoneyMeeting() {
     { id: 'm-targets', title: 'Targets', body: (
       <>
         <p className="meet-sub">Set what each category should cost in {monthOnly(nextMonth)}. It becomes the budget from then on. <Info>Tap an area to open its categories, and a category or amount to check what's in it. The trend shows the last {trendMonths.length} complete months, this one darker, with the budget as a dashed line.</Info></p>
-        <div className="table-wrap">
+        <div className="table-wrap" tabIndex={0} role="region" aria-label="Targets by area (table)">
           <table className="score meeting">
             <thead><tr><th>Area</th><th className="hide-sm">Budget</th><th>Spent</th><th>Left</th><th>Trend</th><th>{monthOnly(nextMonth)} target</th></tr></thead>
             <tbody>
@@ -306,7 +307,7 @@ function MoneyMeeting() {
     ) },
     { id: 'm-ahead', title: 'Looking ahead', body: (
       <>
-        <div className={`meet-keep st-text-${st.verdict === 'yes' ? 'good' : st.verdict === 'tight' ? 'warn' : 'bad'}`}>
+        <div className={`meet-keep st-text-${st.tone}`}>
           <b className="meet-keep-num">{st.headline}</b>
           {st.lines.map((l) => <span key={l}>{l}</span>)}
         </div>
@@ -315,7 +316,7 @@ function MoneyMeeting() {
           <Info>{fc.basis === 'recent' ? `Day-to-day spending of ${money(fc.living.amount)} a month, the average of ${fc.living.from.map((m) => monthOnly(m)).join(', ')} without housing and one-offs. Rent, loan repayments and property costs are added month by month.` : 'Everything the budget plans to spend. Money budgeted to keep stays in the bank.'} Cash starts from your latest bank balances. Property details are on the Property page.</Info>
         </div>
         <CashChart basis={basis} />
-        <div className="table-wrap">
+        <div className="table-wrap" tabIndex={0} role="region" aria-label="Looking ahead, month by month (table)">
           <table className="score compact">
             <thead><tr><th>Month</th><th>Pay in</th><th>Going out</th><th className="hide-sm">Buying costs</th><th>Kept</th><th>Cash</th></tr></thead>
             <tbody>{fc.months.map((x) => (
@@ -363,7 +364,7 @@ function MoneyMeeting() {
     <nav className="agenda no-print" aria-label="Meeting agenda">
       <ol>
         {steps.map((st, i) => (
-          <li key={st.id}><a href={`#${st.id}`} className={active === st.id ? 'on' : ''} onClick={(e) => { e.preventDefault(); document.getElementById(st.id)?.scrollIntoView({ behavior: 'smooth', block: 'start' }); }}>
+          <li key={st.id}><a href={`#${st.id}`} className={active === st.id ? 'on' : ''} onClick={(e) => { e.preventDefault(); document.getElementById(st.id)?.scrollIntoView({ behavior: smooth(), block: 'start' }); }}>
             <span className="agenda-n">{i + 1}</span><span>{st.title}</span></a></li>
         ))}
       </ol>
@@ -381,7 +382,7 @@ function MoneyMeeting() {
         </div>
         {steps.map((st, i) => (
           <section key={st.id} id={st.id} className="meet-step" aria-labelledby={`${st.id}-h`}>
-            <h3 id={`${st.id}-h`} className="meet-step-h"><span className="agenda-n">{i + 1}</span>{st.title}</h3>
+            <h2 id={`${st.id}-h`} className="meet-step-h"><span className="agenda-n">{i + 1}</span>{st.title}</h2>
             {st.body}
           </section>
         ))}
@@ -444,7 +445,7 @@ function FinancialYear() {
   const sums = have.map((m) => summarise(m, data));
   const total = (f: (x: ReturnType<typeof summarise>) => number) => sums.reduce((a, x) => a + f(x), 0);
   const owner = new Map(s.accounts.map((a) => [a.key, a.owner]));
-  const inFy = data.transactions.filter((t) => have.includes(monthOf(t.date)));
+  const inFy = withSplits(data.transactions, s.splits).filter((t) => have.includes(monthOf(t.date)));
   const pay = new Map<string, number>(), interest = new Map<string, number>();
   for (const t of inFy) {
     const who = owner.get(t.account) ?? 'Joint';
@@ -486,7 +487,7 @@ function FinancialYear() {
           <ul className="value-list">
             <li><span>Donations</span><span>{money(cat('donations'))}</span></li>
             <li><span>Accountant & tax fees</span><span>{money(cat('accountant'))}</span></li>
-            <li><span>Income protection paid personally</span><span>{money(cat('life-insurance'))}</span></li>
+            <li><span>Life and income protection paid personally <small className="muted">only the income protection part is deductible; check the policy</small></span><span>{money(cat('life-insurance'))}</span></li>
             <li><span>Bank interest earned</span><span>{money([...interest.values()].reduce((a, b) => a + b, 0))}</span></li>
           </ul>
         </section>
@@ -501,6 +502,9 @@ function FinancialYear() {
     </div>
   );
 }
+
+/** Smooth scrolling, unless the person has asked their device for less motion. */
+const smooth = (): ScrollBehavior => (matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth');
 
 export function Reports() {
   const [params, setParams] = useSearchParams();

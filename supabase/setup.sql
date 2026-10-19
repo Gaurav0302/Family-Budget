@@ -1,7 +1,7 @@
 -- Family Budget: database setup.
 -- Run this once in Supabase: SQL Editor -> New query -> paste everything -> Run.
 -- Run it AFTER creating the logins for each person (Authentication -> Users),
--- because the last step lets every login that exists right now into the family's data.
+-- and put their emails in the last step: only those logins get into the family's data.
 -- It is safe to run again: nothing is deleted.
 
 -- Who is allowed in: only logins listed here can read or change anything.
@@ -91,9 +91,11 @@ create policy "see yourself" on public.members for select to authenticated using
 create or replace function public.ping() returns text language sql stable as $$ select 'ok'::text $$;
 grant execute on function public.ping() to anon, authenticated;
 
--- Let in every login that exists right now (everyone you created a login for).
+-- Let in the family's logins, by email. Put each person's email between the quotes (add a line per person).
+-- Only the emails listed here get access, so running this again never lets in a login you didn't name.
 insert into public.members (user_id, email)
 select id, email from auth.users
+where lower(email) in (lower('first.person@example.com'), lower('second.person@example.com'))
 on conflict (user_id) do nothing;
 
 -- Shows who now has access. You should see two rows.

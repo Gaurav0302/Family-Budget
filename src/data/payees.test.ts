@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { monthCoverage, monthEndBalances } from './analysis';
 import { DEFAULT_SETTINGS } from './defaults';
 import { findPayee, groupByPayee, indexPayees, payeesFor, sortTransaction } from './payees';
@@ -52,6 +52,8 @@ describe('payee list', () => {
 });
 
 describe('accounts that open or close', () => {
+  beforeEach(() => vi.useFakeTimers({ toFake: ['Date'] }));
+  afterEach(() => vi.useRealTimers());
   const s: Settings = { ...DEFAULT_SETTINGS, accounts: [
     { key: 'old', name: 'Old savings', owner: 'Joint', type: 'savings', core: true, closedOn: '2026-12-10', movedTo: 'off' },
     { key: 'off', name: 'Offset', owner: 'Joint', type: 'offset', core: true, openedOn: '2026-12-09' },
@@ -59,6 +61,7 @@ describe('accounts that open or close', () => {
   const cov = (account: string, from: string, to: string) => ({ account, from, to });
 
   it('only needs statements for accounts open during the month', () => {
+    vi.setSystemTime(new Date('2028-01-15T12:00:00'));
     expect(monthCoverage('2026-11', [cov('old', '2026-11-01', '2026-11-30')], s).complete).toBe(true);
     expect(monthCoverage('2027-01', [cov('off', '2027-01-01', '2027-01-31')], s).complete).toBe(true);
     expect(monthCoverage('2026-12', [cov('off', '2026-12-01', '2026-12-31')], s).missing).toEqual(['Old savings']);

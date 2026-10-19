@@ -2,26 +2,29 @@ import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { PageHeader } from '../components/bits';
 import { cashOnHand, completeMonths } from '../data/analysis';
-import { reviewMonth } from '../data/review';
+import { reviewFor } from '../data/reviewCache';
 import { propertiesOf } from '../data/property';
 import { useForecast } from '../data/useProperties';
 import { useStore } from '../data/store';
 import { longDate, money, monthName } from '../lib/format';
+import { today as todayLocal } from '../lib/format';
 
 export function Goals() {
   const { data, updateSettings } = useStore();
   const s = data.settings;
-  const cash = cashOnHand(s);
+  const cash = cashOnHand(s, data.transactions);
   const complete = useMemo(() => completeMonths(data), [data]);
   const last = complete.at(-1);
-  const r = last ? reviewMonth(data, last) : null;
-  const { st } = useForecast();
+  const r = last ? reviewFor(data, last) : null;
+  const { f, st } = useForecast();
+  // Payments made after the latest statements (a deposit): the forecast takes them off; say so here so the figures agree.
+  const pending = f.months.filter((x) => x.part).flatMap((x) => x.oneOffs.filter((o) => !o.settles));
   const props = propertiesOf(s, data.budgets);
   const [acct, setAcct] = useState(s.accounts.find((a) => a.type === 'savings')?.key ?? s.accounts[0]?.key);
   const [amt, setAmt] = useState('');
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todayLocal();
 
-  const latest = s.accounts.filter((a) => !a.closedOn && a.type !== 'loan').map((a) => {
+  const latest = s.accounts.filter((a) => !a.closedOn && a.type !== 'loan' && a.type !== 'card').map((a) => {
     const b = s.balances.filter((x) => x.account === a.key).sort((x, y) => y.date.localeCompare(x.date))[0];
     return { a, b };
   }).filter((x) => x.b);
@@ -41,8 +44,10 @@ export function Goals() {
                 <div>
                   <b>{st.title}</b>{st.current && <em> You are here</em>}
                   <p>{st.detail}</p>
-                  <label className="check small"><input type="checkbox" checked={!!s.babySteps[String(st.n)]}
-                    onChange={(e) => updateSettings({ babySteps: { ...s.babySteps, [String(st.n)]: e.target.checked } })} /><span>Mark as done</span></label>
+                  {st.auto
+                    ? <p className="step-auto st-text-good">Done, on your figures</p>
+                    : <label className="check small"><input type="checkbox" checked={!!s.babySteps[String(st.n)]}
+                        onChange={(e) => updateSettings({ babySteps: { ...s.babySteps, [String(st.n)]: e.target.checked } })} /><span>{s.babySteps[String(st.n)] ? 'Done' : 'Mark as done'}</span></label>}
                 </div>
               </li>
             ))}
@@ -52,6 +57,7 @@ export function Goals() {
         <section className="panel" aria-labelledby="cash">
           <h2 id="cash">Cash on hand</h2>
           <p className="big-num">{money(cash.total)}</p>
+          {pending.length > 0 && <p className="fine">In your latest statements. {pending.map((o) => `The ${money(o.amount)} ${o.label.replace(/ \(.*\)$/, '').toLowerCase()}`).join(' and ')} {pending.length > 1 ? 'have' : 'has'} gone out since, so about <b>{money(cash.total - pending.reduce((a, o) => a + o.amount, 0))}</b> is really there.</p>}
           <p>{st.low ? <>At its lowest in the forecast, about <b>{money(st.low.cash)}</b> in {monthName(st.low.month)}: enough for <b>{st.cover.toFixed(1)} months</b> of spending. Ramsey's full emergency fund is 3 to 6 months. <Link to="/reports?step=m-ahead">See the forecast</Link></> : 'Load a complete month of statements to work this out.'}</p>
           <ul className="balances">
             {latest.map(({ a, b }) => <li key={a.key}><span>{a.name}</span><span>{money(b!.amount)}<small>{longDate(b!.date)}</small></span></li>)}

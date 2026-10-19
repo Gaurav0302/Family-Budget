@@ -70,7 +70,8 @@ export function parseCsv(text: string, account: string, source: string): ParsedI
     const find = (re: RegExp) => first.findIndex((h) => re.test(h));
     idx = {
       date: find(/date/),
-      amount: find(/^amount|amount$|^value$/),
+      // "Debit Amount"/"Credit Amount" (Westpac and others) are the debit and credit columns, not a signed amount.
+      amount: first.findIndex((h) => /^amount|amount$|^value$/.test(h) && !/debit|credit|withdraw|deposit/.test(h)),
       desc: find(/desc|details|narrative|memo|name|payee/),
       debit: find(/debit|withdraw|money out/),
       credit: find(/credit|deposit|money in/),

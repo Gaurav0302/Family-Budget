@@ -38,7 +38,9 @@ function sample(): Data {
   const transactions = ['2026-07', '2026-08', '2026-09'].flatMap((m) => [
     t(`${m}-01`, 16000, 'salary', 'income'), t(`${m}-02`, -2500, 'rent', 'spend'), t(`${m}-03`, -9000, 'groceries', 'spend'), t(`${m}-04`, -20, 'water', 'spend'),
   ]);
-  return { transactions, coverage: [], rules: [], budgets: BUDGETS, reviews: [], payees: [], settings: SETTINGS };
+  // Statements cover July to September for both accounts, so those months count as complete.
+  const coverage = ['a', 's'].map((account) => ({ account, from: '2026-07-01', to: '2026-09-30' }));
+  return { transactions, coverage, rules: [], budgets: BUDGETS, reviews: [], payees: [], settings: SETTINGS };
 }
 
 describe('properties', () => {

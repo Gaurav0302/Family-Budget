@@ -1,4 +1,4 @@
-import { lastDay, monthOf, shiftDays } from './analysis';
+import { lastDay, monthOf, shiftDays, statementAccounts } from './analysis';
 import type { Account, Data, StatementBalance, Transaction } from './types';
 import { payFor } from './wealth';
 
@@ -23,11 +23,11 @@ export interface MonthAudit { month: string; state: MonthState; accounts: Accoun
 const money = (n: number) => `$${Math.abs(n).toLocaleString('en-AU', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const short = (d: string) => new Date(`${d}T00:00:00`).toLocaleDateString('en-AU', { day: 'numeric', month: 'short' });
 const days = (a: string, b: string) => Math.abs(Date.parse(a) - Date.parse(b)) / 864e5;
-const today = () => new Date().toLocaleDateString('en-CA');
+import { today } from '../lib/format';
 const name = (a: Account) => a.name;
 
 /** Accounts that hold money and send statements (loans and PayPal don't). */
-export const statementAccounts = (accounts: Account[]) => accounts.filter((a) => a.type !== 'loan' && a.type !== 'paypal');
+export { statementAccounts };
 
 function covered(data: Pick<Data, 'coverage'>, account: string, start: string, end: string) {
   const spans = data.coverage.filter((c) => c.account === account && c.to >= start && c.from <= end);
@@ -140,13 +140,17 @@ export function auditMonth(data: Pick<Data, 'transactions' | 'coverage' | 'setti
   const repayments = txs.filter((t) => t.category === 'card-payment' && t.amount < 0 && !cards.includes(t.account) && t.date >= s.cardItemisedFrom);
   const loose = repayments.filter((t) => !data.transactions.some((x) => cards.includes(x.account) && Math.abs(x.amount + t.amount) < 0.01 && days(x.date, t.date) <= 5));
   const cardIn = cards.some((k) => coveredOn(k, end) || coveredOn(k, start));
+  // A repayment counted as card spending (card items not loaded) while the card statement does cover the weeks it pays for
+  // would count that spending twice. A repayment pays the statement before it: roughly 25 to 55 days earlier.
+  const twice = txs.filter((t) => t.category === 'card-unitemised' && t.amount < 0 && cards.some((k) => coveredOn(k, shiftDays(t.date, -50)) && coveredOn(k, shiftDays(t.date, -25))));
   checks.push({
     id: 'card', title: 'Card repayments match', todo: 'match card repayments',
-    state: !repayments.length ? 'ok' : !cardIn ? 'unknown' : loose.length ? 'warn' : 'ok',
-    detail: !repayments.length ? 'No card repayments this month.'
+    state: twice.length ? 'warn' : !repayments.length ? 'ok' : !cardIn ? 'unknown' : loose.length ? 'warn' : 'ok',
+    detail: twice.length ? 'A card repayment is counted as spending although the card statement for those weeks is in, so that spending counts twice. Move the card cut-over date (Accounts) or sort the repayment as a card repayment.'
+      : !repayments.length ? 'No card repayments this month.'
       : !cardIn ? 'The card statement for this month isn’t in, so its spending can’t be counted item by item.'
       : loose.length ? 'A repayment left the bank but doesn’t appear on the card statement.' : 'Every repayment shows on the card statement.',
-    items: loose.map((t) => `${short(t.date)}: ${money(t.amount)} from ${acctName(t.account)}`),
+    items: [...twice.map((t) => `${short(t.date)}: ${money(t.amount)} counted as card spending`), ...loose.map((t) => `${short(t.date)}: ${money(t.amount)} from ${acctName(t.account)}`)],
   });
 
   // 6. No unknown accounts: money moving to an account number the app doesn't know.

@@ -6,13 +6,15 @@ import { Chart, inRange, type Range } from '../components/Chart';
 import { KIND, OwnerBadge } from './Accounts';
 import { addMonths } from '../data/analysis';
 import { useStore } from '../data/store';
+import { useForecast } from '../data/useProperties';
 import type { Every, PayEntry, WealthItem } from '../data/types';
 import {
   expectedIncome, financialYear, grossMonthly, latestSuper, linkedLoanOn, netWorth, ownedSinceOf, PER_MONTH, payChanges, payFor, people, superMonthly, superRoom,
 } from '../data/wealth';
 import { longDate, money, monthName, thisMonth } from '../lib/format';
 
-const today = () => new Date().toLocaleDateString('en-CA');   // local date, YYYY-MM-DD
+import { today } from '../lib/format';
+import { FocusTrap } from '../components/FocusTrap';
 const KIND_LABEL: Record<WealthItem['kind'], string> = { home: 'Home', shares: 'Shares', crypto: 'Crypto', other: 'Other asset', loan: 'Home loan', debt: 'Other debt' };
 const EVERY_LABEL: Record<Every, string> = { week: 'week', fortnight: 'fortnight', month: 'month', term: 'term', quarter: 'quarter', year: 'year' };
 
@@ -44,6 +46,7 @@ function When({ debt, start, already, date, onChange }: { debt: boolean; start: 
 function ListSheet({ title, total, children, onClose }: { title: string; total: number; children: ReactNode; onClose: () => void }) {
   return (
     <div className="sheet-wrap" role="dialog" aria-modal="true" aria-labelledby="list-title" onClick={onClose}>
+      <FocusTrap onClose={onClose} />
       <div className="sheet" onClick={(e) => e.stopPropagation()}>
         <div className="sheet-head">
           <div><h2 id="list-title">{title}</h2><p className="muted">{money(total)} today</p></div>
@@ -59,7 +62,7 @@ function CashSheet({ onClose }: { onClose: () => void }) {
   const { data } = useStore();
   const s = data.settings;
   const n = netWorth(s, today());
-  const open = s.accounts.filter((a) => a.type !== 'loan' && !a.closedOn);
+  const open = s.accounts.filter((a) => a.type !== 'loan' && a.type !== 'card' && !a.closedOn);
   return (
     <ListSheet title="Cash in the bank" total={n.cash} onClose={onClose}>
       <ul className="acct-list-new">
@@ -115,6 +118,7 @@ function ItemSheet({ item, onClose }: { item: WealthItem; onClose: () => void })
 
   return (
     <div className="sheet-wrap" role="dialog" aria-modal="true" aria-labelledby="item-title" onClick={onClose}>
+      <FocusTrap onClose={onClose} />
       <div className="sheet" onClick={(e) => e.stopPropagation()}>
         <div className="sheet-head">
           <h2 id="item-title">{w.name}</h2>
@@ -176,6 +180,12 @@ function NetWorthTab() {
   const s = data.settings;
   const nw = netWorth(s, '9999-12-31');
   const nowNw = netWorth(s, today());
+  // Net worth just after settlement: today's figures with the house and loan counted, and cash as the forecast leaves it.
+  const { st } = useForecast();
+  const settledCash = st.settlements.at(-1)?.after ?? nw.cash;
+  const afterSettle = nw.total - nw.cash + settledCash;
+  // Credit cards: what's owed on each (from Accounts), so net worth doesn't miss them.
+  const cards = s.accounts.filter((a) => a.type === 'card' && !a.closedOn).map((a) => ({ a, b: s.balances.filter((x) => x.account === a.key).sort((x, y) => y.date.localeCompare(x.date))[0] }));
   const [range, setRange] = useState<Range>('all');
   const [split, setSplit] = useState<'total' | 'parts'>('total');
   const [open, setOpen] = useState<WealthItem | null>(null);
@@ -231,7 +241,7 @@ function NetWorthTab() {
         <p className="kicker">Net worth today</p>
         <p className="big-num">{money(nowNw.total)}</p>
         <p className="muted">Owned {money(nowNw.cash + nowNw.super + nowNw.assets)}, owed {money(nowNw.debts)}.
-          {future && <> From settlement it becomes {money(nw.total)} once the house and loan count. <Info>The house and loan are dated from settlement. After settlement, update your bank balances: the deposit and stamp duty will have left your savings.</Info></>}</p>
+          {future && <> After settlement, about {money(afterSettle)}: the house and loan count, and the cash the forecast expects is left once the buying costs are paid ({money(settledCash)}). <Info>From the same forecast as Home and the money meeting. The deposit, stamp duty and fees come out of cash; the house value and the loan come in.</Info></>}</p>
       </section>
       {all.length > 1 && (
         <section className="panel">
@@ -245,7 +255,7 @@ function NetWorthTab() {
         <section className="panel">
           <h2>What you own</h2>
           <ul className="value-list items">
-            <li><button className="row-btn" onClick={() => setSheet('cash')}><span><b>Cash in the bank</b><small>{s.accounts.filter((a) => a.type !== 'loan' && !a.closedOn).length} accounts</small></span><span className="num">{money(nowNw.cash)}<ChevronRight size={16} aria-hidden /></span></button></li>
+            <li><button className="row-btn" onClick={() => setSheet('cash')}><span><b>Cash in the bank</b><small>{s.accounts.filter((a) => a.type !== 'loan' && a.type !== 'card' && !a.closedOn).length} accounts</small></span><span className="num">{money(nowNw.cash)}<ChevronRight size={16} aria-hidden /></span></button></li>
             <li><button className="row-btn" onClick={() => setSheet('super')}><span><b>Super</b><small>{people(s).filter((p) => p !== 'Joint').join(' and ')}</small></span><span className="num">{money(nowNw.super)}<ChevronRight size={16} aria-hidden /></span></button></li>
             {(s.wealth ?? []).filter((w) => !isDebt(w)).map(row)}
           </ul>
@@ -253,8 +263,12 @@ function NetWorthTab() {
         <section className="panel">
           <h2>What you owe</h2>
           <ul className="value-list items">
+            {cards.map(({ a, b }) => (
+              <li key={a.key}><Link className="row-btn" to="/accounts"><span><b>{a.name}</b><small>{b ? `Credit card, as at ${longDate(b.date)}` : 'Credit card: add the balance from the latest statement'}</small></span>
+                <span className="num">{b ? money(Math.abs(b.amount)) : 'Add'}<ChevronRight size={16} aria-hidden /></span></Link></li>
+            ))}
             {(s.wealth ?? []).filter(isDebt).map(row)}
-            {!(s.wealth ?? []).some(isDebt) && <li className="muted">Nothing owed.</li>}
+            {!(s.wealth ?? []).some(isDebt) && !cards.length && <li className="muted">Nothing owed.</li>}
           </ul>
           <details className="add">
             <summary>Add something you own or owe</summary>

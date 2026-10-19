@@ -71,7 +71,7 @@ export function forecast(data: Data, opts: { basis?: Basis; months?: number; fro
   const usual = usualLiving(data, 3, timed);
   const recentOk = basis === 'recent' && usual.from.length > 0;
   const skip = new Set([...propertyCats(s), ...timed]);
-  const held = cashOnHand(s);
+  const held = cashOnHand(s, data.transactions);
   const start = { cash: held.total, asOf: held.asOf };
   const today = today0;
   const first = start.asOf && monthOf(start.asOf) < today ? monthOf(start.asOf) : today;
@@ -128,6 +128,8 @@ export interface Story {
   /** The first settled-in month after any squeeze: what's kept from then on. */
   after: ForecastMonth | null;
   settlements: { property: string; month: string; before: number; after: number; paid: number }[];
+  /** Colour for the headline: good, warn (tight, or keeping under a tenth after) or bad (cash runs out). */
+  tone: 'good' | 'warn' | 'bad';
 }
 
 const span = (a: string, b: string) => (a === b ? monthName(a) : `${monthOnly(a)} to ${monthName(b)}`);
@@ -173,6 +175,11 @@ export function story(f: Forecast): Story {
     lines.push(`From ${monthName(after.month)} you'd keep about ${money(after.kept)} a month${settled.length > 1 ? ' on average' : ''} (${pct(rate)})${after.kept < after.pay * 0.1 - 20 ? `, under Babylon's tenth of ${money(after.pay * 0.1)}` : ''}.`);
   }
   if (low) lines.push(`Cash is lowest in ${monthName(low.month)}, at about ${money(low.cash)}: ${cover.toFixed(1)} months of spending. Ramsey's emergency fund is 3 to 6.`);
-  const headline = verdict === 'yes' ? 'Yes, you can carry it.' : verdict === 'tight' ? 'You can carry it, but it gets tight.' : 'Not as things stand: cash runs out.';
-  return { verdict, headline, lines, low, cover, squeezes, after, settlements };
+  // One verdict for the whole look ahead: carrying the costs is one question, keeping a tenth afterwards is the other.
+  const underTenth = !!after && after.kept < after.pay * 0.1 - 20;
+  const headline = verdict === 'no' ? 'Not as things stand: cash runs out.'
+    : verdict === 'tight' ? 'You can carry it, but it gets tight.'
+    : underTenth ? `You can carry it, but from ${monthName(after!.month)} you'd keep under a tenth.` : 'Yes, you can carry it.';
+  const tone: Story['tone'] = verdict === 'no' ? 'bad' : verdict === 'tight' || underTenth ? 'warn' : 'good';
+  return { verdict, tone, headline, lines, low, cover, squeezes, after, settlements };
 }

@@ -10,6 +10,7 @@ import { findPayee, kindForCategory } from '../data/payees';
 import { useStore } from '../data/store';
 import type { Category, Payee, Transaction } from '../data/types';
 import { dayName, money } from '../lib/format';
+import { FocusTrap } from '../components/FocusTrap';
 
 function usePayeeStats() {
   const { data, payeeIdx } = useStore();
@@ -58,6 +59,7 @@ function PayeeSheet({ payee, onClose }: { payee: Payee; onClose: () => void }) {
 
   return (
     <div className="sheet-wrap" role="dialog" aria-modal="true" aria-labelledby="payee-title" onClick={onClose}>
+      <FocusTrap onClose={onClose} />
       <div className="sheet" onClick={(e) => e.stopPropagation()}>
         <div className="sheet-head">
           <h2 id="payee-title">{payee.name}</h2>

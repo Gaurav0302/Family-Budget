@@ -1,5 +1,11 @@
 # SESSION-HANDOFF.md
 
+## Current status (19 Oct 2026, around midnight)
+Audit block 1 built (D31), checked on the real data and published. Waiting on the user for: approving the force-push that removes the family member's name from the public history (rewrite done locally in /home/claude/family-budget before publishing was reset; redo with `git filter-repo --replace-text` 'regex:(?i)<name>==>Person B' on a fresh clone, then force-push), and adding the PRIVACY_WORDS secret on GitHub. Next: block 2 (new structure) after the user's go-ahead on its details.
+
+## Audit (19 Oct 2026, late)
+Full audit of UI and code (86 items: bugs, inconsistent numbers, new skeleton, page fixes, features, code, accessibility, launch) is in the Project at `family-budget/research/app-audit-2026-10-19.md`. Nothing built yet. Top bugs: What if cuts don't move the payoff date (since D30), Debit/Credit-column CSVs import spending as income, payee patterns without word boundaries (e.g. a café named after a bank becomes a transfer), whole-settings overwrites between devices, silent save failures, UTC "today".
+
 ## Current status (19 Oct 2026, near midnight)
 Latest: loan plans and tracking (D30). Property → the home now has Overview, Plans, Edit plan, Record, Buying, Costs & rent; Uni funds has saving changes, check-ins, goals and the uni-years chart; net worth's loan follows Property. Private file 'Family Purse - loan plans 19 Oct 2026' carries the Loan Planner backup's plan ("My plan": $0 extra, sweep off, no guesses), uni settings (in the offset, 3 years) and links the home and loan net worth items. On the user's data a typical loan month has about $743 spare after the $6,762 repayment, ~$10,083 living and property costs and $600 uni saving (Dec–Mar short because of the rent overlap). With $0 extra the loan is paid off around Feb 2052 (bank schedule Dec 2056); $1,500 extra gives Feb 2047 but only ~$743 of it fits in a typical month. Engine checked against the Loan Planner on the backup's inputs: identical month by month.
 

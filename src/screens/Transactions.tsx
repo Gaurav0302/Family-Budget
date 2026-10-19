@@ -11,6 +11,7 @@ import { merchantOf } from '../data/merchant';
 import { useStore } from '../data/store';
 import type { Transaction } from '../data/types';
 import { dayName, money, monthName } from '../lib/format';
+import { FocusTrap } from '../components/FocusTrap';
 
 function Editor({ tx, onClose }: { tx: Transaction; onClose: () => void }) {
   const { data, updateTransaction, setPayee, payeeIdx } = useStore();
@@ -40,6 +41,7 @@ function Editor({ tx, onClose }: { tx: Transaction; onClose: () => void }) {
 
   return (
     <div className="sheet-wrap" role="dialog" aria-modal="true" aria-labelledby="ed-title" onClick={onClose}>
+      <FocusTrap onClose={onClose} />
       <div className="sheet" onClick={(e) => e.stopPropagation()}>
         <div className="sheet-head">
           <h2 id="ed-title">{payee?.name ?? merchantOf(tx.description)}</h2>
@@ -135,9 +137,10 @@ export function Transactions() {
       <p className="result-line">{rows.length} transactions{category !== 'all' && CATEGORY[category] ? ` in ${CATEGORY[category].label}` : ''}. Spending in this view: <b>{money(out)}</b>.</p>
 
       {!rows.length ? <Empty title={onlyReview ? 'All sorted' : 'No transactions match'}><p>{onlyReview ? 'Every transaction has a category.' : 'Try a different month, category or search.'}</p></Empty> : (
-        <div className="tx-list" role="list">
+        <div className="tx-wrap">
+        <ul className="tx-list">
           {rows.slice(0, limit).map((t) => (
-            <button key={t.id} role="listitem" className={`tx ${t.needsReview ? 'needs' : ''} kind-${t.kind}`} onClick={() => setEditing(t)}>
+            <li key={t.id}><button type="button" className={`tx ${t.needsReview ? 'needs' : ''} kind-${t.kind}`} onClick={() => setEditing(t)}>
               <span className="tx-date">{dayName(t.date)}</span>
               <span className="tx-what">
                 <b>{findPayee(t, payeeIdx)?.name ?? merchantOf(t.description)}</b>
@@ -148,9 +151,10 @@ export function Transactions() {
                 {t.oneOff && <span className="pill pill-quiet">One-off</span>}
               </span>
               <span className={`tx-amt ${t.amount > 0 ? 'in' : ''}`}>{money(t.amount, { cents: true, sign: true })}</span>
-            </button>
+            </button></li>
           ))}
-          {rows.length > limit && <button className="btn wide" onClick={() => setLimit(limit + 300)}>Show more ({rows.length - limit} left)</button>}
+        </ul>
+        {rows.length > limit && <button className="btn wide" onClick={() => setLimit(limit + 300)}>Show more ({rows.length - limit} left)</button>}
         </div>
       )}
       {editing && <Editor tx={editing} onClose={() => setEditing(null)} />}

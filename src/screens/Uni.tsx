@@ -72,9 +72,9 @@ export function Uni() {
       {next.length > 0 && (
         <section className="panel" aria-labelledby="uni-budget">
           <div className="panel-head"><h2 id="uni-budget">In the budget</h2><Link to="/budget">Budget</Link></div>
-          <div className="table-wrap">
+          <div className="table-wrap" tabIndex={0} role="region" aria-label="Uni funds in the budget (table)">
             <table className="score">
-              <thead><tr><th>Month</th><th>Planned</th><th>Budgeted</th><th>Left over that month <Info>From the forecast: pay less everything going out, not counting buying costs. If it's less than the funds need, they only grow if savings shrink.</Info></th><th /></tr></thead>
+              <thead><tr><th>Month</th><th>Planned</th><th>Budgeted</th><th>Left over that month <Info>From the forecast: pay less everything going out, not counting buying costs. If it's less than the funds need, they only grow if savings shrink.</Info></th><th><span className="sr-only">Status</span></th></tr></thead>
               <tbody>{next.map((x) => {
                 const need = planned(x.month), bud = budgetFor(data.budgets, 'keep-uni', x.month);
                 const left = x.kept + x.oneOffs.reduce((a, o) => a + o.amount, 0);

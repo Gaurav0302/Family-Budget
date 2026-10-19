@@ -1,6 +1,7 @@
 import { CATEGORY, KEEP_CATEGORIES, SPEND_CATEGORIES } from './categories';
 import { merchantOf } from './merchant';
-import type { BudgetLine, Coverage, Data, Settings, Transaction } from './types';
+import type { Account, BudgetLine, Coverage, Data, Settings, Transaction } from './types';
+import { today } from '../lib/format';
 
 export const monthOf = (date: string) => date.slice(0, 7);
 
@@ -27,12 +28,20 @@ export const shiftDays = (date: string, days: number) => {
   return d.toISOString().slice(0, 10);
 };
 
-/** A month is complete when every core account's statements cover it (2 days' slack at each end). */
+/** Accounts that have statements (not the loan itself, not PayPal). */
+export const statementAccounts = (accounts: Account[]) => accounts.filter((a) => a.type !== 'loan' && a.type !== 'paypal');
+
+/** A month is complete when it has ended and every account needed for it has statements covering it (2 days' slack at each
+ *  end). Accounts marked "needed for a complete month" decide; if none is marked, every account with statements does
+ *  (the same rule as the Statements page). */
 export function monthCoverage(month: string, coverage: Coverage[], settings: Settings) {
   const start = `${month}-01`, end = lastDay(month);
+  if (end >= today()) return { complete: false, missing: ['The month is still going'] };
   // Only accounts that were open during the month need to be loaded.
-  const core = settings.accounts.filter((a) => a.core && (!a.openedOn || a.openedOn <= end) && (!a.closedOn || a.closedOn >= start));
-  const missing = core.filter((a) => !coverage.some((c) => c.account === a.key && c.from <= shiftDays(start, 2) && c.to >= shiftDays(end, -2)));
+  const open = (a: Account) => (!a.openedOn || a.openedOn <= end) && (!a.closedOn || a.closedOn >= start);
+  const marked = settings.accounts.filter((a) => a.core);
+  const needed = (marked.length ? marked : statementAccounts(settings.accounts)).filter(open);
+  const missing = needed.filter((a) => !coverage.some((c) => c.account === a.key && c.from <= shiftDays(start, 2) && c.to >= shiftDays(end, -2)));
   return { complete: missing.length === 0, missing: missing.map((a) => a.name) };
 }
 
@@ -137,6 +146,8 @@ export interface Recurring {
 
 /** Find things paid again and again: subscriptions and memberships.
  *  Looks at everything up to `upTo` to tell monthly from yearly, and drops anything not paid for 3 months (likely cancelled). */
+const monthsBetween = (a: string, b: string) => (Number(b.slice(0, 4)) - Number(a.slice(0, 4))) * 12 + Number(b.slice(5, 7)) - Number(a.slice(5, 7));
+
 export function findRecurring(txs: Transaction[], upTo?: string, categories: string[] = ['subscriptions', 'property-tools', 'entertainment']): Recurring[] {
   const by = new Map<string, Transaction[]>();
   for (const t of txs) {
@@ -153,12 +164,16 @@ export function findRecurring(txs: Transaction[], upTo?: string, categories: str
     const amounts = list.map((t) => -t.amount).sort((a, b) => a - b);
     const typical = amounts[Math.floor(amounts.length / 2)];
     const category = list[0].category!;
+    // How many months apart the payments usually are: a $120 charge in October two years running is yearly, not monthly.
+    const sorted = [...months].sort();
+    const gaps = sorted.slice(1).map((m, i) => monthsBetween(sorted[i], m)).sort((a, b) => a - b);
+    const gap = gaps.length ? gaps[Math.floor(gaps.length / 2)] : 0;
     // Games and outings only count when they repeat; a yearly charge is one of $50 or more.
-    const every: Recurring['every'] = months.size >= 2 ? 'month' : typical >= 50 ? 'year' : 'irregular';
+    const every: Recurring['every'] = months.size >= 2 ? (gap >= 10 ? 'year' : 'month') : typical >= 50 ? 'year' : 'irregular';
     if (every === 'irregular' || (category === 'entertainment' && every !== 'month')) continue;
-    if (every === 'month' && monthOf(last) < addMonths(end, -2)) continue;
-    // Monthly cost: typical payment times how many payments land in a month.
-    const perMonth = every === 'month' ? list.length / months.size : 1 / 12;
+    if (every === 'month' && monthOf(last) < addMonths(end, -Math.max(2, gap + 1))) continue;
+    // Monthly cost: typical payment times how many payments land in a month (a quarterly one counts a third).
+    const perMonth = every === 'month' ? (gap >= 2 ? 1 / gap : list.length / months.size) : 1 / 12;
     const monthly = typical * perMonth;
     if (monthly < 1) continue;
     out.push({ merchant, category, months: months.size, monthly, yearly: monthly * 12, last, every });
@@ -166,17 +181,25 @@ export function findRecurring(txs: Transaction[], upTo?: string, categories: str
   return out.sort((a, b) => b.yearly - a.yearly);
 }
 
-export function cashOnHand(settings: Settings): { total: number; asOf: string | null } {
+/** Cash across all open accounts, as of the newest balance. An account whose last known balance is older is rolled forward
+ *  with the transactions loaded since, so a July savings balance doesn't sit next to an October everyday one. */
+export function cashOnHand(settings: Settings, transactions: Transaction[] = []): { total: number; asOf: string | null } {
   const latest = new Map<string, { date: string; amount: number }>();
-  const live = new Set(settings.accounts.filter((a) => a.type !== 'loan' && !a.closedOn).map((a) => a.key));
+  // Money you can use: not the loan, not a credit card's balance (that's owed).
+  const live = new Set(settings.accounts.filter((a) => a.type !== 'loan' && a.type !== 'card' && !a.closedOn).map((a) => a.key));
   for (const b of settings.balances) {
     if (!live.has(b.account)) continue;
     const cur = latest.get(b.account);
     if (!cur || b.date > cur.date) latest.set(b.account, b);
   }
-  let total = 0, asOf: string | null = null;
-  for (const b of latest.values()) { total += b.amount; if (!asOf || b.date > asOf) asOf = b.date; }
-  return { total, asOf };
+  let asOf: string | null = null;
+  for (const b of latest.values()) if (!asOf || b.date > asOf) asOf = b.date;
+  let total = 0;
+  for (const [account, b] of latest) {
+    total += b.amount;
+    if (asOf && b.date < asOf) for (const t of transactions) if (t.account === account && t.date > b.date && t.date <= asOf) total += t.amount;
+  }
+  return { total: Math.round(total * 100) / 100, asOf };
 }
 
 /** Work out each month-end balance from a known closing balance and the transactions in between,

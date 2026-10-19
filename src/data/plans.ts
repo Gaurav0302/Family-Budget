@@ -1,9 +1,10 @@
 /** Plans for a property's loan, in the Loan Planner's way: what really happened (facts) applies to every plan; each plan keeps its
  *  own guesses about the future; one plan is active. Wording, presets and "what if one thing changed" live here. */
-import { addMonths, monthOf } from './analysis';
+import { addMonths } from './analysis';
 import { simulate, toIdx, type Change, type ChangeType, type Lump, type SimResult } from '../loan';
 import { checkInsOf, plansOf, PLAN_COLORS, runLoan, type LoanInputs, type LoanView } from './property';
 import type { Data, LoanPlan, Property } from './types';
+import { thisMonth } from '../lib/format';
 
 const m$ = (n: number) => `$${Math.round(Math.abs(n)).toLocaleString('en-AU')}`;
 const k$ = (n: number) => { const a = Math.abs(n); return a >= 1e6 ? `$${(a / 1e6).toFixed(2)}m` : a >= 10000 ? `$${Math.round(a / 1000)}k` : a >= 1000 ? `$${(a / 1000).toFixed(1)}k` : m$(a); };
@@ -173,7 +174,7 @@ export function whatIfs(plan: LoanPlan, base: LoanView) {
     vary('None of this plan’s guesses', (i) => ({ ...i, changes: i.changes.filter((c) => !plan.changes.some((g) => g.id === c.id)), lumps: i.lumps.filter((l) => !plan.lumps.some((g) => g.id === l.id)) })),
     vary('$20,000 less in the offset at the start', (i) => ({ ...i, setup: { ...i.setup, offset0: Math.max(0, i.setup.offset0 - 20000) } })),
   ];
-  if (inp.rentUntil && inp.rentUntil > monthOf(new Date().toISOString())) {
+  if (inp.rentUntil && inp.rentUntil > thisMonth()) {
     const ru = inp.rentUntil;
     rows.push(vary('The lease ends 2 months early', (i) => ({ ...i, changes: [...i.changes, { id: 'lease', month: addMonths(ru, -1) > i.setup.start ? addMonths(ru, -1) : i.setup.start, until: ru, type: 'living', value: i.setup.living }] })));
   }

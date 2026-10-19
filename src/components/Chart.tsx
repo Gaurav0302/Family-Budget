@@ -184,6 +184,16 @@ export function Chart(p: ChartProps) {
           aria-label={`${p.label}, ${monthName(shown[0])} to ${monthName(shown[n - 1])}: ${ser.map((s) => `${s.label} ${s.vals.map((v, i) => `${monthName(shown[i], 'short')} ${format(v)}`).join(', ')}`).join('; ')}`}
           onPointerMove={(e) => { if (e.pointerType === 'mouse') { setHover(pick(e.clientX)); setPinned(false); } }}
           onPointerLeave={(e) => { if (e.pointerType === 'mouse') setHover(null); }}
+          // Keyboard: Tab to the chart, arrows move between months (the tooltip follows), Enter opens that month, Escape hides it.
+          tabIndex={0}
+          onKeyDown={(e) => {
+            const at = hover ?? n;
+            if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') { e.preventDefault(); setHover(Math.max(0, Math.min(n - 1, at + (e.key === 'ArrowRight' ? 1 : -1)))); setPinned(true); }
+            else if (e.key === 'Home' || e.key === 'End') { e.preventDefault(); setHover(e.key === 'Home' ? 0 : n - 1); setPinned(true); }
+            else if (e.key === 'Enter' && hover !== null && p.onPick) p.onPick(shown[hover]);
+            else if (e.key === 'Escape') setHover(null);
+          }}
+          onBlur={() => setHover(null)}
           onClick={(e) => {
             const i = pick(e.clientX);
             const touch = (e.nativeEvent as PointerEvent).pointerType === 'touch' || !matchMedia('(hover: hover)').matches;

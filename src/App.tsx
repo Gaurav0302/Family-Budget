@@ -1,29 +1,34 @@
-import { HashRouter, Route, Routes } from 'react-router-dom';
-import { PropertyScreen } from './screens/Property';
-import { Uni } from './screens/Uni';
+import { lazy, Suspense } from 'react';
+import { HashRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { Shell } from './components/Shell';
+import { PageBoundary } from './components/PageBoundary';
 import { StoreProvider, useStore } from './data/store';
 import { useLook } from './theme/useLook';
-import { Accounts } from './screens/Accounts';
-import { Bills } from './screens/Bills';
-import { Categories } from './screens/Categories';
-import { Budget } from './screens/Budget';
-import { Goals } from './screens/Goals';
 import { HomeScreen } from './screens/Home';
-import { Import } from './screens/Import';
 import { Login } from './screens/Login';
-import { More } from './screens/More';
-import { Reports } from './screens/Reports';
-import { Review } from './screens/Review';
-import { SettingsScreen } from './screens/Settings';
-import { Statements } from './screens/Statements';
-import { Transactions } from './screens/Transactions';
-import { Trends } from './screens/Trends';
-import { Wealth } from './screens/Wealth';
-import { WhatIf } from './screens/WhatIf';
+
+// Pages load when first opened, so the app starts faster (Home and sign-in come with the first download).
+const PropertyScreen = lazy(() => import('./screens/Property').then((m) => ({ default: m.PropertyScreen })));
+const Uni = lazy(() => import('./screens/Uni').then((m) => ({ default: m.Uni })));
+const Accounts = lazy(() => import('./screens/Accounts').then((m) => ({ default: m.Accounts })));
+const Bills = lazy(() => import('./screens/Bills').then((m) => ({ default: m.Bills })));
+const Categories = lazy(() => import('./screens/Categories').then((m) => ({ default: m.Categories })));
+const Budget = lazy(() => import('./screens/Budget').then((m) => ({ default: m.Budget })));
+const Goals = lazy(() => import('./screens/Goals').then((m) => ({ default: m.Goals })));
+const Import = lazy(() => import('./screens/Import').then((m) => ({ default: m.Import })));
+const More = lazy(() => import('./screens/More').then((m) => ({ default: m.More })));
+const Reports = lazy(() => import('./screens/Reports').then((m) => ({ default: m.Reports })));
+const Review = lazy(() => import('./screens/Review').then((m) => ({ default: m.Review })));
+const SettingsScreen = lazy(() => import('./screens/Settings').then((m) => ({ default: m.SettingsScreen })));
+const Statements = lazy(() => import('./screens/Statements').then((m) => ({ default: m.Statements })));
+const Transactions = lazy(() => import('./screens/Transactions').then((m) => ({ default: m.Transactions })));
+const Trends = lazy(() => import('./screens/Trends').then((m) => ({ default: m.Trends })));
+const Wealth = lazy(() => import('./screens/Wealth').then((m) => ({ default: m.Wealth })));
+const WhatIf = lazy(() => import('./screens/WhatIf').then((m) => ({ default: m.WhatIf })));
 
 function Gate() {
   const { status, error, reload } = useStore();
+  const where = useLocation().pathname;
   useLook();
 
   if (status === 'loading') return <div className="center-screen"><div className="loader" aria-label="Loading" /><p>Opening the family purse…</p></div>;
@@ -38,6 +43,8 @@ function Gate() {
   );
   return (
     <Shell>
+      <PageBoundary resetKey={where}>
+      <Suspense fallback={<div className="page-loading" aria-label="Loading page"><div className="loader" /></div>}>
       <Routes>
         <Route path="/" element={<HomeScreen />} />
         <Route path="/transactions" element={<Transactions />} />
@@ -60,6 +67,8 @@ function Gate() {
         <Route path="/accounts" element={<Accounts />} />
         <Route path="*" element={<HomeScreen />} />
       </Routes>
+      </Suspense>
+      </PageBoundary>
     </Shell>
   );
 }

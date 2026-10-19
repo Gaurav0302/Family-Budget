@@ -3,7 +3,7 @@ import { addMonths, allMonths } from './analysis';
 import { auditMonth, type MonthAudit } from './audit';
 import { useStore } from './store';
 
-const thisMonth = () => new Date().toLocaleDateString('en-CA').slice(0, 7);
+import { thisMonth } from '../lib/format';
 
 /** Every month from the first transaction to this one, each with its statements checklist. */
 export function useAudits(): { months: string[]; audits: Map<string, MonthAudit>; lastFinished: string } {

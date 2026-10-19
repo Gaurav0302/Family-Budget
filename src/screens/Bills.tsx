@@ -1,20 +1,44 @@
+import { addMonths, lastDay, monthOf, withSplits } from '../data/analysis';
+import { propertiesOf, repaymentOf } from '../data/property';
 import { Trash2 } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { Info, PageHeader } from '../components/bits';
-import { findBills, manualBills, type FoundBill } from '../data/bills';
+import { addEvery, findBills, manualBills, type FoundBill } from '../data/bills';
 import { SPEND_CATEGORIES, label } from '../data/categories';
 import { useStore } from '../data/store';
 import type { Every } from '../data/types';
-import { dayName, money } from '../lib/format';
+import { dayName, money, monthName } from '../lib/format';
+import { today as todayLocal } from '../lib/format';
+
+const monthsFrom = (a: string, b: string) => (Number(b.slice(0, 4)) - Number(a.slice(0, 4))) * 12 + Number(b.slice(5, 7)) - Number(a.slice(5, 7));
+/** The next monthly date on or after today, keeping the day of the month (clamped to short months). */
+const rollMonthly = (first: string, today: string) => { let k = 1, d = addEvery(first, 'month', k); while (d < today) d = addEvery(first, 'month', ++k); return d; };
 
 const EVERY: Record<Every, string> = { week: 'Weekly', fortnight: 'Fortnightly', month: 'Monthly', term: 'Each school term', quarter: 'Quarterly', year: 'Yearly' };
 
 export function Bills() {
   const { data, updateSettings } = useStore();
-  const today = new Date().toISOString().slice(0, 10);
-  const found = useMemo(() => findBills(data.transactions, today), [data.transactions, today]);
+  const today = todayLocal();
+  const found = useMemo(() => findBills(withSplits(data.transactions, data.settings.splits), today), [data.transactions, data.settings.splits, today]);
   const manual = manualBills(data.settings.bills ?? [], today);
-  const all = [...found, ...manual].sort((a, b) => a.next.localeCompare(b.next));
+  // Bills the plans already know about: each property's loan repayment, from its first repayment.
+  // (Once repayments show up in the statements, the statements' version is used instead.)
+  const loans: FoundBill[] = found.some((b) => b.category === 'mortgage') ? [] : propertiesOf(data.settings, data.budgets).filter((p) => p.loan && !p.soldOn).map((p) => {
+    // The settlement day in the first repayment month, clamped to that month's length (no 30 February).
+    const fm = p.loan!.firstRepayment || monthOf(p.settlement);
+    const first = `${fm}-${String(Math.min(Number(p.settlement.slice(8, 10)), Number(lastDay(fm).slice(8, 10)))).padStart(2, '0')}`;
+    const next = first >= today ? first : rollMonthly(first, today);
+    const amount = Math.round(repaymentOf(p.loan!));
+    return { key: `loan|${p.id}`, name: `${p.name} loan repayment`, category: 'mortgage', every: 'month', amount, varies: false, last: '', next, yearly: amount * 12, fromPlan: true } as FoundBill & { fromPlan: boolean };
+  });
+  // A bill whose budget drops to $0 later (rent once the lease ends) stops then; its yearly cost counts only the months left.
+  const stops = (cat: string) => data.budgets.filter((b) => b.category === cat && b.from > monthOf(today) && b.amount === 0).map((b) => b.from).sort()[0];
+  const all = [...found, ...manual, ...loans].map((b) => {
+    const stop = stops(b.category);
+    if (!stop) return b;
+    const left = Math.max(0, Math.min(12, monthsFrom(monthOf(today), stop)));
+    return { ...b, stopsAfter: addMonths(stop, -1), yearly: (b.yearly / 12) * left };
+  }).sort((a, b) => a.next.localeCompare(b.next));
   const soon = all.filter((b) => (new Date(b.next).getTime() - new Date(today).getTime()) / 864e5 <= 31);
   const rises = found.filter((b) => b.rise);
   const yearly = all.reduce((a, b) => a + b.yearly, 0);
@@ -23,7 +47,7 @@ export function Bills() {
   const row = (b: FoundBill) => (
     <li key={b.key}>
       <span className="bill-when">{dayName(b.next)}</span>
-      <span className="bill-what"><b>{b.name}</b><small>{EVERY[b.every]}{b.manual ? '' : ', seen in statements'}{b.varies ? ', amount varies' : ''}</small></span>
+      <span className="bill-what"><b>{b.name}</b><small>{EVERY[b.every]}{b.manual ? '' : (b as any).fromPlan ? ', from Property' : ', seen in statements'}{b.varies ? ', amount varies' : ''}</small></span>
       <span className="bill-amt">{b.varies ? 'about ' : ''}{money(b.amount, { cents: b.amount < 100 })}</span>
     </li>
   );
@@ -35,7 +59,7 @@ export function Bills() {
       </PageHeader>
 
       <div className="stat-row">
-        <div><span>Regular bills a year</span><b>{money(yearly)}</b></div>
+        <div><span>Regular bills, next 12 months</span><b>{money(yearly)}</b></div>
         <div><span>Averages out to</span><b>{money(yearly / 12)}<small> a month</small></b></div>
         <div><span>Due in the next month</span><b>{money(soon.reduce((a, b) => a + b.amount, 0))}</b></div>
       </div>
@@ -62,8 +86,8 @@ export function Bills() {
           <ul className="bill-list">
             {all.map((b) => (
               <li key={b.key}>
-                <span className="bill-what"><b>{b.name}</b><small>{EVERY[b.every]}, {label(b.category).toLowerCase()}</small></span>
-                <span className="bill-amt">{money(b.yearly)}<small>a year</small></span>
+                <span className="bill-what"><b>{b.name}</b><small>{EVERY[b.every]}, {label(b.category).toLowerCase()}{(b as any).stopsAfter ? `, stops after ${monthName((b as any).stopsAfter)}` : ''}{(b as any).fromPlan ? ', from Property' : ''}</small></span>
+                <span className="bill-amt">{money(b.yearly)}<small>{(b as any).stopsAfter ? 'in the next 12 months' : 'a year'}</small></span>
                 {b.manual && <button className="icon-btn" aria-label={`Remove ${b.name}`} onClick={() => updateSettings({ bills: (data.settings.bills ?? []).filter((x) => `manual|${x.id}` !== b.key) })}><Trash2 size={16} /></button>}
               </li>
             ))}

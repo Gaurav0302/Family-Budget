@@ -22,13 +22,22 @@ export interface FoundBill {
 
 const days = (a: string, b: string) => (new Date(b).getTime() - new Date(a).getTime()) / 864e5;
 const addDays = (d: string, n: number) => { const x = new Date(d + 'T00:00:00Z'); x.setUTCDate(x.getUTCDate() + Math.round(n)); return x.toISOString().slice(0, 10); };
-export function addEvery(d: string, every: Every): string {
+/** `n` steps of `every` after a date. Monthly steps keep the original day, clamped to the month's last day, and always count
+ *  from the original date: 31 Jan → 28 Feb → 31 Mar (not 3 Mar, and not drifting to the 28th). */
+export function addEvery(d: string, every: Every, n = 1): string {
   const x = new Date(d + 'T00:00:00Z');
-  if (every === 'week') x.setUTCDate(x.getUTCDate() + 7);
-  else if (every === 'fortnight') x.setUTCDate(x.getUTCDate() + 14);
-  else x.setUTCMonth(x.getUTCMonth() + (every === 'month' ? 1 : every === 'quarter' || every === 'term' ? 3 : 12));
-  return x.toISOString().slice(0, 10);
+  if (every === 'week' || every === 'fortnight') {
+    x.setUTCDate(x.getUTCDate() + (every === 'week' ? 7 : 14) * n);
+    return x.toISOString().slice(0, 10);
+  }
+  const months = (every === 'month' ? 1 : every === 'quarter' || every === 'term' ? 3 : 12) * n;
+  const y = x.getUTCFullYear(), m = x.getUTCMonth() + months, day = x.getUTCDate();
+  const last = new Date(Date.UTC(y, m + 1, 0)).getUTCDate();
+  return new Date(Date.UTC(y, m, Math.min(day, last))).toISOString().slice(0, 10);
 }
+
+/** The first date on or after `today` in a series that starts from `from` (counting each step from `from`). */
+const rollTo = (from: string, every: Every, today: string, first = 1) => { let k = first, next = addEvery(from, every, k); while (next < today) next = addEvery(from, every, ++k); return next; };
 
 function classify(gap: number): Every | null {
   if (gap >= 5 && gap <= 9) return 'week';
@@ -88,7 +97,7 @@ export function findBills(txs: Transaction[], today: string): FoundBill[] {
     }
     const amount = amounts[amounts.length - 1];
     let next = every === 'week' || every === 'fortnight' ? addDays(last, median) : addEvery(last, every);
-    while (next < today) next = addEvery(next, every);
+    if (next < today) next = every === 'week' || every === 'fortnight' ? rollTo(next, every, today, 0) : rollTo(last, every, today);
     out.push({ key, name: key.split('|')[1], category: cats.get(key)!, every, amount, varies, last, next,
       yearly: (varies ? recent.reduce((a, b) => a + b, 0) / recent.length : amount) * PER_YEAR[every], rise });
   }
@@ -98,8 +107,7 @@ export function findBills(txs: Transaction[], today: string): FoundBill[] {
 /** Bills added by hand, rolled forward to their next date. */
 export function manualBills(bills: Bill[], today: string): FoundBill[] {
   return bills.map((b) => {
-    let next = b.next;
-    while (next < today) next = addEvery(next, b.every);
+    const next = b.next < today ? rollTo(b.next, b.every, today) : b.next;
     return { key: `manual|${b.id}`, name: b.name, category: b.category, every: b.every, amount: b.amount, varies: false,
       last: '', next, yearly: b.amount * PER_YEAR[b.every], manual: true };
   });

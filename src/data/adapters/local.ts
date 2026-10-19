@@ -11,7 +11,8 @@ function read(): Loaded {
 }
 
 function write(d: Loaded) {
-  try { localStorage.setItem(KEY, JSON.stringify(d)); } catch { /* storage full or blocked */ }
+  try { localStorage.setItem(KEY, JSON.stringify(d)); }
+  catch { throw new Error("This browser's storage is full or turned off, so the change wasn't saved. Download a backup from Settings."); }
 }
 
 function upsert<T>(list: T[], items: T[], key: (x: T) => string): T[] {
@@ -30,10 +31,10 @@ export const localAdapter: Adapter = {
   async deleteRule(id) { const d = read(); d.rules = d.rules.filter((r) => r.id !== id); write(d); },
   async upsertBudgets(lines) { const d = read(); d.budgets = upsert(d.budgets, lines, (b) => `${b.category}|${b.from}`); write(d); },
   async replaceCoverage(list) { const d = read(); d.coverage = list; write(d); },
-  async saveSettings(s) { const d = read(); d.settings = s; write(d); },
+  async saveSettings(s) { const d = read(); d.settings = s; write(d); return s; },
   async upsertReviews(r) { const d = read(); d.reviews = upsert(d.reviews, r, (x) => x.id); write(d); },
   async deleteReview(id) { const d = read(); d.reviews = d.reviews.filter((r) => r.id !== id); write(d); },
-  async savePayees(p) { const d = read(); d.payees = p; write(d); },
+  async savePayees(p) { const d = read(); d.payees = p; write(d); return p; },
 };
 
 export function clearLocal() { try { localStorage.removeItem(KEY); } catch { /* ignore */ } }

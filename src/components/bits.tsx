@@ -107,7 +107,7 @@ export function Empty({ title, children }: { title: string; children?: ReactNode
 export function Info({ children, label = 'What is this?' }: { children: ReactNode; label?: string }) {
   const [open, setOpen] = useState(false);
   return (
-    <span className="info">
+    <span className="info" onKeyDown={(e) => { if (e.key === 'Escape' && open) { e.stopPropagation(); setOpen(false); } }}>
       <button type="button" className="info-btn" aria-expanded={open} aria-label={label} title={label} onClick={() => setOpen(!open)}>i</button>
       {open && <span className="info-pop" role="note">{children}<button type="button" className="info-close" onClick={() => setOpen(false)} aria-label="Close">×</button></span>}
     </span>

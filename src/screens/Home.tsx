@@ -11,7 +11,7 @@ import { useMonthly } from '../data/useMonthly';
 import { drillCategory, drillType, useDrill } from '../components/Drill';
 import { addMonths, allMonths, budgetFor, completeMonths } from '../data/analysis';
 import { CATEGORY } from '../data/categories';
-import { reviewMonth } from '../data/review';
+import { reviewFor } from '../data/reviewCache';
 import { useStore } from '../data/store';
 import { money, monthName, monthOnly, pct, thisMonth } from '../lib/format';
 
@@ -32,7 +32,7 @@ export function HomeScreen() {
     </Empty>
   );
 
-  const review = reviewMonth(data, month);
+  const review = reviewFor(data, month);
   const s = review.summary;
   const scream = review.findings.filter((f) => f.scream).slice(0, 2);
   const attention = review.findings.filter((f) => !f.scream && (f.severity === 'act' || f.severity === 'watch')).slice(0, 4);
@@ -122,7 +122,7 @@ export function HomeScreen() {
 
         <section className="panel coming" aria-labelledby="up">
           <div className="panel-head"><h2 id="up">Looking ahead</h2><Link to="/reports?step=m-ahead">In the money meeting</Link></div>
-          <p className={`ahead-verdict st-text-${st.verdict === 'yes' ? 'good' : st.verdict === 'tight' ? 'warn' : 'bad'}`}><b>{st.headline}</b></p>
+          <p className={`ahead-verdict st-text-${st.tone}`}><b>{st.headline}</b></p>
           <ul className="ahead-lines">{st.lines.map((l) => <li key={l}>{l}</li>)}</ul>
           <CashChart height={150} />
           <p className="fine">Last complete month: {complete.length ? monthName(complete.at(-1)!) : 'none yet'}. Property details on <Link to="/property">Property</Link>.</p>

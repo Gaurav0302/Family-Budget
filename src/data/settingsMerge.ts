@@ -1,7 +1,8 @@
 import { DEFAULT_SETTINGS } from './defaults';
 import type { Settings } from './types';
 
-const isEmpty = (v: unknown) => v === undefined || v === null || v === '' || v === 0 || (Array.isArray(v) && !v.length)
+// A deliberate 0 is a value, not a blank (a $0 budget, a 0% rise).
+const isEmpty = (v: unknown) => v === undefined || v === null || v === '' || (Array.isArray(v) && !v.length)
   || (typeof v === 'object' && !Array.isArray(v) && Object.values(v as object).every(isEmpty));
 
 /** For items the family already has, fill in only the fields that are still empty. */
@@ -17,13 +18,20 @@ function union<T>(a: T[] = [], b: T[] = [], key: (x: T) => string): T[] {
   return [...map.values()];
 }
 
+/** Like union, but the file wins for the same key: used for figures read from statements, where a newer file corrects them. */
+function unionNewer<T>(a: T[] = [], b: T[] = [], key: (x: T) => string): T[] {
+  const map = new Map(a.map((x) => [key(x), x]));
+  for (const x of b) map.set(key(x), x);
+  return [...map.values()];
+}
+
 /** Bring settings from a data file into the app without overwriting anything the family already changed:
  *  lists are joined (no duplicates); single values are only filled in where the app still has its blank default. */
 export function mergeSettings(current: Settings, incoming: Partial<Settings>): Settings {
   const out: any = { ...current };
   for (const [k, v] of Object.entries(incoming) as [keyof Settings, any][]) {
     const cur = (current as any)[k];
-    if (k === 'balances') out.balances = union(current.balances, v, (b) => `${b.account}|${b.date}`);
+    if (k === 'balances') out.balances = unionNewer(current.balances, v, (b) => `${b.account}|${b.date}`);
     else if (k === 'pay') out.pay = union(current.pay, v, (p) => `${p.person}|${p.from}`);
     else if (k === 'superBalances') out.superBalances = union(current.superBalances, v, (b) => `${b.person}|${b.date}`);
     else if (k === 'wealth') {
@@ -49,7 +57,9 @@ export function mergeSettings(current: Settings, incoming: Partial<Settings>): S
     else if (k === 'bills') out.bills = union(current.bills, v, (b) => b.id);
     else if (k === 'actions') out.actions = union(current.actions, v, (a) => a.id);
     else if (k === 'customCategories') out.customCategories = union(current.customCategories, v, (c) => c.id);
-    else if (k === 'statements') out.statements = union(current.statements, v, (b) => `${b.account}|${b.from}|${b.to}`);
+    else if (k === 'statements') out.statements = unionNewer(current.statements, v, (b) => `${b.account}|${b.from}|${b.to}`);
+    // Split payments: the app's own splits win for a payment; the file's are added for the rest.
+    else if (k === 'splits') out.splits = { ...(v ?? {}), ...(cur ?? {}) };
     else if (k === 'customGroups') out.customGroups = union(current.customGroups, v, (g) => g.id);
     else if (k === 'groupNames' || k === 'categoryEdits' || k === 'looks' || k === 'budgetEvery') out[k] = { ...v, ...(cur ?? {}) };
     else if (k === 'hiddenCategories') out.hiddenCategories = [...new Set([...(current.hiddenCategories ?? []), ...v])];
@@ -58,8 +68,10 @@ export function mergeSettings(current: Settings, incoming: Partial<Settings>): S
       return inc ? fill(a, inc) : a;
     });
     else if (k === 'home') out.home = Object.fromEntries(Object.entries({ ...v, ...current.home }).map(([hk, hv]) =>
-      [hk, isEmpty((current.home as any)[hk]) ? (v as any)[hk] ?? hv : hv]));
-    else if (k === 'cardItemisedFrom') out.cardItemisedFrom = cur === DEFAULT_SETTINGS.cardItemisedFrom ? v : (v > cur ? v : cur);
+      [hk, isEmpty((current.home as any)[hk]) || (current.home as any)[hk] === (DEFAULT_SETTINGS.home as any)[hk] ? (v as any)[hk] ?? hv : hv]));
+    // The card cut-over date only comes from a file when none is set: moving it re-sorts every repayment, so it stays a
+    // deliberate change (a later date from a file used to re-sort repayments and double-count against loaded card items).
+    else if (k === 'cardItemisedFrom') out.cardItemisedFrom = cur === DEFAULT_SETTINGS.cardItemisedFrom ? v : cur;
     else if (isEmpty(cur) || cur === (DEFAULT_SETTINGS as any)[k]) out[k] = v;
   }
   return out;

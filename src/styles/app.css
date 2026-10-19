@@ -6,7 +6,7 @@
   --card-2: #f6f8f6;
   --ink: #15241f;
   --ink-2: #44554f;
-  --muted: #6f7f79;
+  --muted: #5f6d68;   /* 4.8:1 on paper, 5.4:1 on white (WCAG AA) */
   --line: #d6dfd9;
   --line-2: #e6ece8;
   --euc: #2f5d50;
@@ -60,7 +60,7 @@ h3 { font-size: 1.02rem; font-weight: 600; }
 p { margin: 0.4em 0; }
 a { color: var(--euc); }
 button, input, select, textarea { font: inherit; color: inherit; }
-:focus-visible { outline: 3px solid var(--brass); outline-offset: 2px; border-radius: 4px; }
+:focus-visible { outline: 3px solid var(--euc); outline-offset: 2px; border-radius: 4px; box-shadow: 0 0 0 5px var(--card); }
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 .skip { position: absolute; left: -999px; top: 8px; background: var(--card); padding: 8px 12px; z-index: 50; }
 .skip:focus { left: 8px; }
@@ -138,7 +138,7 @@ label.check small { display: block; color: var(--muted); }
 label.check.small { font-size: 0.85rem; margin: 6px 0 0; }
 .money-input { display: inline-flex; align-items: center; border: 1px solid var(--line); border-radius: var(--r-md); background: var(--card); padding-left: 10px; }
 .money-input input { border: 0; min-height: 38px; width: 6.5em; padding-left: 4px; text-align: right; font-variant-numeric: tabular-nums; }
-.money-input:focus-within { outline: 3px solid var(--brass); outline-offset: 1px; }
+.money-input:focus-within { outline: 3px solid var(--euc); outline-offset: 1px; }
 .money-input input:focus-visible { outline: none; }
 .month-picker { display: flex; align-items: center; gap: 4px; }
 .month-picker select { font-weight: 700; }
@@ -336,8 +336,9 @@ label.check.small { font-size: 0.85rem; margin: 6px 0 0; }
 .rule-head b::before { content: counter(c) '. '; color: var(--muted); }
 .rule-quote { display: block; color: var(--muted); font-style: italic; }
 .rule p { margin: 4px 0 0; color: var(--ink-2); font-size: 0.93rem; }
-.step { display: grid; grid-template-columns: 34px 1fr; gap: 12px; align-items: start; opacity: 0.75; }
-.step.done, .step.current { opacity: 1; }
+.step { display: grid; grid-template-columns: 34px 1fr; gap: 12px; align-items: start; }
+/* Later steps look quieter through their number only, so their text keeps full contrast. */
+.step:not(.done):not(.current) .step-n { opacity: 0.6; }
 .step-n { width: 34px; height: 34px; display: grid; place-items: center; border-radius: 50%; border: 2px solid var(--line); font-family: var(--display); font-weight: 700; }
 .step.done .step-n { background: var(--good); border-color: var(--good); color: var(--card); }
 .step.current .step-n { border-color: var(--brass); background: var(--brass-soft); color: var(--brass-ink); }
@@ -519,7 +520,7 @@ a.on-dark { color: var(--euc-ink); }
 .whatif-sticky { display: none; }
 @media (max-width: 959px) {
   .whatif-sticky { display: flex; justify-content: space-between; gap: 10px; position: sticky; bottom: calc(68px + env(safe-area-inset-bottom)); z-index: 5; background: var(--ink); color: var(--paper); padding: 10px 14px; border-radius: var(--r-md); font-size: 0.92rem; box-shadow: var(--shadow); order: -1; }
-  .whatif-sticky b { color: var(--brass); }
+  .whatif-sticky b { color: inherit; font-weight: 800; }
   .whatif-grid { display: flex; flex-direction: column; }
   .whatif-grid > div:first-child { order: 0; }
   .whatif-sticky { order: 1; }
@@ -710,7 +711,8 @@ button.tile:hover { border-color: var(--euc); }
 .acct-main b { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .acct-main small { display: block; color: var(--muted); font-size: 0.8rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .kind-tag { display: inline-block; font-size: 0.72rem; font-weight: 700; padding: 0 6px; border-radius: var(--r-sm); margin-right: 4px; background: var(--card); border: 1px solid currentColor; }
-.kind-tag.kind-spend { color: var(--k-spend); } .kind-tag.kind-save { color: var(--k-save); } .kind-tag.kind-offset { color: var(--k-offset); } .kind-tag.kind-loan { color: var(--k-loan); }
+/* The tag's border carries the kind's colour; its text is darkened (or lightened in dark mode) towards the ink for contrast. */
+.kind-tag.kind-spend { color: color-mix(in srgb, var(--k-spend) 45%, var(--ink)); border-color: var(--k-spend); } .kind-tag.kind-save { color: color-mix(in srgb, var(--k-save) 45%, var(--ink)); border-color: var(--k-save); } .kind-tag.kind-offset { color: color-mix(in srgb, var(--k-offset) 45%, var(--ink)); border-color: var(--k-offset); } .kind-tag.kind-loan { color: color-mix(in srgb, var(--k-loan) 45%, var(--ink)); border-color: var(--k-loan); }
 .acct-bal { background: none; border: 0; text-align: right; cursor: pointer; font: inherit; color: inherit; padding: 4px; border-radius: var(--r-sm); }
 .acct-bal:hover { background: var(--card); }
 .acct-bal b { display: block; font-variant-numeric: tabular-nums; }
@@ -1214,3 +1216,29 @@ td[class*='st-text-'], dd[class*='st-text-'], span.small[class*='st-text-'], .ah
 .uni-plan .field-grid { max-width: 560px; }
 .lp-note { display: block; font-size: 0.8rem; }
 .sheet .fine { margin: 6px 0 14px; }
+/* Audit fixes (D31) */
+.skip { border: 1px solid var(--line); border-radius: 8px; font: inherit; color: var(--ink); cursor: pointer; }
+.main:focus { outline: none; }
+.save-error { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 6px 10px; align-items: start; margin: 0 0 16px; padding: 12px 14px;
+  border: 1px solid var(--bad); border-radius: var(--radius, 12px); background: color-mix(in srgb, var(--bad) 8%, var(--card)); color: var(--ink); }
+.save-error > svg { color: var(--bad); margin-top: 2px; }
+.save-error p { margin: 0; }
+.save-error-actions { grid-column: 2; display: flex; gap: 8px; flex-wrap: wrap; }
+.step-auto { margin: 4px 0 0; font-size: 0.85rem; font-weight: 600; }
+.fr-later { color: var(--muted); }
+.page-loading { display: grid; place-items: center; min-height: 40vh; }
+ul.tx-list { list-style: none; margin: 0; }
+ul.tx-list > li { display: block; }
+ul.tx-list > li > .tx { width: 100%; }
+.tx-wrap { display: grid; gap: 10px; }
+/* Phones and tablets: every tap target at least 44px (WCAG 2.5.5), without changing the look on computers. */
+@media (pointer: coarse) {
+  .icon-btn, .menu-btn { min-width: 44px; min-height: 44px; }
+  /* The small (i) button keeps its look; an invisible margin makes it easy to tap. */
+  .info-btn { position: relative; }
+  .info-btn::after { content: ''; position: absolute; inset: -11px; }
+  .link, button.link { min-height: 44px; display: inline-flex; align-items: center; }
+  label.check { min-height: 44px; }
+  .tab { min-height: 48px; }
+}
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto !important; } }

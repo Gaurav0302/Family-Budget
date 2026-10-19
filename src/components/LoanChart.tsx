@@ -130,7 +130,14 @@ export function LoanChart({ v, p, plan, checkIns, today, kidsInOffset }: { v: Lo
           <span className="lc-note muted">Zoomed in: the scale doesn't start at $0</span>
         </div>
       )}
-      <div className="lc-plot" ref={box} onPointerMove={(e) => setHover(pick(e.clientX))} onPointerLeave={() => setHover(null)}>
+      {/* Keyboard: Tab to the chart, arrows move a month (Shift: a year), Escape hides the figures. */}
+      <div className="lc-plot" ref={box} tabIndex={0} aria-label="Loan chart: use the arrow keys to read each month"
+        onPointerMove={(e) => setHover(pick(e.clientX))} onPointerLeave={() => setHover(null)} onBlur={() => setHover(null)}
+        onKeyDown={(e) => {
+          const step = e.shiftKey ? 12 : 1, cur = hover ?? Math.max(d0, Math.min(d1, toIdx(today)));
+          if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') { e.preventDefault(); setHover(Math.max(d0, Math.min(d1, cur + (e.key === 'ArrowRight' ? step : -step)))); }
+          else if (e.key === 'Escape') setHover(null);
+        }}>
         <svg width={width} height={H} role="img" aria-label={`Loan over time. Paid off ${mon(toYM(res.paidIdx))}; the bank's schedule finishes ${mon(toYM(bank.paidIdx))}.`}>
           {ticks.map((tv) => <g key={tv}><line x1={pad.l} x2={width - pad.r} y1={y(tv)} y2={y(tv)} className="ch-grid" /><text x={pad.l - 6} y={y(tv) + 4} textAnchor="end" className="ch-axis">{compact(tv)}</text></g>)}
           {(whole ? years : nearTicks).map((i) => <text key={i} x={x(i)} y={H - 6} textAnchor="middle" className="ch-axis">{whole ? Math.floor(i / 12) : mon(toYM(i))}</text>)}

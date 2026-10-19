@@ -46,12 +46,14 @@ export function concessionalCap(fy: string): { cap: number; known: boolean } {
   return hit ? { cap: hit[1], known: true } : { cap: CAPS[CAPS.length - 1][1], known: false };
 }
 
-/** Australian resident marginal tax rate (2026-27 rates; the lowest band falls to 15% from 1 July 2026). */
-export function marginalRate(gross: number): number {
+/** Australian resident marginal tax rate for a financial year ("2026-27"). The $18,201–$45,000 band is 16% to 2025-26, 15% in
+ *  2026-27 and 14% from 2027-28 (legislated cuts); other bands unchanged since 2024-25. Check each July. */
+export function marginalRate(gross: number, fy = '2026-27'): number {
+  const start = Number(fy.slice(0, 4));
   if (gross > 190000) return 0.45;
   if (gross > 135000) return 0.37;
   if (gross > 45000) return 0.3;
-  if (gross > 18200) return 0.15;
+  if (gross > 18200) return start <= 2025 ? 0.16 : start === 2026 ? 0.15 : 0.14;
   return 0;
 }
 
@@ -59,7 +61,7 @@ export interface SuperRoom { person: string; used: number; cap: number; room: nu
 export function superRoom(p: PayEntry, month: string): SuperRoom {
   const used = p.grossYearly * (p.superPct / 100) + p.salarySacrifice * 12;
   const { cap, known } = concessionalCap(financialYear(month));
-  const rate = marginalRate(p.grossYearly) + 0.02;
+  const rate = marginalRate(p.grossYearly, financialYear(month)) + 0.02;
   return { person: p.person, used, cap, room: Math.max(0, cap - used), capKnown: known,
     costPer1000: Math.round(1000 * (1 - rate)), taxSavedPer1000: Math.round(1000 * (rate - 0.15)) };
 }
@@ -70,7 +72,7 @@ export function latestSuper(s: Settings, person: string, upTo = '9999-12-31') {
   return list.find((b) => b.date <= upTo) ?? list[list.length - 1];
 }
 
-const today = () => new Date().toISOString().slice(0, 10);
+import { today } from '../lib/format';
 
 /** When an item started counting. With no date set: from its first value if that's in the future (e.g. a house at settlement),
  *  otherwise from the very beginning, because things like an overseas house or old shares were owned before records began. */
@@ -110,10 +112,14 @@ const endOfMonth = (m: string) => { const [y, mo] = m.split('-').map(Number); re
 export function netWorth(s: Settings, date: string): NetWorth {
   const parts: NetWorth['parts'] = [];
   let cash = 0;
+  let cardDebt = 0;
   for (const a of s.accounts) {
     if (a.type === 'loan' || (a.closedOn && a.closedOn <= date) || (a.openedOn && a.openedOn > date)) continue;
     const b = s.balances.filter((x) => x.account === a.key && x.date <= date).sort((x, y) => y.date.localeCompare(x.date))[0];
-    if (b) { cash += b.amount; parts.push({ name: a.name, amount: b.amount, kind: 'cash', date: b.date }); }
+    if (!b) continue;
+    // A credit card's balance is money owed, not cash (stored either way round, so take its size).
+    if (a.type === 'card') { cardDebt += Math.abs(b.amount); parts.push({ name: a.name, amount: -Math.abs(b.amount), kind: 'card', date: b.date }); }
+    else { cash += b.amount; parts.push({ name: a.name, amount: b.amount, kind: 'cash', date: b.date }); }
   }
   let sup = 0;
   for (const p of people(s)) {
@@ -128,6 +134,7 @@ export function netWorth(s: Settings, date: string): NetWorth {
     if (debt) debts += v.amount; else assets += v.amount;
     parts.push({ name: w.name, amount: debt ? -v.amount : v.amount, kind: w.kind, date: v.date });
   }
+  debts += cardDebt;
   return { date, cash, super: sup, assets, debts, total: cash + sup + assets - debts, parts };
 }
 
