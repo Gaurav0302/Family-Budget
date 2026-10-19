@@ -1056,10 +1056,26 @@ td[class*='st-text-'], dd[class*='st-text-'], span.small[class*='st-text-'], .ah
 .meet-keep span { display: block; }
 
 /* ---------- Budget frequencies (D29) ---------- */
-.budget-amt { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; justify-content: flex-end; }
-.budget-amt select { min-height: 38px; }
-.budget-amt small { flex-basis: 100%; text-align: right; }
-.due-in { display: inline-flex; align-items: center; gap: 6px; font-size: 0.85rem; color: var(--ink-2); }
-.due-in input { min-height: 38px; }
-.freq-sug { display: block; margin-top: 6px; font-size: 0.82rem; color: var(--ink-2); background: color-mix(in srgb, var(--warn) 10%, var(--card)); border-radius: var(--r-sm, 8px); padding: 6px 8px; }
-@media (max-width: 759px) { .budget-amt { grid-column: 1 / -1; justify-content: flex-start; } .budget-amt small { text-align: left; } }
+/* Every spending row uses the same columns: name | amount | how often | next due | spent. */
+.freq-row { grid-template-columns: auto auto auto minmax(0, 1fr); grid-template-areas: 'name name name name' 'amt every due .' 'spent spent spent spent'; }
+.freq-row .budget-name { grid-area: name; }
+.freq-row .fr-amt { grid-area: amt; } .freq-row .fr-every { grid-area: every; } .freq-row .fr-due { grid-area: due; }
+.freq-row .budget-spent { grid-area: spent; }
+.fr-amt { display: grid; gap: 2px; justify-items: start; }
+.fr-amt small { color: var(--muted); font-size: 0.8rem; }
+.fr-every select, .fr-due input { min-height: 40px; width: 100%; }
+.fr-every { width: 9.5em; } .fr-due { width: 10em; }
+.freq-sug { display: flex; width: fit-content; max-width: 100%; flex-wrap: wrap; align-items: baseline; gap: 2px 8px; margin-top: 6px; font-size: 0.82rem; line-height: 1.4; color: var(--ink-2); background: color-mix(in srgb, var(--warn) 10%, var(--card)); border-radius: var(--r-sm, 8px); padding: 6px 8px; }
+@media (min-width: 1240px) {
+  .freq-row { grid-template-columns: minmax(0, 1.2fr) 8em 9.5em 10em minmax(0, 1.3fr); grid-template-areas: 'name amt every due spent'; align-items: start; }
+  .fr-amt { justify-items: end; }
+  .freq-row .fr-amt, .freq-row .fr-every, .freq-row .fr-due, .freq-row .budget-spent { padding-top: 2px; }
+  .freq-row .budget-name { align-self: center; }
+  .fr-every, .fr-due { width: auto; }
+  .fr-amt .money-input { width: 100%; } .fr-amt .money-input input { width: 100%; }
+}
+@media (max-width: 420px) {
+  .freq-row { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); grid-template-areas: 'name name' 'amt every' 'due due' 'spent spent'; }
+  .fr-every, .fr-due { width: auto; }
+  .fr-amt { justify-items: start; } .fr-amt .money-input input { width: 100%; }
+}

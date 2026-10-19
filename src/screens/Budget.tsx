@@ -4,7 +4,7 @@ import { addMonths, allMonths, average, budgetFor, completeMonths, keepBudget, s
 import { GROUPS, KEEP_CATEGORIES, SPEND_CATEGORIES } from '../data/categories';
 import { useStore } from '../data/store';
 import { expectedIncome } from '../data/wealth';
-import { allowance, meterLimit, EVERY_ORDER, EVERY_UNIT, EVERY_WORDS, freqOf, lumpy, monthlyOf, nextUnpaid, paidAhead, perTime, suggest, type Suggestion } from '../data/frequency';
+import { allowance, meterLimit, EVERY_ORDER, EVERY_WORDS, freqOf, lumpy, monthlyOf, nextUnpaid, paidAhead, perTime, suggest, type Suggestion } from '../data/frequency';
 import type { Every } from '../data/types';
 import { Link } from 'react-router-dom';
 import { Info } from '../components/bits';
@@ -135,28 +135,30 @@ export function Budget() {
                 const sug = suggestions.get(c.id);
                 const differs = sug && sug.every !== f.every;
                 return (
-                  <div key={c.id} className="budget-row">
+                  <div key={c.id} className="budget-row freq-row">
                     <div className="budget-name"><b>{c.label}</b>{c.hint && <small>{c.hint}</small>}
                       {differs && (
-                        <span className="freq-sug">Looks like {money(sug.per, { cents: sug.per % 1 !== 0 })} {EVERY_WORDS[sug.every].toLowerCase()}: {sug.why}.
+                        <span className="freq-sug" title={`From your statements: ${sug.why}`}>Looks like {money(sug.per, { cents: sug.per % 1 !== 0 })} {EVERY_WORDS[sug.every].toLowerCase()}
                           <button className="link" onClick={() => applySuggestion(c.id, sug)}>Use this</button></span>
                       )}
                     </div>
-                    <div className="budget-amt">
+                    <div className="fr-amt">
                       <BudgetInput label={`${c.label}, ${EVERY_WORDS[f.every].toLowerCase()}`} value={per} onSave={(n) => setBudget(c.id, month, monthlyOf(n, f.every))} />
+                      {f.every !== 'month' && <small>{money(b)} a month</small>}
+                    </div>
+                    <div className="fr-every">
                       <select aria-label={`How often ${c.label} is paid`} value={f.every} onChange={(e) => setFreq(c.id, e.target.value as Every)}>
                         {EVERY_ORDER.map((x) => <option key={x} value={x}>{EVERY_WORDS[x].toLowerCase()}</option>)}
                       </select>
-                      {lump && <label className="due-in">next due<input type="month" aria-label={`${c.label} next due`} value={next ?? ''} onChange={(e) => e.target.value && setFreq(c.id, f.every, e.target.value)} /></label>}
-                      {f.every !== 'month' && <small className="muted">{money(b)} a month</small>}
+                    </div>
+                    <div className="fr-due">
+                      {lump && <input type="month" aria-label={`${c.label} next due`} title="Next due" value={next ?? ''} onChange={(e) => e.target.value && setFreq(c.id, f.every, e.target.value)} />}
                     </div>
                     <div className="budget-spent">
-                      {lump && (early || !al.due) && !spent
-                        ? <small>{next ? `${money(per)} due ${monthName(next)}` : `${money(per)} a ${EVERY_UNIT[f.every]}: set a month it's due`}. Set aside {money(b)} a month until then.</small>
-                        : <Meter actual={spent} budget={meterLimit(data, c.id, month, spent)} />}
+                      <Meter actual={spent} budget={meterLimit(data, c.id, month, spent)} />
                       <small>
                         {s.count ? (spent ? <DrillLink spec={drillCategory(month, c.id)}>{money(spent)} spent</DrillLink> : `${money(spent)} spent`) : 'No spending loaded'}
-                        {lump && al.due ? (early ? `, ${monthOnly(month)}'s ${EVERY_UNIT[f.every]} was paid early` : `, ${money(per)} due this month`) : ''}
+                        {lump && (al.due && !early ? `, ${money(per)} due this month` : next ? `, next ${money(per)} due ${monthName(next, 'short')}` : `, pick the month it's due`)}
                         {!lump && avg > 0 && <>, average {money(avg)}{Math.round(avg) !== Math.round(b) && <button className="link" onClick={() => setBudget(c.id, month, Math.ceil(avg / 10) * 10)}>use</button>}</>}
                       </small>
                     </div>
