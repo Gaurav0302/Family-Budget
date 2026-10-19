@@ -10,7 +10,10 @@ import { MonthBanner } from '../components/MonthBanner';
 import { DrillLink, drillCategory, drillGroup, drillType, useDrill } from '../components/Drill';
 import { addMonths, allMonths, budgetFor, completeMonths, monthOf, summarise, withSplits } from '../data/analysis';
 import { CATEGORIES, CATEGORY, GROUPS } from '../data/categories';
-import { type Finding } from '../data/review';
+import { reviewText, type Finding, type Severity } from '../data/review';
+import { merchantOf } from '../data/merchant';
+import { Markdown } from '../lib/markdown';
+import { Trends } from './Trends';
 import { reviewFor } from '../data/reviewCache';
 import { useStore } from '../data/store';
 import type { Data } from '../data/types';
@@ -20,7 +23,7 @@ import { outgoings, type Basis } from '../data/forecast';
 import { useForecast } from '../data/useProperties';
 import { EVERY_UNIT, freqOf, meterLimit, monthlyOf, perTime } from '../data/frequency';
 import { keepBudget, totalBudget } from '../data/analysis';
-import { money, monthName, monthOnly, pct } from '../lib/format';
+import { dayName, money, monthName, monthOnly, pct } from '../lib/format';
 
 const endOf = (m: string) => { const [y, mo] = m.split('-').map(Number); return `${m}-${String(new Date(Date.UTC(y, mo, 0)).getUTCDate()).padStart(2, '0')}`; };
 
@@ -115,12 +118,37 @@ function suggestAction(f: Finding, data: Data, nextMonth: string): string {
 
 interface Step { id: string; title: string; body: ReactNode }
 
+const LATER: { sev: Severity; title: string }[] = [
+  { sev: 'act', title: 'Also needs attention' }, { sev: 'watch', title: 'Keep an eye on' }, { sev: 'info', title: 'Good to know' }, { sev: 'good', title: 'Going well' },
+];
+
+/** Everything else the review found this month, grouped, behind one "show" so the meeting stays short. */
+function MoreFindings({ items }: { items: Finding[] }) {
+  if (!items.length) return null;
+  return (
+    <details className="more-findings">
+      <summary>Everything else this month ({items.length})</summary>
+      {LATER.map(({ sev, title }) => {
+        const list = items.filter((f) => f.severity === sev);
+        return list.length ? (
+          <div key={sev} className="more-group-f">
+            <h3>{title}</h3>
+            <ul className="findings">{list.map((f) => <li key={f.id}><Badge severity={f.severity} short /><div><strong>{f.title}</strong><p>{f.detail}</p><small className="src">{f.source}</small></div></li>)}</ul>
+          </div>
+        ) : null;
+      })}
+    </details>
+  );
+}
+
 function MoneyMeeting() {
-  const { data, updateSettings, setBudget } = useStore();
+  const { data, updateSettings, setBudget, updateTransaction, addReview, deleteReview, email } = useStore();
   const months = useMemo(() => allMonths(data.transactions), [data.transactions]);
   const complete = useMemo(() => completeMonths(data), [data]);
   const [month, setMonth] = useState(complete.at(-1) ?? months.at(-1) ?? '');
   const [text, setText] = useState('');
+  const [noteText, setNoteText] = useState('');
+  const [copied, setCopied] = useState(false);
   const [basis, setBasis] = useState<Basis>('recent');
   const { f: fc, st } = useForecast(basis);
   const [openGroups, setOpenGroups] = useState<Set<string>>(new Set());
@@ -167,6 +195,7 @@ function MoneyMeeting() {
   const prev = addMonths(month, -1);
   const lastActions = actions.filter((a) => a.month === prev);
   const nextActions = actions.filter((a) => a.month === month);
+  const notes = data.reviews.filter((x) => x.month === month);
   // Biggest dollars first, whatever page the issue came from (budget, forecast, uni funds, overspending).
   const top = r.findings.filter((f) => f.severity === 'act' || f.severity === 'watch')
     .sort((a, b) => Number(!!b.scream) - Number(!!a.scream) || b.impact - a.impact).slice(0, 6);
@@ -252,6 +281,7 @@ function MoneyMeeting() {
       </div>
     ) : <p className="muted">No plan was set for {monthOnly(month)}. The plan you make in step 6 shows up here next month.</p> },
     { id: 'm-talk', title: 'What to talk about', body: (
+      <>
       <ul className="talk">
         {top.map((f) => {
           const suggestion = suggestAction(f, data, nextMonth);
@@ -267,6 +297,22 @@ function MoneyMeeting() {
         })}
         {!top.length && <li className="muted">Nothing needs talking about this month.</li>}
       </ul>
+      {r.unusual.length > 0 && (
+        <div className="meet-unusual">
+          <h3>Out of the ordinary <Info>Payments much bigger than usual at that shop, or a first big one. Mark a real one-off (a dental bill, a visa fee) so it doesn't skew the trends.</Info></h3>
+          <ul className="unusual">
+            {r.unusual.map(({ tx, reason }) => (
+              <li key={tx.id}>
+                <div><b>{merchantOf(tx.description)}</b><small>{dayName(tx.date)}. {reason}</small></div>
+                <span className="num">{money(tx.amount, { cents: true })}</span>
+                <button className="btn small no-print" onClick={() => updateTransaction(tx.splitOf ?? tx.id, { oneOff: true })}>Mark as one-off</button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+      <MoreFindings items={r.findings.filter((f) => !top.includes(f))} />
+      </>
     ) },
     { id: 'm-areas', title: 'Each area', body: <AreaCharts month={month} /> },
     { id: 'm-targets', title: 'Targets', body: (
@@ -356,6 +402,26 @@ function MoneyMeeting() {
           <button className="btn small">Add</button>
         </form>
         <p className="fine no-print">Next month's meeting starts by asking whether these got done.</p>
+        <div className="meet-notes">
+          <h3>Notes for {monthOnly(month)}</h3>
+          {notes.length ? notes.map((n) => (
+            <article key={n.id} className="note">
+              <Markdown text={n.body} />
+              <footer>{n.author}, {new Date(n.created).toLocaleDateString('en-AU')} <button className="link no-print" onClick={() => deleteReview(n.id)}>Delete</button></footer>
+            </article>
+          )) : <p className="muted">No notes yet. When a Claude session reviews your statements, its note appears here.</p>}
+          <details className="no-print">
+            <summary>Add a note</summary>
+            <textarea rows={5} value={noteText} onChange={(e) => setNoteText(e.target.value)} placeholder="Paste a review or write your own note" aria-label="Note" />
+            <button className="btn small" disabled={!noteText.trim()} onClick={async () => {
+              await addReview({ id: `${month}:${Date.now()}`, month, title: `${monthName(month)} note`, body: noteText.trim(), author: email ?? 'You', created: new Date().toISOString() });
+              setNoteText('');
+            }}>Save note</button>
+          </details>
+          <button className="btn small ghost no-print" onClick={async () => {
+            try { await navigator.clipboard.writeText(reviewText(r)); setCopied(true); setTimeout(() => setCopied(false), 2000); } catch { /* clipboard blocked */ }
+          }}>{copied ? 'Copied' : 'Copy this month’s review as text'}</button>
+        </div>
       </>
     ) },
   ];
@@ -506,15 +572,17 @@ function FinancialYear() {
 /** Smooth scrolling, unless the person has asked their device for less motion. */
 const smooth = (): ScrollBehavior => (matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth');
 
+/** The monthly check-in: the money meeting (how the month went, what to talk about, the plan), trends for any area or
+ *  category, and the financial year for tax time. One place for looking back. */
 export function Reports() {
   const [params, setParams] = useSearchParams();
-  const tab = (params.get('tab') as 'meeting' | 'year') ?? 'meeting';
+  const tab = (params.get('tab') as 'meeting' | 'trends' | 'year') ?? 'meeting';
   return (
     <div>
-      <PageHeader title="Reports">
-        <div className="no-print"><Tabs value={tab} onChange={(t) => setParams({ tab: t }, { replace: true })} items={[{ id: 'meeting', label: 'Money meeting' }, { id: 'year', label: 'Financial year' }]} /></div>
+      <PageHeader title="Monthly check-in">
+        <div className="no-print"><Tabs value={tab} onChange={(t) => setParams({ tab: t }, { replace: true })} items={[{ id: 'meeting', label: 'Money meeting' }, { id: 'trends', label: 'Trends' }, { id: 'year', label: 'Financial year' }]} /></div>
       </PageHeader>
-      {tab === 'meeting' ? <MoneyMeeting /> : <FinancialYear />}
+      {tab === 'meeting' ? <MoneyMeeting /> : tab === 'trends' ? <Trends embedded /> : <FinancialYear />}
     </div>
   );
 }

@@ -78,7 +78,7 @@ export function auditMonth(data: Pick<Data, 'transactions' | 'coverage' | 'setti
       ? `${open.length - missing.length} of ${open.length} accounts cover the whole month.${inProgress ? ' The month isn’t over yet.' : ''}`
       : `All ${open.length} accounts cover the whole month.`,
     items: missing.map((m) => m.state === 'part' ? `${name(m.account)}: only ${short(m.from!)} to ${short(m.to!)}` : `${name(m.account)}: no statement yet`),
-    fix: missing.length ? { label: 'Add statements', to: '/import' } : undefined,
+    fix: missing.length ? { label: 'Add statements', to: '/statements?tab=add' } : undefined,
   });
 
   // 2. Balances add up.

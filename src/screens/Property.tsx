@@ -17,10 +17,11 @@ import { longDate, money, monthName, pct, thisMonth } from '../lib/format';
 import { PER_MONTH } from '../data/wealth';
 import { today as todayLocal } from '../lib/format';
 import { FocusTrap } from '../components/FocusTrap';
+import { WhatIf } from './WhatIf';
 
-type Tab = 'overview' | 'plans' | 'edit' | 'record' | 'buying' | 'costs';
+type Tab = 'overview' | 'plans' | 'edit' | 'record' | 'whatif' | 'buying' | 'costs';
 const TABS: { id: Tab; label: string }[] = [
-  { id: 'overview', label: 'Overview' }, { id: 'plans', label: 'Plans' }, { id: 'edit', label: 'Edit plan' }, { id: 'record', label: 'Record' },
+  { id: 'overview', label: 'Overview' }, { id: 'plans', label: 'Plans' }, { id: 'edit', label: 'Edit plan' }, { id: 'record', label: 'Record' }, { id: 'whatif', label: 'What if' },
   { id: 'buying', label: 'Buying' }, { id: 'costs', label: 'Costs & rent' },
 ];
 const EVERY: Every[] = ['week', 'fortnight', 'month', 'term', 'quarter', 'year'];
@@ -88,13 +89,15 @@ function PropertyPage({ p }: { p: Property }) {
       <PageHeader title={p.name}>
         <span className="muted">{p.use === 'home' ? 'Our home' : 'Investment'}</span>
       </PageHeader>
-      <Tabs value={tab} onChange={(t) => setParams({ tab: t }, { replace: true })} items={TABS} />
-      {!p.loan && tab !== 'buying' && tab !== 'costs' && <p className="muted">No loan on this property. Add one in Edit plan.</p>}
+      {/* What if (spending cuts) is about the family's home, so it shows on the home only. */}
+      <Tabs value={tab} onChange={(t) => setParams({ tab: t }, { replace: true })} items={TABS.filter((t) => t.id !== 'whatif' || p.use === 'home')} />
+      {!p.loan && tab !== 'buying' && tab !== 'costs' && tab !== 'whatif' && <p className="muted">No loan on this property. Add one in Edit plan.</p>}
       <div className="prop-body">
         {tab === 'overview' && <Overview p={p} />}
         {tab === 'plans' && <PlansTab p={p} />}
         {tab === 'edit' && <EditPlan key={params.get('plan') ?? 'active'} p={p} planId={params.get('plan') ?? undefined} />}
         {tab === 'record' && <RecordTab p={p} />}
+        {tab === 'whatif' && <WhatIf embedded />}
         {tab === 'buying' && <Buying p={p} set={set} />}
         {tab === 'costs' && <CostsTab p={p} set={set} />}
       </div>
@@ -309,7 +312,7 @@ function Buying({ p, set }: { p: Property; set: (x: Partial<Property>) => void }
 
       {f.months.length > 0 && (
         <section className="panel" aria-labelledby="cash-path">
-          <div className="panel-head"><h2 id="cash-path">Cash either side of settlement</h2><Link to="/reports?step=m-ahead">In the money meeting</Link></div>
+          <div className="panel-head"><h2 id="cash-path">Cash either side of settlement</h2><Link to="/check-in?step=m-ahead">In the money meeting</Link></div>
           {settle && <div className="stat-row"><div><span>Before settlement</span><b>{money(settle.before)}</b></div><div><span>Buying costs then</span><b>{money(settle.paid)}</b></div><div><span>After</span><b>{money(settle.after)}</b></div>{st.low && <div><span>Lowest</span><b>{money(st.low.cash)}</b><small>{monthName(st.low.month)}, {st.cover.toFixed(1)} months of spending</small></div>}</div>}
           <CashChart />
         </section>

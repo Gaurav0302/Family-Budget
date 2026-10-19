@@ -28,7 +28,7 @@ export function HomeScreen() {
   if (!data.transactions.length) return (
     <Empty title="Nothing here yet">
       <p>Add your first statements to see where the money goes.</p>
-      <Link className="btn primary" to="/import">Add statements</Link>
+      <Link className="btn primary" to="/statements?tab=add">Add statements</Link>
     </Empty>
   );
 
@@ -72,7 +72,7 @@ export function HomeScreen() {
 
       <div className="home-grid">
         <section className="panel" aria-labelledby="att">
-          <div className="panel-head"><h2 id="att">What needs attention</h2><Link to="/review">Full review</Link></div>
+          <div className="panel-head"><h2 id="att">What needs attention</h2><Link to="/check-in?step=m-talk">In the check-in</Link></div>
           {attention.length ? (
             <ul className="findings">
               {attention.map((f) => (
@@ -84,7 +84,7 @@ export function HomeScreen() {
 
         {plan.length > 0 && (
           <section className="panel" aria-labelledby="plan">
-            <div className="panel-head"><h2 id="plan">Our plan for {monthOnly(now)}</h2><Link to="/reports">Money meeting</Link></div>
+            <div className="panel-head"><h2 id="plan">Our plan for {monthOnly(now)}</h2><Link to="/check-in">Money meeting</Link></div>
             <ul className="checklist">
               {plan.map((a) => (
                 <li key={a.id}><label className="check"><input type="checkbox" checked={a.done} onChange={(e) => updateSettings({ actions: actions.map((x) => (x.id === a.id ? { ...x, done: e.target.checked } : x)) })} /><span>{a.text}</span></label></li>
@@ -121,7 +121,7 @@ export function HomeScreen() {
         </section>
 
         <section className="panel coming" aria-labelledby="up">
-          <div className="panel-head"><h2 id="up">Looking ahead</h2><Link to="/reports?step=m-ahead">In the money meeting</Link></div>
+          <div className="panel-head"><h2 id="up">Looking ahead</h2><Link to="/check-in?step=m-ahead">In the money meeting</Link></div>
           <p className={`ahead-verdict st-text-${st.tone}`}><b>{st.headline}</b></p>
           <ul className="ahead-lines">{st.lines.map((l) => <li key={l}>{l}</li>)}</ul>
           <CashChart height={150} />

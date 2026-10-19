@@ -1242,3 +1242,15 @@ ul.tx-list > li > .tx { width: 100%; }
   .tab { min-height: 48px; }
 }
 @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto !important; } }
+.tab-body { margin-top: 18px; }
+.goals-wide { grid-column: 1 / -1; }
+.rules-grid { grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr)); }
+/* Monthly check-in: what used to be the Review page, folded into the meeting */
+.meet-unusual { margin-top: 20px; }
+.meet-unusual h3, .meet-notes h3 { margin: 0 0 8px; font-size: 1rem; }
+.more-findings { margin-top: 18px; border-top: 1px solid var(--line-2); padding-top: 12px; }
+.more-findings > summary { cursor: pointer; font-weight: 700; color: var(--euc); }
+.more-group-f h3 { margin: 16px 0 8px; font-size: 0.95rem; color: var(--ink-2); }
+.meet-notes { margin-top: 22px; border-top: 1px solid var(--line-2); padding-top: 14px; display: grid; gap: 10px; justify-items: start; }
+.meet-notes textarea { width: 100%; margin: 8px 0; }
+.trend-intro, .whatif-intro { margin: 0 0 14px; }

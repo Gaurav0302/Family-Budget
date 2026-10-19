@@ -1,5 +1,7 @@
-import { addMonths, lastDay, monthOf, withSplits } from '../data/analysis';
-import { propertiesOf, repaymentOf } from '../data/property';
+import { addMonths, completeMonths, lastDay, monthOf, withSplits } from '../data/analysis';
+import { reviewFor } from '../data/reviewCache';
+import { Link } from 'react-router-dom';
+import { homeProperty, propertiesOf, repaymentOf } from '../data/property';
 import { Trash2 } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { Info, PageHeader } from '../components/bits';
@@ -42,6 +44,10 @@ export function Bills() {
   const soon = all.filter((b) => (new Date(b.next).getTime() - new Date(today).getTime()) / 864e5 <= 31);
   const rises = found.filter((b) => b.rise);
   const yearly = all.reduce((a, b) => a + b.yearly, 0);
+  // Subscriptions: the same list the monthly review uses (with "you have two of these" notes), as of the last complete month.
+  const lastComplete = completeMonths(data).at(-1);
+  const subs = lastComplete ? reviewFor(data, lastComplete).subscriptions : [];
+  const home = homeProperty(data.settings, data.budgets);
   const [form, setForm] = useState({ name: '', amount: '', every: 'year' as Every, next: today, category: 'car-rego' });
 
   const row = (b: FoundBill) => (
@@ -54,7 +60,7 @@ export function Bills() {
 
   return (
     <div className="bills">
-      <PageHeader title="Bills & renewals">
+      <PageHeader title="Bills & subscriptions">
         <Info>Bills are found automatically when the same payee shows up at regular intervals. Add yearly ones (rego, insurance renewals) by hand so they don't surprise you.</Info>
       </PageHeader>
 
@@ -73,6 +79,21 @@ export function Bills() {
                 <span>{money(b.rise!.from, { cents: true })} → {money(b.rise!.to, { cents: true })}<small>{money(((b.rise!.to - b.rise!.from) * b.yearly) / b.amount)} a year more</small></span></li>
             ))}
           </ul>
+        </section>
+      )}
+
+      {subs.length > 0 && (
+        <section className="panel" aria-labelledby="subs">
+          <div className="panel-head"><h2 id="subs">Subscriptions and memberships</h2>{home && <Link to={`/property/${home.id}?tab=whatif`}>Try cancelling some</Link>}</div>
+          <ul className="subs">
+            {subs.map((x) => (
+              <li key={x.merchant}>
+                <span><b>{x.merchant}</b>{x.overlap && <small className="warn"> You have {x.overlap}</small>}</span>
+                <span>{money(x.monthly)}/month<small>{money(x.yearly)} a year{x.every === 'year' ? ', paid yearly' : ''}</small></span>
+              </li>
+            ))}
+          </ul>
+          <p className="total-line">Together about <b>{money(subs.reduce((a, x) => a + x.monthly, 0))}</b> a month, or <b>{money(subs.reduce((a, x) => a + x.yearly, 0))}</b> a year.</p>
         </section>
       )}
 

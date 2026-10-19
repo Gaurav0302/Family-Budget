@@ -276,7 +276,7 @@ export function reviewMonth(data: Data, month: string): ReviewResult {
   const subsMonthly = subscriptions.reduce((a, x) => a + x.monthly, 0);
   const subsBudget = budgetFor(data.budgets, 'subscriptions', month) + budgetFor(data.budgets, 'property-tools', month) + budgetFor(data.budgets, 'entertainment', month);
   if (subsMonthly > subsBudget * 1.2 && subsMonthly > 100) findings.push({ id: 'subs:total', source: 'Subscriptions', severity: 'act', impact: subsMonthly - subsBudget,
-    title: `Subscriptions cost about ${money(subsMonthly)} a month`, detail: `That's ${money(subsMonthly * 12)} a year, against ${money(subsBudget)} a month budgeted. The Subscriptions list below shows each one, so you can cancel what you don't use.` });
+    title: `Subscriptions cost about ${money(subsMonthly)} a month`, detail: `That's ${money(subsMonthly * 12)} a year, against ${money(subsBudget)} a month budgeted. Bills & subscriptions lists each one, so you can cancel what you don't use.` });
   const property = subscriptions.filter((x) => x.category === 'property-tools' && x.every === 'month');
   if (property.length && month >= '2026-10') findings.push({ id: 'subs:property', source: 'Subscriptions', severity: 'watch', impact: property.reduce((a, x) => a + x.monthly, 0),
     title: 'Property research tools, now the house is bought', detail: `${property.map((p) => `${p.merchant} ${money(p.monthly)}/month`).join(', ')}. Worth cancelling unless you're planning another purchase.` });

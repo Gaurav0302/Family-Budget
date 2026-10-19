@@ -12,7 +12,8 @@ type Level = 'areas' | 'categories';
 type View = 'lines' | 'stacked';
 
 /** Pick areas or categories and see how they move over time, side by side or stacked. */
-export function Trends() {
+/** Any area or category over time. `embedded`: shown as a tab of the monthly check-in (no page title of its own). */
+export function Trends({ embedded = false }: { embedded?: boolean } = {}) {
   const { data } = useStore();
   const drill = useDrill();
   const m = useMonthly();
@@ -22,7 +23,8 @@ export function Trends() {
   const range = (params.get('range') as Range) ?? '6m';
   const [table, setTable] = useState(false);
   const [more, setMore] = useState(false);
-  const set = (patch: Record<string, string>) => setParams({ level, view, range, sel: params.get('sel') ?? '', ...patch }, { replace: true });
+  // Keep whatever else is in the address (the check-in's tab) when changing a setting here.
+  const set = (patch: Record<string, string>) => setParams((prev) => { const n = new URLSearchParams(prev); for (const [k, v] of Object.entries({ level, view, range, sel: params.get('sel') ?? '', ...patch })) n.set(k, v); return n; }, { replace: true });
 
   // Everything that can be picked, with its categories and spending in the chosen span.
   const span = new Set(inRange(m.months, range));
@@ -60,9 +62,7 @@ export function Trends() {
 
   return (
     <div className="trends">
-      <PageHeader title="Trends">
-        <Info>Pick up to eight areas or categories to follow. “Compare” draws a line for each; “Make-up” stacks them with everything else, so the bar is your total spending. Hover or tap a month for the numbers; click it to see the payments. Paler months are missing an account.</Info>
-      </PageHeader>
+      {embedded ? <p className="trend-intro muted">Follow any area or category over time. <Info>Pick up to eight areas or categories to follow. “Compare” draws a line for each; “Make-up” stacks them with everything else, so the bar is your total spending. Hover or tap a month for the numbers; click it to see the payments. Paler months are missing an account.</Info></p> : <PageHeader title="Trends" />}
       <div className="trend-controls">
         <Tabs value={level} onChange={(v) => set({ level: v, sel: '' })} items={[{ id: 'areas', label: 'Areas' }, { id: 'categories', label: 'Categories' }]} />
         <Tabs value={view} onChange={(v) => set({ view: v })} items={[{ id: 'lines', label: 'Compare' }, { id: 'stacked', label: 'Make-up' }]} />

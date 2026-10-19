@@ -1,7 +1,8 @@
 import { AlertTriangle, Check, CircleCheck, CircleDashed, CircleHelp, Clock, Minus, X } from 'lucide-react';
 import { useEffect, useRef } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { Info, PageHeader } from '../components/bits';
+import { Info, PageHeader, Tabs } from '../components/bits';
+import { Import } from './Import';
 import type { AccountMonth, CheckState, MonthAudit } from '../data/audit';
 import { useAudits } from '../data/useAudit';
 import { useStore } from '../data/store';
@@ -70,7 +71,22 @@ function MonthDetail({ a }: { a: MonthAudit }) {
   );
 }
 
+/** Statements: add new ones, and see what's in for every month. One page for getting the data in and proving it's complete. */
 export function Statements() {
+  const [params, setParams] = useSearchParams();
+  const tab = params.get('tab') === 'add' ? 'add' : 'checks';
+  return (
+    <div className="statements">
+      <PageHeader title="Statements">
+        <Info>Add a bank CSV, or a data file Claude prepared from your PDF statements: anything already in is skipped, so adding a file twice is safe. Then check each month: a month is trusted once every statement is in and the numbers prove nothing was missed (balances add up, transfers arrive at both ends, pay is there, card repayments match, no unknown accounts).</Info>
+      </PageHeader>
+      <Tabs value={tab} onChange={(t) => setParams({ tab: t }, { replace: true })} items={[{ id: 'add', label: 'Add statements' }, { id: 'checks', label: 'What’s in' }]} />
+      <div className="tab-body">{tab === 'add' ? <Import embedded /> : <StatementChecks />}</div>
+    </div>
+  );
+}
+
+function StatementChecks() {
   const { data } = useStore();
   const { months, audits, lastFinished } = useAudits();
   const [params, setParams] = useSearchParams();
@@ -84,12 +100,9 @@ export function Statements() {
   useEffect(() => { if (grid.current) grid.current.scrollLeft = grid.current.scrollWidth; }, [months.length]);
   const doneCount = finished.filter((m) => audits.get(m)!.state === 'done').length;
 
-  if (!a) return <div><PageHeader title="Statements" /><p className="muted">Add your first statements to start the checklist.</p></div>;
+  if (!a) return <p className="muted">Add your first statements to start the checklist.</p>;
   return (
-    <div className="statements">
-      <PageHeader title="Statements">
-        <Info>Every account, every month. A month is trusted once every statement is in and the numbers prove nothing was missed: balances add up, transfers arrive at both ends, pay is there, card repayments match, and no unknown accounts appear. Months that aren't complete are marked as drafts elsewhere in the app.</Info>
-      </PageHeader>
+    <div>
       <p className="lead statements-lead">{doneCount} of {finished.length} finished month{finished.length === 1 ? '' : 's'} fully in and checked.</p>
 
       <section className="panel">
@@ -103,7 +116,7 @@ export function Statements() {
                   const st = audits.get(m)!.state;
                   return (
                     <th key={m} scope="col" className={m === month ? 'is-on' : ''}>
-                      <button onClick={() => setParams({ month: m }, { replace: true })} aria-pressed={m === month} title={`${monthName(m)}: ${STATE_WORDS[st]}`}>
+                      <button onClick={() => setParams({ tab: 'checks', month: m }, { replace: true })} aria-pressed={m === month} title={`${monthName(m)}: ${STATE_WORDS[st]}`}>
                         <span>{monthName(m, 'short').replace(/ 20(\d\d)$/, ' ’$1')}</span><MonthIcon state={st} />
                       </button>
                     </th>
@@ -118,7 +131,7 @@ export function Statements() {
                   {months.map((m) => {
                     const ma = audits.get(m)!;
                     const c = ma.accounts.find((x) => x.account.key === acc.key)!;
-                    return <td key={m} className={m === month ? 'is-on' : ''} onClick={() => setParams({ month: m }, { replace: true })}><Cell c={c} finished={ma.state !== 'in-progress'} /></td>;
+                    return <td key={m} className={m === month ? 'is-on' : ''} onClick={() => setParams({ tab: 'checks', month: m }, { replace: true })}><Cell c={c} finished={ma.state !== 'in-progress'} /></td>;
                   })}
                 </tr>
               ))}

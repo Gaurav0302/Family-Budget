@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { PageHeader } from '../components/bits';
+import { Badge, PageHeader } from '../components/bits';
 import { cashOnHand, completeMonths } from '../data/analysis';
 import { reviewFor } from '../data/reviewCache';
 import { propertiesOf } from '../data/property';
@@ -58,7 +58,7 @@ export function Goals() {
           <h2 id="cash">Cash on hand</h2>
           <p className="big-num">{money(cash.total)}</p>
           {pending.length > 0 && <p className="fine">In your latest statements. {pending.map((o) => `The ${money(o.amount)} ${o.label.replace(/ \(.*\)$/, '').toLowerCase()}`).join(' and ')} {pending.length > 1 ? 'have' : 'has'} gone out since, so about <b>{money(cash.total - pending.reduce((a, o) => a + o.amount, 0))}</b> is really there.</p>}
-          <p>{st.low ? <>At its lowest in the forecast, about <b>{money(st.low.cash)}</b> in {monthName(st.low.month)}: enough for <b>{st.cover.toFixed(1)} months</b> of spending. Ramsey's full emergency fund is 3 to 6 months. <Link to="/reports?step=m-ahead">See the forecast</Link></> : 'Load a complete month of statements to work this out.'}</p>
+          <p>{st.low ? <>At its lowest in the forecast, about <b>{money(st.low.cash)}</b> in {monthName(st.low.month)}: enough for <b>{st.cover.toFixed(1)} months</b> of spending. Ramsey's full emergency fund is 3 to 6 months. <Link to="/check-in?step=m-ahead">See the forecast</Link></> : 'Load a complete month of statements to work this out.'}</p>
           <ul className="balances">
             {latest.map(({ a, b }) => <li key={a.key}><span>{a.name}</span><span>{money(b!.amount)}<small>{longDate(b!.date)}</small></span></li>)}
           </ul>
@@ -85,6 +85,21 @@ export function Goals() {
           {props.length ? <ul className="balances">{props.map((p) => <li key={p.id}><Link to={`/property/${p.id}`}>{p.name}</Link><span>{money(p.value ?? p.price)}<small>{p.use === 'home' ? 'our home' : 'investment'}, settles {longDate(p.settlement)}</small></span></li>)}</ul>
             : <p className="muted">No property yet. <Link to="/property">Add one</Link>.</p>}
         </section>
+
+        {r && (
+          <section className="panel goals-wide" aria-labelledby="babylon">
+            <div className="panel-head"><h2 id="babylon">Babylon's seven cures</h2><span className="muted small">{monthName(last!)}</span></div>
+            <ol className="rules rules-grid">
+              {r.babylon.map((c) => (
+                <li key={c.title} className={`rule sev-line-${c.status}`}>
+                  <div className="rule-head"><b>{c.title}</b><Badge severity={c.status} short /></div>
+                  <small className="rule-quote">{c.rule}</small>
+                  <p>{c.detail}</p>
+                </li>
+              ))}
+            </ol>
+          </section>
+        )}
       </div>
     </div>
   );

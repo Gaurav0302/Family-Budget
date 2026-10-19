@@ -1,7 +1,7 @@
 import { FileUp } from 'lucide-react';
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Info, PageHeader } from '../components/bits';
+import { PageHeader } from '../components/bits';
 import { applyRules } from '../data/rules';
 import { parseCsv, parseDataFile, splitNew, type ParsedImport } from '../data/importers';
 import { useStore } from '../data/store';
@@ -9,7 +9,8 @@ import { isPayPalCsv, matchPayPal, parsePayPalCsv } from '../data/paypal';
 import { download, longDate, money } from '../lib/format';
 import { today as todayLocal } from '../lib/format';
 
-export function Import() {
+/** Adding statements. `embedded`: shown as a tab of the Statements page. */
+export function Import({ embedded = false }: { embedded?: boolean } = {}) {
   const { data, importParsed, backup, namePayPal } = useStore();
   const [file, setFile] = useState<File | null>(null);
   const [text, setText] = useState<string>('');
@@ -44,7 +45,7 @@ export function Import() {
 
   return (
     <div className="import">
-      <PageHeader title="Add statements"><Info>A bank CSV, or a data file Claude prepared from your PDF statements. Anything already in the app is skipped, so adding a file twice is safe.</Info></PageHeader>
+      {!embedded && <PageHeader title="Add statements" />}
 
       <label className={`drop ${drag ? 'drag' : ''}`}
         onDragOver={(e) => { e.preventDefault(); setDrag(true); }} onDragLeave={() => setDrag(false)}
@@ -119,7 +120,7 @@ export function Import() {
           }}>{busy ? 'Updating…' : 'Apply update'}</button>
         </div>
       )}
-      {result && <div className="step-box ok" role="status"><p>{result}</p><p><Link to="/transactions?review=1">Sort anything that needs your input</Link> or <Link to="/review">read the review</Link>.</p></div>}
+      {result && <div className="step-box ok" role="status"><p>{result}</p><p><Link to="/transactions?review=1">Sort anything that needs your input</Link> or <Link to="/check-in?step=m-talk">read the review</Link>.</p></div>}
 
       <div className="import-help">
         <section className="panel">

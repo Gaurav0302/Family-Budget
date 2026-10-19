@@ -1,9 +1,9 @@
 import { Link } from 'react-router-dom';
-import { NAV } from '../components/Shell';
+import { NAV, TAB_PATHS } from '../components/Shell';
 
 /** Phone only: everything that doesn't fit in the bottom bar. */
 export function More() {
-  const shown = ['/', '/transactions', '/budget', '/review'];
+  const shown = TAB_PATHS;
   return (
     <div>
       <h1 className="more-title">More</h1>

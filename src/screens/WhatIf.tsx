@@ -10,7 +10,8 @@ import { simulate } from '../loan';
 import { useForecast, useLoan } from '../data/useProperties';
 import { money, monthName, pct } from '../lib/format';
 
-export function WhatIf() {
+/** Try spending less and see what it frees up and what it does to the loan. `embedded`: a tab of the home's Property page. */
+export function WhatIf({ embedded = false }: { embedded?: boolean } = {}) {
   const { data } = useStore();
   const s = data.settings;
   const complete = useMemo(() => completeMonths(data), [data]);
@@ -44,15 +45,18 @@ export function WhatIf() {
     const now = simulate(setup, changes, i.lumps, i.anchor ? { anchor: i.anchor } : {});
     return { ...base, now };
   }, [home, base, extra]);
-  if (!recent.length) return <div><PageHeader title="What if" /><p className="muted">Needs at least one complete month of statements.</p></div>;
+  if (!recent.length) return <div>{!embedded && <PageHeader title="What if" />}<p className="muted">Needs at least one complete month of statements.</p></div>;
   const hasHome = !!(home && base && after);
   const gone = (v: NonNullable<typeof base>) => yearsMonths(v.now.paidMonth);
 
   return (
     <div className="whatif">
-      <PageHeader title="What if">
-        <Info>Starts from your average over {recent.length} complete month{recent.length > 1 ? 's' : ''}. Change a number or tick a subscription to see what it frees up. Nothing here changes your budget.</Info>
-      </PageHeader>
+      {(() => {
+        const help = <Info>Starts from your average over {recent.length} complete month{recent.length > 1 ? 's' : ''}. Change a number or tick a subscription to see what it frees up. Nothing here changes your budget.</Info>;
+        return embedded
+          ? <p className="muted whatif-intro">Spend less on something and see what it frees up, what you'd keep, and what it does to the loan. {help}</p>
+          : <PageHeader title="What if">{help}</PageHeader>;
+      })()}
       <div className="whatif-grid">
         <div>
           <section className="panel">
