@@ -1,5 +1,5 @@
 import { CalendarClock, FileText, Home, LayoutGrid, Loader2, Mountain, ReceiptText, Scale, Settings, Sparkles, Upload, Wallet, Landmark, Tags, CreditCard, TrendingUp } from 'lucide-react';
-import { Fragment, type ReactNode } from 'react';
+import type { ReactNode } from 'react';
 import { NavLink } from 'react-router-dom';
 import { useStore } from '../data/store';
 import { DrillProvider } from './Drill';
@@ -53,16 +53,16 @@ export function Shell({ children }: { children: ReactNode }) {
           <nav key={g.section || 'main'} aria-label={g.section || 'Main'} className={g.section === 'Tools' ? 'nav-extra' : ''}>
             {g.section && g.section !== 'Tools' && <p className="nav-section">{g.section}</p>}
             {g.items.map(({ to, label, Icon }) => (
-              <Fragment key={to}>
-                <NavLink to={to} end={to === '/'} className="nav-item"><Icon size={19} aria-hidden /><span>{label}</span>{badge(to)}</NavLink>
-                {/* A page can put its own steps here, under its menu entry (the money meeting's agenda). */}
-                <div id={`nav-sub-${to.slice(1) || 'home'}`} className="nav-sub" />
-              </Fragment>
+              <NavLink key={to} to={to} end={to === '/'} className="nav-item" title={label}><Icon size={19} aria-hidden /><span>{label}</span>{badge(to)}</NavLink>
             ))}
           </nav>
         ))}
         {mode === 'local' && <p className="demo-note">Demo mode: data stays in this browser.</p>}
       </aside>
+
+      {/* A second panel beside the menu, filled by pages that have sections of their own (the money meeting).
+          While it has something in it, the menu shrinks to icons, like a design tool's side rail. */}
+      <aside id="side-panel" className="side-panel" />
 
       <header className="topbar">
         <div className="brand"><Purse /><strong>Family Purse</strong></div>

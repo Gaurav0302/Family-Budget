@@ -120,7 +120,7 @@ function MoneyMeeting() {
   const [sideSlot, setSideSlot] = useState<HTMLElement | null>(null);
   useEffect(() => {
     const mq = matchMedia('(min-width: 960px)');
-    const pick = () => setSideSlot(mq.matches ? document.getElementById('nav-sub-reports') : null);
+    const pick = () => setSideSlot(mq.matches ? document.getElementById('side-panel') : null);
     pick();
     mq.addEventListener('change', pick);
     return () => mq.removeEventListener('change', pick);
@@ -291,6 +291,7 @@ function MoneyMeeting() {
 
   const agenda = (
     <nav className={`agenda no-print ${sideSlot ? 'in-side' : ''}`} aria-label="Meeting agenda">
+      {sideSlot && <div className="panel-title"><b>Money meeting</b><small>{monthName(month)}</small></div>}
       <ol>
         {steps.map((st, i) => (
           <li key={st.id}><a href={`#${st.id}`} className={active === st.id ? 'on' : ''} onClick={(e) => { e.preventDefault(); document.getElementById(st.id)?.scrollIntoView({ behavior: 'smooth', block: 'start' }); }}>
