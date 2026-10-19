@@ -122,8 +122,45 @@ export interface UniFund {
   year: number;
   /** Month saving starts (YYYY-MM). Defaults to the first month the budget gives the funds money. */
   start?: string;
-  /** Kept in the offset, where it earns the loan rate by cancelling interest (default yes). */
+  /** Kept in the offset, where it earns the loan rate by cancelling interest (default yes). Superseded by settings `uniPlan`. */
   inOffset?: boolean;
+  /** The monthly saving changing from a month on, or for a while ("until" is the last month). */
+  changes?: { id: string; month: string; until?: string; monthly: number }[];
+  /** The fund's real balance at the end of a month. */
+  checkIns?: { month: string; amount: number }[];
+}
+
+/** How the uni funds are kept, for all children. */
+export interface UniPlan {
+  /** In the offset (earns the loan rate by cancelling interest) or invested elsewhere. */
+  inOffset: boolean;
+  /** Return a year after fees and tax when invested elsewhere, in percent. */
+  returnPct: number;
+  /** Years at uni; each fund is drawn evenly over them. */
+  years: number;
+}
+
+/** A way of paying the loan down. One is active; the others are for comparing. What really happened (the loan's
+ *  `changes` and `lumps`) applies to every plan; each plan keeps its own guesses about the future. */
+export interface LoanPlan {
+  id: string;
+  name: string;
+  color: string;
+  /** Guesses: rate moves, more or less into the offset, a year on one income… (Loan Planner format). */
+  changes: Change[];
+  lumps: Lump[];
+  /** Money in the offset on day one. Blank: what the forecast leaves after settlement. */
+  offsetStart?: number;
+  /** Put all spare money into the offset. */
+  sweep?: boolean;
+  /** Into the offset each month while this plan isn't active (the active plan uses the Budget's "Savings & offset" line). */
+  extra?: number;
+  /** A yearly bonus into the offset, and the month it's paid (1–12). */
+  bonus?: number;
+  bonusMonth?: number;
+  /** Pay, living costs and the extra all rising this much a year, in percent. */
+  growth?: number;
+  editedAt: string;
 }
 
 /** Money paid to buy a property: deposit, stamp duty, legal fees… */
@@ -159,9 +196,14 @@ export interface PropertyLoan {
   /** Accounts that hold the loan and its offset, so real balances replace the projection. */
   loanAccount?: string;
   offsetAccount?: string;
-  /** Things that happened or are planned: rate changes (with what the bank did), lump sums. Loan Planner format. */
+  /** What really happened: rate changes (with what the bank did), changes to what goes into the offset, lump sums.
+   *  These apply to every plan (Loan Planner's "recorded" facts). */
   changes?: Change[];
   lumps?: Lump[];
+  plans?: LoanPlan[];
+  activePlan?: string;
+  /** Month-end balances typed in on Record (statements for the loan and offset accounts fill these in automatically). */
+  checkIns?: { month: string; loan: number; offset: number }[];
 }
 
 /** A property the family owns or is buying: everything about it lives here, and every page reads it from here. */
@@ -185,6 +227,8 @@ export interface Property {
   area?: string;
   /** Sold on (YYYY-MM-DD). */
   soldOn?: string;
+  /** Net worth items this property replaces (its value and loan were added by hand before properties existed). */
+  wealthIds?: string[];
 }
 
 export interface Settings {
@@ -213,6 +257,7 @@ export interface Settings {
   /** How often each budget line is paid (default each month), and a month it's due for quarterly, term and yearly lines.
    *  The budget amount itself stays the monthly equivalent, so totals add up. */
   budgetEvery?: Record<string, { every: Every; due?: string }>;
+  uniPlan?: UniPlan;
   /** Properties owned or being bought. When empty, the old `home` details stand in for the family home. */
   properties?: Property[];
   babySteps: Record<string, boolean>;

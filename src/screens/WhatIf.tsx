@@ -34,7 +34,7 @@ export function WhatIf() {
   const after = st.after;
   const income = after?.pay ?? expectedIncome(s, recent.at(-1)!);
   const keptNow = after?.kept ?? 0, keptNew = keptNow + extra;
-  const better = home && base ? runLoan(data, home, { offsetStart: offsetAtStart(data, home, st, f.start.cash), changes: extra > 0 ? [{ id: 'cut', month: base.inputs.setup.start, type: 'living', value: base.inputs.setup.living - extra }] : [] }) : null;
+  const better = home && base ? runLoan(data, home, { offsetStart: offsetAtStart(home, st, f.start.cash, undefined, data.settings), changes: extra > 0 ? [{ id: 'cut', month: base.inputs.setup.start, type: 'living', value: base.inputs.setup.living - extra }] : [] }) : null;
   const hasHome = !!(home && base && after);
   const gone = (v: NonNullable<typeof base>) => yearsMonths(v.now.paidMonth);
 

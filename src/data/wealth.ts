@@ -90,6 +90,22 @@ export function valueOn(w: WealthItem, date: string): { amount: number; date?: s
 
 export interface NetWorth { date: string; cash: number; super: number; assets: number; debts: number; total: number; parts: { name: string; amount: number; kind: string; date?: string }[] }
 
+/** A loan item that belongs to a property (its `wealthIds`, or a loan starting on its settlement day) takes its balance from
+ *  the property: the latest month-end check-in, or the loan account's statement balance, on or before the date. */
+export function linkedLoanOn(s: Settings, w: WealthItem, date: string): { amount: number; date?: string } | null {
+  if (w.kind !== 'loan' || date < ownedSinceOf(w) || (w.endedOn && date >= w.endedOn)) return null;
+  const p = (s.properties ?? []).find((x) => x.loan && (x.wealthIds ? x.wealthIds.includes(w.id) : !!w.ownedSince && w.ownedSince === x.settlement));
+  const l = p?.loan;
+  if (!l) return null;
+  const seen: { date: string; amount: number }[] = [];
+  for (const c of l.checkIns ?? []) seen.push({ date: endOfMonth(c.month), amount: c.loan });
+  if (l.loanAccount) for (const b of s.balances) if (b.account === l.loanAccount) seen.push({ date: b.date, amount: Math.abs(b.amount) });
+  const best = seen.filter((x) => x.date <= date).sort((a, b) => b.date.localeCompare(a.date))[0];
+  return best ?? null;
+}
+
+const endOfMonth = (m: string) => { const [y, mo] = m.split('-').map(Number); return `${m}-${String(new Date(Date.UTC(y, mo, 0)).getUTCDate()).padStart(2, '0')}`; };
+
 /** Everything owned minus everything owed, as known on a date. Cash comes from account balances, super from super balances. */
 export function netWorth(s: Settings, date: string): NetWorth {
   const parts: NetWorth['parts'] = [];
@@ -106,7 +122,7 @@ export function netWorth(s: Settings, date: string): NetWorth {
   }
   let assets = 0, debts = 0;
   for (const w of s.wealth ?? []) {
-    const v = valueOn(w, date);
+    const v = linkedLoanOn(s, w, date) ?? valueOn(w, date);
     if (!v) continue;
     const debt = w.kind === 'loan' || w.kind === 'debt';
     if (debt) debts += v.amount; else assets += v.amount;

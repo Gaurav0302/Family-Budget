@@ -1,22 +1,25 @@
 import { Building2, ChevronRight, Plus, Trash2, X } from 'lucide-react';
-import { useMemo, useState, type ReactNode } from 'react';
+import { useMemo, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { Info, NumberField, PageHeader, Tabs } from '../components/bits';
 import { Chart } from '../components/Chart';
 import { addMonths, monthOf } from '../data/analysis';
 import { outgoings, type Basis } from '../data/forecast';
-import { ownedIn, pointIn, rentIn, repaymentOf, runLoan, runningMonthly, toIdx, toYM, type LoanView } from '../data/property';
+import { activePlanOf, ownedIn, pointIn, rentIn, repaymentOf, runningMonthly, toYM, uniPlanOf, type LoanView } from '../data/property';
+import { checkInNet, checkInsOf, describeChange, expectedAt } from '../data/plans';
+import { LoanChart } from '../components/LoanChart';
+import { EditPlan, PlansTab, RecordTab } from './LoanPlans';
 import { useStore } from '../data/store';
-import type { Every, Property, PropertyCost, PropertyLoan, RunningCost } from '../data/types';
+import type { Every, Property, PropertyCost, RunningCost } from '../data/types';
 import { offsetAtStart, useForecast, useLoan, useProperties } from '../data/useProperties';
-import { yearRows, type Change, type Lump } from '../loan';
+import { yearRows } from '../loan';
 import { longDate, money, monthName, pct, thisMonth } from '../lib/format';
 import { PER_MONTH } from '../data/wealth';
 
-type Tab = 'overview' | 'buying' | 'loan' | 'costs' | 'scenarios';
+type Tab = 'overview' | 'plans' | 'edit' | 'record' | 'buying' | 'costs';
 const TABS: { id: Tab; label: string }[] = [
-  { id: 'overview', label: 'Overview' }, { id: 'buying', label: 'Buying' }, { id: 'loan', label: 'Loan' },
-  { id: 'costs', label: 'Costs & rent' }, { id: 'scenarios', label: 'Scenarios' },
+  { id: 'overview', label: 'Overview' }, { id: 'plans', label: 'Plans' }, { id: 'edit', label: 'Edit plan' }, { id: 'record', label: 'Record' },
+  { id: 'buying', label: 'Buying' }, { id: 'costs', label: 'Costs & rent' },
 ];
 const EVERY: Every[] = ['week', 'fortnight', 'month', 'term', 'quarter', 'year'];
 const yrs = (months: number) => { const y = Math.floor(Math.abs(months) / 12), m = Math.abs(months) % 12; return [y && `${y} year${y > 1 ? 's' : ''}`, m && `${m} month${m > 1 ? 's' : ''}`].filter(Boolean).join(' ') || '0 months'; };
@@ -84,12 +87,14 @@ function PropertyPage({ p }: { p: Property }) {
         <span className="muted">{p.use === 'home' ? 'Our home' : 'Investment'}</span>
       </PageHeader>
       <Tabs value={tab} onChange={(t) => setParams({ tab: t }, { replace: true })} items={TABS} />
+      {!p.loan && tab !== 'buying' && tab !== 'costs' && <p className="muted">No loan on this property. Add one in Edit plan.</p>}
       <div className="prop-body">
         {tab === 'overview' && <Overview p={p} />}
+        {tab === 'plans' && <PlansTab p={p} />}
+        {tab === 'edit' && <EditPlan key={params.get('plan') ?? 'active'} p={p} planId={params.get('plan') ?? undefined} />}
+        {tab === 'record' && <RecordTab p={p} />}
         {tab === 'buying' && <Buying p={p} set={set} />}
-        {tab === 'loan' && <LoanTab p={p} set={set} />}
         {tab === 'costs' && <CostsTab p={p} set={set} />}
-        {tab === 'scenarios' && <Scenarios p={p} />}
       </div>
       {tab === 'buying' && (
         <p className="fine">Sold it, or added it by mistake? <button className="link danger" onClick={() => { if (confirm(`Remove ${p.name} from the app? Its payments stay where they are.`)) { remove(p.id); nav('/property'); } }}>Remove this property</button></p>
@@ -102,42 +107,57 @@ function PropertyPage({ p }: { p: Property }) {
 
 function Overview({ p }: { p: Property }) {
   const { data } = useStore();
-  const v = useLoan(p);
-  if (!p.loan || !v) return <p className="muted">No loan on this property. Add one on the Loan tab to see when it's paid off.</p>;
+  const { f, st: story } = useForecast();
+  const [, setParams] = useSearchParams();
+  const plan = activePlanOf(p);
+  const v = useLoan(p, plan);
+  const offsetStart = offsetAtStart(p, story, f.start.cash, plan, data.settings);
+  const kidsIn = uniPlanOf(data.settings).inOffset;
+  const checkIns = checkInsOf(data, p);
+  const latest = v ? checkIns.filter((c) => c.month >= v.inputs.setup.start).at(-1) : undefined;
+  const status = useMemo(() => {
+    if (!latest || !v) return null;
+    const diff = expectedAt(data, p, plan, latest.month, offsetStart).net - checkInNet(latest, kidsIn);
+    return { diff, word: diff > 500 ? 'ahead' : diff < -500 ? 'behind' : 'on' } as const;
+  }, [data, p, plan, latest, offsetStart, kidsIn, v]);
+  if (!p.loan || !v) return null;
   const st = v.inputs.setup;
   const today = thisMonth();
   const started = today >= st.start;
   const at = started ? today : st.start;
   const pt = pointIn(v.now, at)!;
-  const bankAt = pointIn(v.bank, at)!;
-  const cancelled = pt.loan ? Math.min(1, (pt.offset + pt.kids.reduce((a, b) => a + b, 0)) / pt.loan) : 1;
+  const net = latest ? checkInNet(latest, kidsIn) : started ? pt.net : st.loan - st.offset0;
+  const cancelled = Math.max(0, Math.min(1, 1 - net / st.loan));
   const timeSaved = v.bank.paidMonth - v.now.paidMonth;
   const interestSaved = v.bank.totalInterest - v.now.totalInterest;
-  const avoided = started ? v.now.points.filter((x) => x.idx <= toIdx(today)).reduce((a, x) => a + ((v.bank.points[x.m]?.interest ?? 0) - x.interest), 0) : 0;
-  const growth = started ? pt.offset - st.offset0 : 0;
-  const anchor = v.inputs.anchor;
-  const diff = anchor ? (pointIn(v.plan, anchor.month)?.net ?? 0) - (pointIn(v.now, anchor.month)?.net ?? 0) : 0;
-  const status = !anchor ? null : Math.abs(diff) < 100 ? 'on' : diff > 0 ? 'ahead' : 'behind';
-
-  // The chart: what's still owed after the offset, what's in the offset, and the bank's schedule for comparison.
-  const last = Math.min(v.bank.paidIdx, st.term * 12 + toIdx(st.start)) + 6;
-  const months: string[] = [];
-  for (let i = toIdx(st.start); i <= last; i++) months.push(toYM(i));
-  const val = (r: LoanView['now'], i: number, f: (x: (typeof r.points)[number]) => number) => { const x = r.points[i]; return x ? f(x) : 0; };
-  const marks = [{ month: today, label: 'Today' }, ...(v.inputs.rentUntil ? [{ month: addMonths(v.inputs.rentUntil, 1), label: 'Rent stops' }] : [])].filter((m) => m.month >= st.start);
+  const bankAt = pointIn(v.bank, at)!;
+  const avoided = started ? Math.max(0, bankAt.cumInterest - pt.cumInterest) : 0;
+  const offsetNow = latest ? latest.offset - (kidsIn ? latest.kids.filter((k) => Number.isFinite(k)).reduce((a, b) => a + b, 0) : 0) : pt.offset;
+  const growth = started ? offsetNow - st.offset0 : 0;
+  const fromStart = v.now.paidMonth - v.original.paidMonth;
+  const recent = checkIns.filter((c) => c.month >= st.start).slice(-4).reverse();
 
   return (
     <>
+      <div className="lp-dash-head">
+        <span className="muted">Today, {monthName(today)}. Your loan on <button className="link" onClick={() => setParams({ tab: 'plans' })}>{plan.name}</button>.</span>
+        <div className="lp-actions">
+          <button className="btn" onClick={() => setParams({ tab: 'record', mode: 'balances' })}>Check in balances</button>
+          <button className="btn primary" onClick={() => setParams({ tab: 'record' })}>Record a change</button>
+        </div>
+      </div>
+      {!started && <p className="lp-notice">Your loan starts in {monthName(st.start)}. Until then everything here follows {plan.name}; once repayments begin, check in your statement balances each month to see how you're really doing.</p>}
       <div className="prop-top">
         <section className="panel prop-hero" aria-labelledby="payoff">
-          <div className="panel-head"><h2 id="payoff">{p.use === 'home' ? 'Home loan' : 'Loan'}</h2>{status && <span className={`chip-st st-text-${status === 'behind' ? 'warn' : 'good'}`}><i aria-hidden />{status === 'on' ? 'On plan' : status === 'ahead' ? 'Ahead of plan' : 'Behind plan'}</span>}</div>
-          <span className="muted">{anchor ? 'On your real balances, paid off' : 'At this rate, paid off'}</span>
+          <div className="panel-head"><h2 id="payoff">{p.use === 'home' ? 'Home loan' : 'Loan'}</h2>{status && <span className={`chip-st st-text-${status.word === 'behind' ? 'warn' : 'good'}`}><i aria-hidden />{status.word === 'on' ? 'On track' : status.word === 'ahead' ? 'Ahead of plan' : 'Behind plan'}</span>}</div>
+          <span className="muted">{latest ? 'On your real balances, paid off' : 'On this plan, paid off'}</span>
           <strong className="prop-big">{idxName(v.now.paidIdx)}</strong>
-          <span className="muted">{anchor
-            ? `${money(Math.abs(diff))} ${diff >= 0 ? 'ahead of' : 'behind'} the plan at ${monthName(anchor.month)}.`
-            : `${yrs(v.now.paidMonth)} of repayments from ${monthName(st.start)}, with everything left over going into the offset.`}</span>
-          <div className="progress" role="img" aria-label={`${pct(cancelled)} of the loan cancelled by the offset`}><span style={{ width: `${cancelled * 100}%` }} /></div>
-          <div className="progress-labels muted small"><span>{pct(cancelled)} of {money(pt.loan)} cancelled by the offset</span><span>{money(pt.net)} owed after the offset</span></div>
+          <span className="muted">{latest
+            ? (status?.word === 'on' ? 'Right where the plan expected at your last check-in.' : `${money(Math.abs(status?.diff ?? 0))} ${(status?.diff ?? 0) > 0 ? 'ahead of' : 'behind'} the plan at ${monthName(latest.month)}.`)
+            : started ? 'Check in your balances to see how you are really doing.' : `${yrs(v.now.paidMonth)} of repayments from ${monthName(st.start)}.`}</span>
+          {fromStart !== 0 && <p className="lp-since"><span className="muted">When you started</span> <b>{idxName(v.original.paidIdx)}</b> → <span className="muted">now</span> <b>{idxName(v.now.paidIdx)}</b> <span className={fromStart < 0 ? 'st-text-good tone' : 'st-text-bad tone'}>{yrs(Math.abs(fromStart))} {fromStart < 0 ? 'sooner' : 'later'}</span></p>}
+          <div className="progress" role="img" aria-label={`${pct(cancelled)} of the loan cancelled`}><span style={{ width: `${cancelled * 100}%` }} /></div>
+          <div className="progress-labels muted small"><span>{pct(cancelled)} of {money(st.loan)} cancelled</span><span>{money(net)} owed after the offset</span></div>
         </section>
         <MoneyThisMonth v={v} at={at} />
       </div>
@@ -147,27 +167,22 @@ function Overview({ p }: { p: Property }) {
         <div className="stat-row prop-stats">
           <div><span>Time saved</span><b className="is-good">{yrs(timeSaved)}</b><small>Paid off {idxName(v.now.paidIdx)}, not {idxName(v.bank.paidIdx)}</small></div>
           <div><span>Interest saved</span><b className="is-good">{money(interestSaved)}</b><small>{money(v.now.totalInterest)} instead of {money(v.bank.totalInterest)}</small></div>
-          <div><span>Interest avoided so far</span><b>{money(avoided)}</b><small>{started ? `Since ${monthName(st.start)}` : 'Starts with the first repayment'}</small></div>
-          <div><span>Offset growth</span><b>{money(growth)}</b><small>{started ? `Since ${monthName(st.start)}` : `Starts at ${money(st.offset0)}`}</small></div>
+          <div><span>Interest avoided so far</span><b>{money(avoided)}</b><small>{started ? `Cancelled by the offset, ${monthName(st.start)} to ${monthName(latest?.month ?? at)}` : 'Starts with your first repayment'}</small></div>
+          <div><span>Offset growth</span><b>{money(growth)}</b><small>{started ? `Since settlement, ${latest ? 'from your balances' : 'on plan'}` : `Starts at ${money(st.offset0)}`}</small></div>
         </div>
       </section>
 
-      <section className="panel" aria-labelledby="loan-chart">
-        <Chart title={<h2 id="loan-chart">The loan over time</h2>} label="Loan, offset and bank's schedule by month" kind="lines" months={months} range="all" noRange height={240} marks={marks}
-          series={[
-            { id: 'net', label: 'Owed after the offset', values: months.map((_, i) => val(v.now, i, (x) => x.net)), color: 'var(--s1)' },
-            { id: 'off', label: 'In the offset', values: months.map((_, i) => val(v.now, i, (x) => (x.net > 0 ? x.offset + x.kids.reduce((a, b) => a + b, 0) : 0))), color: 'var(--s2)' },
-            { id: 'bank', label: "Bank's schedule", values: months.map((_, i) => val(v.bank, i, (x) => x.loan)), color: 'var(--ink-2)', dashed: true },
-          ]} />
-        <p className="fine">Living costs come from your last three complete months ({money(v.inputs.setup.living)} a month, with property costs). Change them in Scenarios to see the effect.</p>
-      </section>
+      <LoanChart v={v} p={p} plan={plan} checkIns={checkIns} today={today} kidsInOffset={kidsIn} />
 
       <div className="prop-grid">
         <ComingUp p={p} v={v} />
-        <section className="panel" aria-labelledby="bank-now">
-          <h2 id="bank-now">The bank's minimum</h2>
-          <p>Repayment of <b>{money(pt.repayment || repaymentOf(p.loan))}</b> a month at {pt.rate}%. Paying only that, the loan would still be <b>{money(bankAt.loan)}</b> in {monthName(at)} and finish in {idxName(v.bank.paidIdx)}.</p>
-          <p className="fine">Record rate changes on the Loan tab: the payoff date moves from that month on.</p>
+        <section className="panel" aria-labelledby="bal">
+          <div className="panel-head"><h2 id="bal">Your balances</h2><button className="link" onClick={() => setParams({ tab: 'record', mode: 'balances' })}>Check in</button></div>
+          {!recent.length ? <p className="muted small">{started ? 'No check-ins yet. Add your statement balances to see how you are really doing.' : 'Check-ins open after the first repayment.'}</p> : (
+            <ul className="timeline">{recent.map((c) => { const d = expectedAt(data, p, plan, c.month, offsetStart).net - checkInNet(c, kidsIn); return (
+              <li key={c.month}><b>{monthName(c.month)}</b><span className={Math.abs(d) < 50 ? '' : d > 0 ? 'st-text-good tone' : 'st-text-bad tone'}>{Math.abs(d) < 50 ? 'On plan' : `${money(Math.abs(d))} ${d > 0 ? 'ahead' : 'behind'}`}</span></li>
+            ); })}</ul>
+          )}
         </section>
       </div>
       <YearByYear v={v} kids={(data.settings.uniFunds ?? []).length > 0} />
@@ -190,7 +205,7 @@ function MoneyThisMonth({ v, at }: { v: LoanView; at: string }) {
   const cover = monthly ? (pt.offset + pt.kids.reduce((a, b) => a + b, 0)) / monthly : 0;
   return (
     <section className="panel" aria-labelledby="money-month">
-      <div className="panel-head"><h2 id="money-month">Money in {monthName(at)}</h2><span className={`small strong st-text-${short ? 'bad' : 'good'}`}>{short ? `${money(-pt.spare)} short` : `${money(pt.extra)} into the offset`}</span></div>
+      <div className="panel-head"><h2 id="money-month">Money in {monthName(at)}</h2><span className={`small strong st-text-${short ? 'bad' : 'good'} tone`}>{short ? `${money(-pt.spare)} short` : pt.unallocated > 0 ? `${money(pt.unallocated)} not allocated` : `${money(pt.extra)} into the offset`}</span></div>
       <div className="stack-bar" role="img" aria-label="How take-home pay is split this month">
         {rows.map((r) => <span key={r.label} className={r.cls} style={{ width: `${Math.max(0, (r.value / take) * 100).toFixed(1)}%` }} />)}
       </div>
@@ -198,8 +213,9 @@ function MoneyThisMonth({ v, at }: { v: LoanView; at: string }) {
         <div><dt>Take-home pay</dt><dd>{money(pt.takeHome)}</dd></div>
         {rows.map((r) => <div key={r.label}><dt><i className={`key-dot ${r.cls}`} aria-hidden />{r.label}</dt><dd>{money(r.value)}</dd></div>)}
         {short && <div><dt>Taken from the offset</dt><dd className="st-text-bad">{money(pt.drawn)}</dd></div>}
+        {!short && pt.unallocated > 0 && <div><dt>Not allocated</dt><dd>{money(pt.unallocated)}</dd></div>}
       </dl>
-      <p className="fine">On the larger pay alone you'd be {oneIncome < 0 ? `${money(-oneIncome)} short` : `${money(oneIncome)} ahead`} each month. The offset would cover {cover.toFixed(1)} months of repayments and living costs.</p>
+      <p className="fine">On the larger pay alone you'd be {oneIncome < 0 ? `${money(-oneIncome)} short` : `${money(oneIncome)} ahead`} each month. The offset would cover {cover.toFixed(1)} months of repayments and living costs.{!short && pt.unallocated > 0 ? ' Money not allocated stays wherever it lands and isn\'t counted as going into the offset: give it a job in the plan (extra into the offset, or all spare money).' : ''}</p>
     </section>
   );
 }
@@ -207,19 +223,20 @@ function MoneyThisMonth({ v, at }: { v: LoanView; at: string }) {
 function ComingUp({ p, v }: { p: Property; v: LoanView }) {
   const { data } = useStore();
   const today = thisMonth();
-  const end = addMonths(today, 36);
+  const end = addMonths(today, 24);
   const ev: { month: string; text: string }[] = [];
   if (monthOf(p.settlement) >= today) ev.push({ month: monthOf(p.settlement), text: `Settlement on ${longDate(p.settlement)}` });
   if (v.inputs.setup.start >= today) ev.push({ month: v.inputs.setup.start, text: `First repayment, about ${money(repaymentOf(p.loan!))}` });
   if (v.inputs.rentUntil) ev.push({ month: addMonths(v.inputs.rentUntil, 1), text: 'Rent stops: the lease has ended' });
-  for (const c of p.loan?.changes ?? []) if (c.month >= today) ev.push({ month: c.month, text: c.type === 'rate' ? `Rate ${c.value}%${c.repayment ? `, repayment ${money(c.repayment)}` : ''}` : `${c.type} changes to ${money(c.value)}` });
-  for (const l of p.loan?.lumps ?? []) if (l.month >= today) ev.push({ month: l.month, text: `${money(l.amount)} into the offset` });
+  const plan = activePlanOf(p);
+  for (const c of [...(p.loan?.changes ?? []), ...plan.changes]) if (c.month > today) ev.push({ month: c.month, text: describeChange(c, v.inputs.earners) });
+  for (const l of [...(p.loan?.lumps ?? []), ...plan.lumps]) if (l.month > today) ev.push({ month: l.month, text: `${money(l.amount)} into the offset` });
   for (const f of data.settings.uniFunds ?? []) ev.push({ month: `${f.year}-02`, text: `${f.name} starts uni` });
   const shown = ev.filter((e) => e.month <= end).sort((a, b) => a.month.localeCompare(b.month));
   return (
     <section className="panel" aria-labelledby="coming">
       <h2 id="coming">Coming up</h2>
-      {shown.length ? <ul className="timeline">{shown.map((e, i) => <li key={i}><b>{monthName(e.month)}</b><span>{e.text}</span></li>)}</ul> : <p className="muted">Nothing changes in the next three years.</p>}
+      {shown.length ? <ul className="timeline">{shown.map((e, i) => <li key={i}><b>{monthName(e.month)}</b><span>{e.text}</span></li>)}</ul> : <p className="muted">Nothing changes in the next two years.</p>}
     </section>
   );
 }
@@ -317,72 +334,6 @@ export function CashChart({ height = 200, basis = 'recent' }: { height?: number;
   );
 }
 
-/* ---------------- Loan: details and what happened to it ---------------- */
-
-function LoanTab({ p, set }: { p: Property; set: (x: Partial<Property>) => void }) {
-  const { data } = useStore();
-  const l: PropertyLoan = p.loan ?? { amount: 0, rate: 0, term: 30, firstRepayment: monthOf(p.settlement), changes: [], lumps: [] };
-  const setLoan = (patch: Partial<PropertyLoan>) => set({ loan: { ...l, ...patch } });
-  const v = useLoan(p);
-  const accounts = data.settings.accounts;
-  const [kind, setKind] = useState<'rate' | 'lump'>('rate');
-  const [month, setMonth] = useState(thisMonth() > l.firstRepayment ? thisMonth() : l.firstRepayment);
-  const [value, setValue] = useState('');
-  const [bankRepay, setBankRepay] = useState('');
-  const [keep, setKeep] = useState(false);
-  const events = [...(l.changes ?? []).map((c) => ({ ...c, kind: 'change' as const })), ...(l.lumps ?? []).map((x) => ({ ...x, kind: 'lump' as const }))].sort((a, b) => a.month.localeCompare(b.month));
-  const record = () => {
-    const n = Number(value);
-    if (!n || !month) return;
-    if (kind === 'lump') setLoan({ lumps: [...(l.lumps ?? []), { id: newId(), month, amount: n }] });
-    else {
-      const before = v ? (pointIn(v.now, addMonths(month, -1))?.paidOut ?? repaymentOf(l)) : repaymentOf(l);
-      setLoan({ changes: [...(l.changes ?? []), { id: newId(), month, type: 'rate', value: n, ...(bankRepay ? { repayment: Number(bankRepay) } : {}), ...(keep ? { keepPaying: Math.round(before) } : {}) }] });
-    }
-    setValue(''); setBankRepay(''); setKeep(false);
-  };
-  return (
-    <>
-      <section className="panel">
-        <div className="field-grid">
-          <label>Loan amount<NumberField label="Loan amount" value={l.amount} onSave={(n) => setLoan({ amount: n })} /></label>
-          <label>Interest rate<NumberField label="Interest rate" prefix="" suffix="%" value={l.rate} onSave={(n) => setLoan({ rate: n })} /></label>
-          <label>Years<NumberField label="Years" prefix="" value={l.term} onSave={(n) => setLoan({ term: Math.max(1, Math.round(n)) })} /></label>
-          <label>First repayment<input type="month" value={l.firstRepayment} onChange={(e) => e.target.value && setLoan({ firstRepayment: e.target.value })} /></label>
-          <label>Bank's repayment<NumberField label="Bank's monthly repayment" value={l.repayment ?? Math.round(repaymentOf({ ...l, repayment: undefined }))} onSave={(n) => setLoan({ repayment: n || undefined })} /></label>
-          <label>In the offset on day one<NumberField label="Offset on day one" value={l.offsetStart ?? 0} onSave={(n) => setLoan({ offsetStart: n || undefined })} /><small className="muted">{l.offsetStart ? '' : 'Blank: what the forecast leaves after settlement'}</small></label>
-          <label>Loan account<select value={l.loanAccount ?? ''} onChange={(e) => setLoan({ loanAccount: e.target.value || undefined })}><option value="">Not added yet</option>{accounts.filter((a) => a.type === 'loan').map((a) => <option key={a.key} value={a.key}>{a.name}</option>)}</select></label>
-          <label>Offset account<select value={l.offsetAccount ?? ''} onChange={(e) => setLoan({ offsetAccount: e.target.value || undefined })}><option value="">Not added yet</option>{accounts.filter((a) => a.type === 'offset' || a.type === 'savings').map((a) => <option key={a.key} value={a.key}>{a.name}</option>)}</select></label>
-        </div>
-        <label className="check"><input type="checkbox" checked={l.sweep ?? true} onChange={(e) => setLoan({ sweep: e.target.checked })} /><span>Everything left over each month goes into the offset</span></label>
-        {l.sweep === false && <label className="inline-label">Fixed extra into the offset each month <NumberField label="Extra each month" value={l.extra ?? 0} onSave={(n) => setLoan({ extra: n })} /></label>}
-        <p className="fine">Once the loan and offset accounts are added and their statements are in, the payoff date uses your real balances. <Link to="/accounts">Accounts</Link></p>
-      </section>
-
-      <section className="panel" aria-labelledby="happened">
-        <div className="panel-head"><h2 id="happened">What happened to the loan</h2><Info>Rate changes and lump sums count from their month on; earlier months stay as they were.</Info></div>
-        {events.length ? (
-          <ul className="event-list">
-            {events.map((e) => (
-              <li key={e.id}><b>{monthName(e.month)}</b>
-                <span>{e.kind === 'lump' ? `${money(e.amount)} into the offset` : (e as Change).type === 'rate' ? `Rate to ${(e as Change).value}%${(e as Change).repayment ? `, bank set the repayment to ${money((e as Change).repayment!)}` : ''}${(e as Change).keepPaying ? `, we kept paying ${money((e as Change).keepPaying!)}` : ''}` : `${(e as Change).type} to ${(e as Change).value}`}</span>
-                <button className="icon-btn" aria-label="Remove" onClick={() => e.kind === 'lump' ? setLoan({ lumps: (l.lumps ?? []).filter((x) => x.id !== e.id) }) : setLoan({ changes: (l.changes ?? []).filter((x) => x.id !== e.id) })}><Trash2 size={15} /></button></li>
-            ))}
-          </ul>
-        ) : <p className="muted">Nothing recorded yet.</p>}
-        <form className="record-form" onSubmit={(e) => { e.preventDefault(); record(); }}>
-          <select aria-label="What happened" value={kind} onChange={(e) => setKind(e.target.value as 'rate' | 'lump')}><option value="rate">The rate changed</option><option value="lump">A lump sum into the offset</option></select>
-          <input type="month" aria-label="From" value={month} onChange={(e) => setMonth(e.target.value)} />
-          <span className="money-input">{kind === 'lump' && <span aria-hidden>$</span>}<input inputMode="decimal" aria-label={kind === 'rate' ? 'New rate' : 'Amount'} placeholder={kind === 'rate' ? 'New rate %' : 'Amount'} value={value} onChange={(e) => setValue(e.target.value.replace(/[^\d.]/g, ''))} /></span>
-          {kind === 'rate' && <span className="money-input"><span aria-hidden>$</span><input inputMode="decimal" aria-label="Repayment the bank set" placeholder="Bank's repayment (if told)" value={bankRepay} onChange={(e) => setBankRepay(e.target.value.replace(/[^\d.]/g, ''))} /></span>}
-          {kind === 'rate' && <label className="check small"><input type="checkbox" checked={keep} onChange={(e) => setKeep(e.target.checked)} /><span>We keep paying the old amount</span></label>}
-          <button className="btn small">Record</button>
-        </form>
-      </section>
-    </>
-  );
-}
-
 /* ---------------- Costs & rent ---------------- */
 
 function CostsTab({ p, set }: { p: Property; set: (x: Partial<Property>) => void }) {
@@ -421,66 +372,6 @@ function CostsTab({ p, set }: { p: Property; set: (x: Partial<Property>) => void
           <p>About <b>{money(rent)}</b> a month after empty weeks{p.value ? <>, a gross yield of <b>{pct(((p.rent?.weekly ?? 0) * 52) / (p.value ?? p.price))}</b></> : null}. After running costs and the repayment: <b>{money(rent - runningMonthly(p) - (p.loan ? repaymentOf(p.loan) : 0))}</b> a month.</p>
         </section>
       )}
-    </>
-  );
-}
-
-/* ---------------- Scenarios: what one change does ---------------- */
-
-function Scenarios({ p }: { p: Property }) {
-  const { data } = useStore();
-  const { f, st } = useForecast();
-  const base = useLoan(p);
-  const [extra, setExtra] = useState(0);
-  const [rate, setRate] = useState(0);
-  const [lump, setLump] = useState(0);
-  if (!base || !p.loan) return <p className="muted">Add the loan first.</p>;
-  const s = base.inputs.setup;
-  const offsetStart = offsetAtStart(data, p, st, f.start.cash);
-  const from = thisMonth() > s.start ? addMonths(thisMonth(), 1) : s.start;
-  const july = `${Number(from.slice(0, 4)) + (from.slice(5) > '07' ? 1 : 0)}-07`;
-  const run = (changes: Change[] = [], lumps: Lump[] = []) => runLoan(data, p, { offsetStart, changes, lumps })!;
-  const livingChange = (d: number): Change[] => [{ id: 'x', month: from, type: 'living', value: s.living + d }];
-  const rows: { label: string; v: LoanView }[] = [
-    { label: 'Rates rise 1%', v: run([{ id: 'x', month: from, type: 'rate', value: p.loan.rate + 1 }]) },
-    { label: 'Rates fall 0.5%', v: run([{ id: 'x', month: from, type: 'rate', value: Math.max(0, p.loan.rate - 0.5) }]) },
-    { label: 'Spend $500 a month less', v: run(livingChange(-500)) },
-    { label: 'Spend $500 a month more', v: run(livingChange(500)) },
-    { label: `One income for a year from ${monthName(july)}`, v: run([{ id: 'x', month: july, until: addMonths(july, 11), type: 'inc2', value: 0 }]) },
-    { label: `$10,000 into the offset in ${monthName(july)}`, v: run([], [{ id: 'x', month: july, amount: 10000 }]) },
-  ];
-  const ru = base.inputs.rentUntil;
-  if (ru && ru > from) rows.push({ label: 'The lease ends 2 months early', v: run([{ id: 'x', month: addMonths(ru, -1) > s.start ? addMonths(ru, -1) : s.start, until: ru, type: 'living', value: s.living }]) });
-  const own = run([
-    ...(rate ? [{ id: 'r', month: from, type: 'rate' as const, value: p.loan.rate + rate }] : []),
-    ...(extra ? livingChange(-extra) : []),
-  ], lump ? [{ id: 'l', month: from, amount: lump }] : []);
-  const delta = (v: LoanView): ReactNode => {
-    const d = v.now.paidMonth - base.now.paidMonth;
-    const di = v.now.totalInterest - base.now.totalInterest;
-    return <><td className={d < 0 ? 'st-text-good' : d > 0 ? 'st-text-bad' : ''}>{d === 0 ? 'No change' : `${yrs(d)} ${d < 0 ? 'sooner' : 'later'}`}</td><td>{Math.abs(di) < 50 ? '–' : `${money(Math.abs(di))} ${di < 0 ? 'less' : 'more'}`}</td></>;
-  };
-  return (
-    <>
-      <section className="panel" aria-labelledby="one-change">
-        <div className="panel-head"><h2 id="one-change">What one change does</h2><span className="muted small">Now: paid off {idxName(base.now.paidIdx)}</span></div>
-        <div className="table-wrap">
-          <table className="score">
-            <thead><tr><th>If…</th><th>Paid off</th><th>Change</th><th>Interest</th></tr></thead>
-            <tbody>{rows.map((r) => <tr key={r.label}><th scope="row">{r.label}</th><td>{idxName(r.v.now.paidIdx)}</td>{delta(r.v)}</tr>)}</tbody>
-          </table>
-        </div>
-      </section>
-      <section className="panel" aria-labelledby="try">
-        <h2 id="try">Try your own</h2>
-        <div className="field-grid">
-          <label>Spend less each month<NumberField label="Spend less each month" value={extra} onSave={setExtra} /></label>
-          <label>Rate up or down<NumberField label="Rate change" prefix="" suffix="%" value={rate} onSave={(n) => setRate(n)} /></label>
-          <label>Lump sum into the offset<NumberField label="Lump sum" value={lump} onSave={setLump} /></label>
-        </div>
-        <p className="lead">Paid off <b>{idxName(own.now.paidIdx)}</b>: {(() => { const d = own.now.paidMonth - base.now.paidMonth; return d === 0 ? 'no change' : `${yrs(d)} ${d < 0 ? 'sooner' : 'later'}`; })()}, {money(Math.abs(own.now.totalInterest - base.now.totalInterest))} {own.now.totalInterest <= base.now.totalInterest ? 'less' : 'more'} interest.</p>
-        <p className="fine">Rates can only go down so far: a rate change uses the bank's new repayment worked out on the years left.</p>
-      </section>
     </>
   );
 }

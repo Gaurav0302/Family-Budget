@@ -8,7 +8,7 @@ import { addMonths } from '../data/analysis';
 import { useStore } from '../data/store';
 import type { Every, PayEntry, WealthItem } from '../data/types';
 import {
-  expectedIncome, financialYear, grossMonthly, latestSuper, netWorth, ownedSinceOf, PER_MONTH, payChanges, payFor, people, superMonthly, superRoom,
+  expectedIncome, financialYear, grossMonthly, latestSuper, linkedLoanOn, netWorth, ownedSinceOf, PER_MONTH, payChanges, payFor, people, superMonthly, superRoom,
 } from '../data/wealth';
 import { longDate, money, monthName, thisMonth } from '../lib/format';
 
@@ -110,6 +110,8 @@ function ItemSheet({ item, onClose }: { item: WealthItem; onClose: () => void })
   const [sure, setSure] = useState(false);
   const owners = [...new Set([...people(s), 'Joint'])];
   const start = useRecordsStart();
+  const linked = linkedLoanOn(s, w, '9999-12-31');
+  const linkedTo = (s.properties ?? []).find((p) => p.wealthIds?.includes(w.id) || (!p.wealthIds && w.ownedSince === p.settlement))?.id;
 
   return (
     <div className="sheet-wrap" role="dialog" aria-modal="true" aria-labelledby="item-title" onClick={onClose}>
@@ -129,6 +131,10 @@ function ItemSheet({ item, onClose }: { item: WealthItem; onClose: () => void })
           onChange={(already, d) => set({ ownedSince: already ? '0000-01-01' : (d || values[values.length - 1]?.date || today()) })} />
         <label className="inline">{isDebt(w) ? 'Paid off on' : 'Sold on'} <input type="date" value={w.endedOn ?? ''} onChange={(e) => set({ endedOn: e.target.value || undefined })} /></label>
 
+        {isDebt(w) && linkedTo && <p className="fine">{linked
+          ? <>The balance comes from Property: {money(linked.amount)} at {longDate(linked.date!)}, from the latest check-in or loan statement. </>
+          : <>Once the loan starts, its balance comes from Property's month-end check-ins and loan statements. Until then the figure below counts. </>}
+          <Link to={`/property/${linkedTo}?tab=record`}>Check in balances</Link></p>}
         <h3 className="sub">{isDebt(w) ? 'Balance' : 'Value'} over time</h3>
         <ul className="value-list">
           {values.map((v, i) => (
@@ -205,10 +211,10 @@ function NetWorthTab() {
   const future = nw.total !== nowNw.total;
 
   const row = (w: WealthItem) => {
-    const v = [...w.values].sort((a, b) => b.date.localeCompare(a.date))[0];
+    const v = linkedLoanOn(s, w, '9999-12-31') ?? [...w.values].sort((a, b) => b.date.localeCompare(a.date))[0];
     const since = ownedSinceOf(w);
     const note = since > today() ? `${KIND_LABEL[w.kind]}, from ${longDate(since)}`
-      : [KIND_LABEL[w.kind], v && `as at ${longDate(v.date)}`, w.endedOn ? `ended ${longDate(w.endedOn)}` : since !== '0000-01-01' ? `since ${longDate(since)}` : ''].filter(Boolean).join(', ');
+      : [KIND_LABEL[w.kind], v && v.date && `as at ${longDate(v.date)}`, w.endedOn ? `ended ${longDate(w.endedOn)}` : since !== '0000-01-01' ? `since ${longDate(since)}` : ''].filter(Boolean).join(', ');
     return (
       <li key={w.id}>
         <button className="row-btn" onClick={() => setOpen(w)}>

@@ -77,6 +77,10 @@ export interface ChartProps {
   kind?: 'bars' | 'lines' | 'stacked';
   /** Budget for each month (drawn as a dashed line). */
   budget?: number[];
+  /** Stretches of time to shade (years at uni), each with a label and its series colour. */
+  bands?: { from: string; to: string; label: string; color?: string }[];
+  /** Flat goal lines, each up to a month (a fund's goal until uni starts). */
+  goals?: { value: number; until: string; label: string; color?: string }[];
   /** Moments to mark with a thin upright line and a label (settlement, a lease ending). */
   marks?: { month: string; label: string }[];
   /** A fixed goal line, e.g. Babylon's tenth. */
@@ -134,7 +138,7 @@ export function Chart(p: ChartProps) {
   const pad = { l: compact ? 36 : 50, r: 8, t: 8, b: 22 };
   const w = Math.max(10, width - pad.l - pad.r), h = height - pad.t - pad.b;
   const tops = kind === 'stacked' ? shown.map((_, i) => ser.reduce((a, s) => a + Math.max(0, s.vals[i]), 0)) : ser.flatMap((s) => s.vals);
-  const all = [...tops, ...(bud ?? []), p.target?.value ?? 0];
+  const all = [...tops, ...(bud ?? []), p.target?.value ?? 0, ...(p.goals ?? []).map((g) => g.value * 1.05)];
   let lo = Math.min(0, ...ser.flatMap((s) => s.vals)), hi = Math.max(...all, 0);
   if (p.tight && lo >= 0) { const vmin = Math.min(...ser.flatMap((s) => s.vals)); const spread = Math.max(hi - vmin, hi * 0.05, 1); lo = Math.max(0, vmin - spread * 0.25); }
   const ys = ticks(lo, hi || 1, compact ? 2 : 4);
@@ -192,6 +196,12 @@ export function Chart(p: ChartProps) {
               <text x={pad.l - 6} y={y(v) + 4} textAnchor="end" className="ch-axis">{axisFormat(v)}</text>
             </g>
           ))}
+          {p.bands?.map((b) => { const i0 = shown.indexOf(b.from), i1 = shown.lastIndexOf(shown.filter((m) => m <= b.to).at(-1) ?? ''); return i0 < 0 || i1 < i0 ? null : (
+            <g key={b.label} className="ch-band"><rect x={cx(i0) - band / 2} y={pad.t} width={(i1 - i0 + 1) * band} height={h} style={{ fill: b.color }} /><text x={cx(i0) + 4} y={pad.t + 12}>{b.label}</text></g>
+          ); })}
+          {p.goals?.map((g) => { const i1 = shown.filter((m) => m <= g.until).length - 1; return i1 < 0 ? null : (
+            <g key={g.label} className="ch-goal"><line x1={pad.l} x2={cx(i1)} y1={y(g.value)} y2={y(g.value)} style={{ stroke: g.color }} /><text x={pad.l + 4} y={y(g.value) - 5}>{g.label}</text></g>
+          ); })}
           {hover !== null && <rect x={pad.l + band * hover} y={pad.t} width={band} height={h} className="ch-hover" />}
 
           {kind === 'bars' && ser.map((s, si) => s.vals.map((v, i) => {

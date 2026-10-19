@@ -102,7 +102,7 @@ describe('the loan', () => {
     const inp = loanInputs(data, HOME, { offsetStart: 50000 })!;
     expect(inp.rentUntil).toBe('2027-03');
     expect(inp.changes.find((c) => c.id === 'rent-overlap')).toMatchObject({ month: '2026-12', until: '2027-03', value: 9000 + 300 + 2500 });
-    expect(inp.setup).toMatchObject({ inc1: 9000, inc2: 7000, living: 9300, offset0: 50000, sweep: true });
+    expect(inp.setup).toMatchObject({ inc1: 9000, inc2: 7000, living: 9300, offset0: 50000, sweep: true, extra: 4000 });   // extra = the Budget's Savings & offset line
   });
   it('pays off sooner than the bank’s schedule, and later at a higher rate', () => {
     const v = runLoan(data, HOME, { offsetStart: 50000 })!;

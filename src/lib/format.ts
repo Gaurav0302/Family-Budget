@@ -19,6 +19,8 @@ export const longDate = (d: string) =>
   new Date(d + 'T00:00:00').toLocaleDateString('en-AU', { day: 'numeric', month: 'long', year: 'numeric' });
 
 export const thisMonth = () => {
+  // While developing, localStorage "fb:today" = "2027-06" pretends it's that month (to try check-ins before the loan starts).
+  if (import.meta.env?.DEV) { try { const t = localStorage.getItem('fb:today'); if (t) return t; } catch { /* no storage */ } }
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
 };

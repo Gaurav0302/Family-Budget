@@ -35,7 +35,7 @@ Status: ✅ done · ⬜ to do · 🔄 in progress · ❌ blocked · 🚫 dropped
 
 ## Phase 6 — Monthly routine
 - ✅ 18 Oct 2026 — AGENT-RUNBOOK.md, prepare-import and review tools
-- ⬜ First run with October 2026 statements (Reeti's October statement still needed)
+- ⬜ First run with October 2026 statements (the second person's October statement still needed)
 - ⬜ Optional: Supabase connector in claude.ai so sessions can add data directly
 
 ## Phase 6b — Wealth and insight (approved 18 Oct 2026)
@@ -83,7 +83,7 @@ Status: ✅ done · ⬜ to do · 🔄 in progress · ❌ blocked · 🚫 dropped
 - ✅ 19 Oct 2026 — Money meeting as an agenda with Present mode and one-tap actions (D26)
 - ✅ 19 Oct 2026 — Statements page: month-by-month checklist and six checks; banners and Draft marking (D27)
 - ⬜ User adds the statement balances file (proves Feb–Oct statements add up)
-- ⬜ Reeti's statements before July and the card before 22 June, if they can be downloaded, to complete Feb–June
+- ⬜ The second person's statements before July and the card before 22 June, if they can be downloaded, to complete Feb–June
 - ⬜ Font loading is from Google Fonts; consider self-hosting fonts if offline use matters
 
 ## Phase 6f — One plan: property, loan, forecast, uni funds (approved 19 Oct 2026)
@@ -93,12 +93,16 @@ Status: ✅ done · ⬜ to do · 🔄 in progress · ❌ blocked · 🚫 dropped
 - ✅ 19 Oct 2026 — One "left to give a job" everywhere; meeting plan step gives it a job in one tap; Budget months-ahead strip
 - ✅ 19 Oct 2026 — Uni funds page (each fund over time, goal, in the budget month by month); uni and forecast findings in the meeting
 - ⬜ User: Add statements → "Family Purse - property 19 Oct 2026" → Apply update; check the buying costs against the conveyancer's statement when it arrives
-- ⬜ User (optional): Loan Planner → Settings → Save a backup file, send it to bring saved plans across
-- ⬜ After settlement: add the loan and offset accounts, pick them on Property → Loan so real balances drive the payoff date
+- ✅ 19 Oct 2026 — Loan Planner backup received and brought across (one plan, no recorded changes or check-ins)
+- ⬜ After settlement: add the loan and offset accounts, pick them on Property → Edit plan → Loan so real balances drive the payoff date
 - ⬜ Investment properties: tax (negative gearing, depreciation) not modelled yet
 - ✅ 19 Oct 2026 — Budget frequencies (D29): week/fortnight/month/term/quarter/year per line, suggestions from statements, fair over-budget checks, forecast timing
 - ⬜ User: Budget page → tap "Use this" on the suggestions (cleaner weekly, swimming fortnightly, school/tennis/martial arts/scouts per term), check the per-term amounts
 - ⬜ User: add yearly costs with their due month (car rego, life insurance if not via super, accountant, holidays, Christmas)
+- ✅ 19 Oct 2026 — Loan plans and tracking (D30): plans, facts, check-ins, drafts, presets, what-ifs, Record; Uni funds with changes, check-ins and goals; net worth loan from Property
+- ⬜ User: Add statements → "Family Purse - loan plans 19 Oct 2026" → Apply update (after the property file)
+- ⬜ After settlement: add the loan and offset accounts on Accounts, pick them in Property → Edit plan → Loan; check in balances each month (or let statements do it)
+- ⬜ Uni funds: set goals if wanted (backup had none); check in the fund balances once saving starts
 
 ## Phase 7 — Polish
 - ✅ 18 Oct 2026 — Tests (17), phone overflow check on every page, dark mode

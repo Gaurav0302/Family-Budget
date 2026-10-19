@@ -1,8 +1,10 @@
 import { useMemo } from 'react';
 import { forecast, story, type Basis } from './forecast';
-import { propertiesOf, runLoan, type LoanView } from './property';
+import { activePlanOf, propertiesOf, runLoan, type LoanView } from './property';
 import { useStore } from './store';
-import type { Category, Data, Property } from './types';
+import type { Category, LoanPlan, Property, Settings } from './types';
+import { lastDay, monthOf } from './analysis';
+import type { Change } from '../loan';
 
 /** Every property, and the one way to change them: the rest of the app reads from here. */
 export function useProperties() {
@@ -42,15 +44,38 @@ export function useForecast(basis: Basis = 'recent') {
   return useMemo(() => { const f = forecast(data, { basis }); return { f, st: story(f) }; }, [data, basis]);
 }
 
-/** Money in the offset on day one: what the family typed, else what the forecast leaves after settlement, else cash today. */
-export function offsetAtStart(_data: Data, p: Property, st: ReturnType<typeof story>, cashNow: number): number {
-  if (p.loan?.offsetStart !== undefined && p.loan.offsetStart !== null) return p.loan.offsetStart;
+/** Money in the offset on day one: what the plan (or the loan) says; once statements reach past settlement, the real cash at the
+ *  end of the settlement month; before that, what the forecast leaves after settlement; else cash today. */
+export function offsetAtStart(p: Property, st: ReturnType<typeof story>, cashNow: number, plan?: LoanPlan, s?: Settings): number {
+  const set = plan?.offsetStart ?? p.loan?.offsetStart;
+  if (set !== undefined && set !== null) return set;
   if (p.use !== 'home') return 0;
+  const real = s ? cashAfterSettlement(s, p) : null;
+  if (real !== null) return real;
   return st.settlements.find((x) => x.property === p.name)?.after ?? cashNow;
 }
 
-export function useLoan(p: Property | undefined): LoanView | null {
+/** Cash in the bank at the end of the settlement month, once every open account has a balance from then or later. */
+export function cashAfterSettlement(s: Settings, p: Property): number | null {
+  const end = lastDay(monthOf(p.settlement));
+  const live = s.accounts.filter((a) => a.type !== 'loan' && (!a.closedOn || a.closedOn > end) && (!a.openedOn || a.openedOn <= end));
+  if (!live.length || !live.every((a) => s.balances.some((b) => b.account === a.key && b.date >= end))) return null;
+  let total = 0;
+  for (const a of live) {
+    const b = s.balances.filter((x) => x.account === a.key && x.date <= end).sort((x, y) => y.date.localeCompare(x.date))[0];
+    if (b) total += b.amount;
+  }
+  return total;
+}
+
+/** A property's loan on a plan (the active one by default), with extra changes on top (a draft's new figures). */
+export function useLoan(p: Property | undefined, plan?: LoanPlan, extra: Change[] = []): LoanView | null {
   const { data } = useStore();
   const { f, st } = useForecast();
-  return useMemo(() => (p ? runLoan(data, p, { offsetStart: offsetAtStart(data, p, st, f.start.cash) }) : null), [data, p, st, f]);
+  const key = JSON.stringify([plan, extra]);
+  return useMemo(() => {
+    if (!p) return null;
+    const pl = plan ?? activePlanOf(p);
+    return runLoan(data, p, { plan: pl, offsetStart: offsetAtStart(p, st, f.start.cash, pl, data.settings), changes: extra });
+  }, [data, p, key, st, f]);
 }

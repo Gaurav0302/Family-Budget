@@ -1,13 +1,16 @@
 # SESSION-HANDOFF.md
 
-## Current status (19 Oct 2026, late night)
+## Current status (19 Oct 2026, near midnight)
+Latest: loan plans and tracking (D30). Property → the home now has Overview, Plans, Edit plan, Record, Buying, Costs & rent; Uni funds has saving changes, check-ins, goals and the uni-years chart; net worth's loan follows Property. Private file 'Family Purse - loan plans 19 Oct 2026' carries the Loan Planner backup's plan ("My plan": $0 extra, sweep off, no guesses), uni settings (in the offset, 3 years) and links the home and loan net worth items. On the user's data a typical loan month has about $743 spare after the $6,762 repayment, ~$10,083 living and property costs and $600 uni saving (Dec–Mar short because of the rent overlap). With $0 extra the loan is paid off around Feb 2052 (bank schedule Dec 2056); $1,500 extra gives Feb 2047 but only ~$743 of it fits in a typical month. Engine checked against the Loan Planner on the backup's inputs: identical month by month.
+
+## Earlier status (19 Oct 2026, late night)
 Latest: budget frequencies (D29). Suggestions on the user's data: cleaner $110 weekly, YMCA swimming $39.70 fortnightly (budget was $362/month), school ~$906/term, tennis ~$569/term (Term 4 paid in September), martial arts ~$523/term (Term 4 due October), scouts ~$334/term. With those accepted the forecast (test copy) shows ~$141k before settlement, ~$75.6k after, Dec–Mar about $768/month drawn ($3,073), Term 1 fees in January, lowest ~$72.5k in March, ~$1,818/month kept on average from April (10%). Yearly costs (rego etc.) still need due months from the user.
 
 ## Earlier status (19 Oct 2026, night)
 Latest: one forward plan (D28). Property page (the home first; adding an investment is one form), the Loan Planner calculator and dashboard on real figures, a cash forecast to June 2027 used by Home, Goals, What if, Property and the money meeting's new "Looking ahead" step, Uni funds page. Private file 'Family Purse - property 19 Oct 2026' carries the property (price, deposit paid 10 Oct, stamp duty estimate $62,157.50 at the general rate, $3,500 fees estimate, rates/water/insurance, loan). Numbers on the user's data: about $140,092 cash before settlement, $74,435 after, lowest $68,616 in March 2027 (4.1 months of spending); Dec–Mar about $1,455 a month drawn from savings; from April about $1,326 kept (7%). Loan paid off Feb 2047 at real spending (Loan Planner's own defaults gave Jan 2042 with $6,000 living).
 
 ## Earlier status (19 Oct 2026, evening)
-Latest: Statements page with month checks (D27). Private file 'Family Purse - statement balances 19 Oct 2026' carries each statement's opening/closing balance (all tie to the cent). Feb–June are missing Reeti's two accounts and the card (before 22 June); July is fully checked; Aug/Sep only need payments sorted.
+Latest: Statements page with month checks (D27). Private file 'Family Purse - statement balances 19 Oct 2026' carries each statement's opening/closing balance (all tie to the cent). Feb–June are missing the second person's two accounts and the card (before 22 June); July is fully checked; Aug/Sep only need payments sorted.
 Also pushed since: theme-independent meaning colours (D24), 50/30/20 green-within colours (D25), money meeting agenda with Present mode (D26).
 
 ## Earlier status (19 Oct 2026, late afternoon)
@@ -37,6 +40,8 @@ Fifth build pushed: no reload on returning, 54 themes (light and dark, per perso
 - Subscriptions seen only once are treated as yearly until a second payment appears.
 
 ## Got wrong this session
+- What-ifs first measured "$500 more into the offset" from the first month's actual extra (cut by the rent overlap), so "more" showed as later. Now from the plan's own extra, and rows that can't change anything say there's nothing spare.
+- A family member's first name had been in BACKLOG, SESSION-HANDOFF and two code comments since the first commit; removed and added to privacy-words. It is still in git history.
 - The needs/wants/kept bar took its colours from the theme, so they meant nothing (wants looked fine while over guide), and the verdict compared spending without one-offs against averages with them. Fixed (D23): status colours with words, like-for-like sentence.
 - Chart tooltips first sat above the plot and covered the time span buttons; they now sit beside the hovered month. Menus inside scrolling sheets were cut off; they're now fixed to the screen.
 - The drill-down sheet stayed open after moving to another page; fixed by closing it on navigation and Escape. Test flows across pages, not just one page.
