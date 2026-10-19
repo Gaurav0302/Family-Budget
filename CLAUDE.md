@@ -23,6 +23,7 @@ React 18 + Vite + TypeScript, HashRouter, Supabase (supabase-js, email + passwor
 - `src/data/payees.ts`: the payee list (D13) that decides each transaction's category; `sortTransaction` is the one sorting entry point. Stored as settings key `payees`.
 - `src/data/rules.ts`: built-in sorting rules (generic only), used only for payees not seen before. Bump `RULES_VERSION` when you change them: the app re-sorts everything not sorted by hand.
 - `wealth.ts`: pay, super, caps, tax rates, net worth, pay-change detection. `bills.ts`: regular bills and price rises. `whatif.ts`: loan payoff with offset. `settingsMerge.ts`: how settings from files merge without overwriting. `categories.ts`: categories and groups. `analysis.ts`: month totals, coverage, budgets, recurring payments, month-end balances. `review.ts`: the review engine (budget, trends, Babylon, Ramsey, 50/30/20, subscriptions, unusual). `importers.ts`: CSV and data-file import. `store.tsx`: state and saving. `adapters/`: Supabase and browser-only storage.
+- `src/loan/`: the Loan Planner's month-by-month loan calculator (`simulate`, tested against the original page). `src/data/property.ts`: properties (`propertiesOf`, falls back to the old `home` details), `runLoan` (real pay, spending, rent overlap, uni funds, real balances). `forecast.ts`: cash month by month and `story()`, the one set of sentences every page uses. `useProperties.ts`: `useProperties`, `useForecast`, `useLoan`. Screens `Property.tsx` (and `CashChart`), `Uni.tsx`.
 - `tools/`: `parse_statements.py` (PDF text → transactions), `prepare-import.ts`, `review.ts`.
 - `supabase/setup.sql`: tables and access rules. `.github/workflows/`: publish and keep-awake.
 
@@ -39,5 +40,6 @@ React 18 + Vite + TypeScript, HashRouter, Supabase (supabase-js, email + passwor
 - Statements checks: `data/audit.ts` (`auditMonth`), `useAudits()`, `MonthBanner`. Statement balances live in settings `statements`.
 - Steps pane: `components/StepPane.tsx` (Shell shows it on hover over Reports, docks it on click). The meeting tells it the current step via `usePane().setInfo`; the pane sends steps as `/reports?step=…` and Present as `?present=1`.
 - Drill-downs: `DrillLink` with `drillCategory/drillType/drillGroup` from `components/Drill.tsx` opens the payments behind any figure.
+- Anything about the future (settlement, overlap, what's kept after, money without a job, uni funds) comes from `forecast()`/`story()` or `aheadFindings()` in review.ts: never work it out again on a page. Recent spending leaves out `HOUSING_CATS` and an investment's own area; each property's running costs go back in.
 - Keep pages uncluttered: explanations go behind the small `Info` button, not in paragraphs.
 - Super cap and tax-rate tables in `wealth.ts` need updating each July (ATO key super rates and thresholds).

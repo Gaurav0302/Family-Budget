@@ -63,6 +63,19 @@ export function Budget() {
           : `The plan spends ${money(-left)} more than you expect to earn in ${monthOnly(month)}. Trim a few categories until this reaches zero.`}</p>
       </section>
 
+      <nav className="ahead-strip" aria-label="Money without a job, month by month">
+        {months.filter((m) => m >= thisMonth()).slice(0, 7).map((m) => {
+          const l = expectedIncome(data.settings, m) - totalBudget(data.budgets, m) - keepBudget(data.budgets, m);
+          const t = Math.abs(l) < 1 ? 'good' : l > 0 ? 'warn' : 'bad';
+          return (
+            <button key={m} className={`ahead-chip st-text-${t} ${m === month ? 'on' : ''}`} onClick={() => setMonth(m)} aria-pressed={m === month}>
+              <span>{monthName(m, 'short')}</span><b>{Math.abs(l) < 1 ? 'All set' : `${l > 0 ? '' : '−'}${money(Math.abs(l))}`}</b>
+            </button>
+          );
+        })}
+        <Info>Each month's pay less everything budgeted. Amber: money still without a job. Red: the plan spends more than comes in. Tap a month to fix it.</Info>
+      </nav>
+
       <section className="budget-group keep-group" aria-labelledby="g-keep">
         <div className="budget-group-head">
           <h2 id="g-keep">Kept on purpose</h2>

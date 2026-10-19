@@ -7,6 +7,8 @@ import { findBills } from './bills';
 import { merchantOf } from './merchant';
 import { expectedIncome, grossMonthly, payChanges, superMonthly } from './wealth';
 import type { Data, Transaction } from './types';
+import { forecast, story } from './forecast';
+import { homeOf, homeProperty, runningMonthly, uniStart } from './property';
 
 export type Severity = 'act' | 'watch' | 'good' | 'info';
 
@@ -17,10 +19,12 @@ export interface Finding {
   detail: string;
   /** Monthly dollars at stake, used for ranking. */
   impact: number;
-  source: 'Budget' | 'Trend' | 'Babylon' | 'Ramsey' | '50/30/20' | 'Subscriptions' | 'Unusual' | 'Home' | 'Data' | 'Bills' | 'Savings' | 'Income';
+  source: 'Budget' | 'Trend' | 'Babylon' | 'Ramsey' | '50/30/20' | 'Subscriptions' | 'Unusual' | 'Home' | 'Data' | 'Bills' | 'Savings' | 'Income' | 'Looking ahead' | 'Uni funds';
   category?: string;
   /** Important enough for the red banner at the top of Home. */
   scream?: boolean;
+  /** A concrete next step for the money meeting's "Make this an action". */
+  action?: string;
 }
 
 export interface ScoreRow {
@@ -69,6 +73,73 @@ const OVERLAPS: [string, RegExp][] = [
   ['two food-delivery memberships', /^(Uber One|DoorDash DashPass)$/],
   ['several streaming services', /^(YouTube Premium|Prime Video|Netflix|Stan|Binge|Disney|Spotify)$/i],
 ];
+
+const fmtMonthShort = (m: string) => new Date(m + '-01T00:00:00').toLocaleDateString('en-AU', { month: 'long' });
+const spanText = (a: string, b: string) => (a === b ? fmtMonth(a) : `${fmtMonthShort(a)} to ${fmtMonth(b)}`);
+
+/** What the forecast says about the months ahead, as findings for the review and the money meeting. */
+export function aheadFindings(data: Data, month: string, from?: string): Finding[] {
+  const out: Finding[] = [];
+  const s = data.settings;
+  const f = forecast(data, { from });
+  const st = story(f);
+  const next = addMonthsLocal(month, 1);
+  const ahead = f.months.filter((x) => x.month >= next);
+
+  // Can we carry what's coming? Settlement, overlaps, the lowest point.
+  if (st.settlements.length || st.squeezes.length) {
+    const sev = st.verdict === 'yes' ? 'watch' : 'act';
+    const keptAfter = st.after ? st.after.kept / Math.max(1, st.after.pay) : 1;
+    const shortOfTenth = st.after ? Math.max(0, st.after.pay * 0.1 - st.after.kept) : 0;
+    out.push({ id: 'ahead:carry', source: 'Looking ahead', severity: keptAfter < 0.1 ? 'act' : sev, scream: st.verdict !== 'yes' || keptAfter < 0.1,
+      impact: Math.max(st.squeezes.reduce((a, q) => a + q.perMonth, 0), shortOfTenth),
+      title: st.verdict === 'yes' && st.after && keptAfter < 0.1
+        ? `From ${fmtMonthShort(st.after.month)} you'd keep about ${money(st.after.kept)} a month (${pct(keptAfter)}), under Babylon's tenth`
+        : `${st.headline}${st.low ? ` Cash bottoms out at about ${money(st.low.cash)} in ${fmtMonthShort(st.low.month)}.` : ''}`,
+      detail: st.verdict === 'yes' && st.after && keptAfter < 0.1
+        ? `Settlement${st.squeezes.length ? ' and the months of rent and mortgage together' : ''} are covered: cash is lowest${st.low ? ` in ${fmtMonthShort(st.low.month)}, at about ${money(st.low.cash)} (${st.cover.toFixed(1)} months of spending)` : ''}. After that, about ${money(shortOfTenth)} a month less spending gets you back to a tenth.`
+        : st.lines.filter((l) => !/isn't in the bank balances/.test(l)).join(' '),
+      action: shortOfTenth ? `Find ${money(shortOfTenth)} a month of savings before ${fmtMonthShort(st.after!.month)}` : 'Check the forecast again after settlement' });
+  }
+  for (const q of st.squeezes) out.push({ id: `ahead:squeeze:${q.from}`, source: 'Looking ahead', severity: 'watch', impact: q.perMonth,
+    title: `${spanText(q.from, q.to)}: about ${money(q.perMonth)} a month more going out than coming in`,
+    detail: `${money(q.total)} in all comes out of savings.${q.from <= next ? '' : ' Money put aside before then covers it.'}`,
+    action: `Put aside ${money(q.total)} before ${fmtMonthShort(q.from)} to cover ${spanText(q.from, q.to)}` });
+
+  // The budget planned beyond income in the months ahead.
+  const beyond = ahead.filter((x) => x.unassigned < -1);
+  if (beyond.length) {
+    const worst = Math.max(...beyond.map((x) => -x.unassigned));
+    out.push({ id: 'ahead:beyond', source: 'Budget', severity: 'watch', impact: worst,
+      title: `The budget plans more than comes in for ${beyond.length === 1 ? fmtMonth(beyond[0].month) : `${beyond.length} months from ${fmtMonthShort(beyond[0].month)}`}`,
+      detail: `Up to ${money(worst)} a month more is given a job than you expect to earn. Trim those months on the Budget page, or plan to draw it from savings on purpose.`,
+      action: `Trim ${fmtMonth(beyond[0].month)}'s budget by ${money(-beyond[0].unassigned)}` });
+  }
+
+  // Next month's money without a job.
+  const n = f.months.find((x) => x.month === next);
+  if (n && n.unassigned > 50) {
+    const job = st.squeezes.find((q) => q.from > next);
+    out.push({ id: `job:${next}`, source: 'Budget', severity: 'watch', impact: n.unassigned,
+      title: `${money(n.unassigned)} of ${fmtMonthShort(next)}'s pay has no job yet`,
+      detail: job ? `Keeping it for ${spanText(job.from, job.to)} would cover ${Math.min(100, Math.round((n.unassigned / job.total) * 100))}% of the ${money(job.total)} that will come out of savings then.` : 'Money without a job tends to get spent. Give it one: the offset, savings or the uni funds.',
+      action: job ? `Keep ${fmtMonthShort(next)}'s ${money(n.unassigned)} for ${spanText(job.from, job.to)}` : `Give ${fmtMonthShort(next)}'s ${money(n.unassigned)} a job` });
+  }
+
+  // Uni funds: in the budget, and actually affordable in the months ahead.
+  const funds = s.uniFunds ?? [];
+  const planned = (m: string) => funds.filter((u) => uniStart(u, data.budgets, m) <= m && u.year * 100 + 2 > Number(m.replace('-', ''))).reduce((a, u) => a + u.monthly, 0);
+  const budgetUni = budgetFor(data.budgets, 'keep-uni', next);
+  if (planned(next) - budgetUni > 1) out.push({ id: `uni:budget:${next}`, source: 'Uni funds', severity: 'watch', impact: planned(next) - budgetUni,
+    title: `The uni funds get ${money(budgetUni)} in ${fmtMonthShort(next)}'s budget, ${money(planned(next))} is planned`,
+    detail: 'Give them their full amount under "Kept on purpose" on the Budget page, or change the plan on the Uni funds page.',
+    action: `Budget ${money(planned(next))} for the uni funds in ${fmtMonthShort(next)}` });
+  const short = ahead.filter((x) => planned(x.month) > 0 && !x.part && x.kept + x.oneOffs.reduce((a, o) => a + o.amount, 0) < planned(x.month));
+  if (short.length) out.push({ id: 'uni:ahead', source: 'Uni funds', severity: 'watch', impact: planned(short[0].month),
+    title: `The uni funds' ${money(planned(short[0].month))} a month would come out of savings in ${spanText(short[0].month, short.at(-1)!.month)}`,
+    detail: `Those months nothing is left over after spending, so the funds only grow if savings shrink. ${st.after ? `From ${fmtMonthShort(st.after.month)} there's ${money(st.after.kept)} a month to cover them.` : ''}`.trim() });
+  return out;
+}
 
 /** The full monthly review: budget scorecard, trends, Babylon's seven cures, Ramsey's baby steps, 50/30/20. */
 export function reviewMonth(data: Data, month: string): ReviewResult {
@@ -204,21 +275,15 @@ export function reviewMonth(data: Data, month: string): ReviewResult {
     title: `${toSort} transaction${toSort > 1 ? 's need' : ' needs'} your input`, detail: "The app couldn't tell what these were. Sorting them makes every number here more accurate." });
 
   // ---- Home: settlement, rent overlap, upkeep
-  const h = s.home;
+  const h = homeOf(s, data.budgets);
   const hasHome = !!h.settlement;
   const settleMonth = hasHome ? monthOf(h.settlement) : '9999-12';
   const housingNow = (summary.byCategory['rent'] ?? 0) + (summary.byCategory['mortgage'] ?? 0) + (summary.byCategory['council-rates'] ?? 0) + (summary.byCategory['water'] ?? 0) + (summary.byCategory['home-insurance'] ?? 0);
-  const housingAfterCost = h.repayment + budgetFor(data.budgets, 'council-rates', settleMonth) + budgetFor(data.budgets, 'water', settleMonth) + budgetFor(data.budgets, 'home-insurance', settleMonth);
+  const hp = homeProperty(s, data.budgets);
+  const housingAfterCost = h.repayment + (hp ? runningMonthly(hp) : 0);
   const housingShare = summary.income ? housingNow / summary.income : 0;
   const incAfter = expectedIncome(s, settleMonth > month ? settleMonth : month);
   const housingAfter = incAfter ? housingAfterCost / incAfter : 0;
-  if (hasHome && h.leaseEnds > h.settlement && month <= settleMonth) {
-    const overlap = Math.max(0, Math.round((new Date(h.leaseEnds).getTime() - new Date(h.settlement).getTime()) / (30.44 * 864e5)));
-    const rent = budgetFor(data.budgets, 'rent', month);
-    if (overlap && rent) findings.push({ id: 'home:overlap', source: 'Home', severity: 'act', scream: true, impact: rent,
-      title: `Rent and mortgage could overlap for ${overlap} months`, detail: `Settlement is ${fmtDate(h.settlement)} but the lease runs to ${fmtDate(h.leaseEnds)}. Paying both would cost about ${money(overlap * rent)} extra. Ask the rental agent now about ending the lease early or finding a replacement tenant.` });
-  }
-
   // ---- Babylon's seven cures for a lean purse
   const cash = cashOnHand(s);
   const avgSpend = base.length ? average(base.map((b) => b.spend)) : summary.spend;
@@ -244,7 +309,7 @@ export function reviewMonth(data: Data, month: string): ReviewResult {
         : 'Add your savings balances on the Goals page to check your emergency cover.' },
     { title: 'Make of thy dwelling a profitable investment', rule: 'Own your home rather than rent it.',
       status: month >= settleMonth ? 'good' : 'info',
-      detail: !hasHome ? 'Add your home loan details on the Goals page.' : month >= settleMonth ? `You own your home. Every extra dollar in the offset brings payoff closer.` : `Settlement on ${fmtDate(h.settlement)} turns ${money(budgetFor(data.budgets, 'rent', month))} of rent a month into paying off your own home.` },
+      detail: !hasHome ? 'Add your home on the Property page.' : month >= settleMonth ? `You own your home. Every extra dollar in the offset brings payoff closer.` : `Settlement on ${fmtDate(h.settlement)} turns ${money(budgetFor(data.budgets, 'rent', month))} of rent a month into paying off your own home.` },
     { title: 'Insure a future income', rule: 'Provide for the years when you no longer work.',
       status: gross && sup / gross >= 0.12 ? 'good' : 'watch',
       detail: `About ${money(sup)} a month goes into super for both of you: ${pct(sup / (gross || 1))} of gross pay.` },
@@ -272,7 +337,7 @@ export function reviewMonth(data: Data, month: string): ReviewResult {
     { n: 5, title: "Save for the children's university", rule: 'Build a fund for each child.', done: !!s.babySteps['5'],
       detail: `${money(fundsSaved)} saved so far. Planned: ${s.uniFunds.map((f) => `${f.name} ${money(f.monthly)}/month`).join(', ')}.` },
     { n: 6, title: 'Pay off the home early', rule: 'Every spare dollar to the mortgage.', done: !!s.babySteps['6'],
-      detail: !hasHome ? 'Add your home loan on the Goals page.' : month >= settleMonth ? 'Extra money into the offset counts here.' : `Starts at settlement on ${fmtDate(h.settlement)}.` },
+      detail: !hasHome ? 'Add your home on the Property page.' : month >= settleMonth ? 'Extra money into the offset counts here.' : `Starts at settlement on ${fmtDate(h.settlement)}.` },
     { n: 7, title: 'Build wealth and give', rule: 'Invest and give generously.', done: !!s.babySteps['7'],
       detail: giving ? `${money(giving)} given this month.` : 'Giving this month: none recorded.' },
   ];
@@ -290,19 +355,9 @@ export function reviewMonth(data: Data, month: string): ReviewResult {
   if (summary.income > 0 && summary.kept < 0) findings.push({ id: 'alert:overspend', source: 'Budget', severity: 'act', scream: true, impact: -summary.kept,
     title: `${money(-summary.kept)} more went out than came in`, detail: `Spending was ${money(summary.spend)} against ${money(summary.income)} of income. The gap came out of savings.` });
 
-  if (hasHome && month < settleMonth && base.length + (summary.complete ? 1 : 0) >= 2) {
-    const recent = [...base, ...(summary.complete ? [summary] : [])].slice(-3);
-    const usual = average(recent.map((b) => b.spend - b.oneOffs.reduce((a, t) => a - t.amount, 0)));
-    const rentNow = budgetFor(data.budgets, 'rent', month);
-    const waterNow = budgetFor(data.budgets, 'water', month);
-    const after = usual - rentNow - waterNow + housingAfterCost;
-    const keptAfter = incAfter - after;
-    const overlapRent = h.leaseEnds > h.settlement ? budgetFor(data.budgets, 'rent', settleMonth) : 0;
-    if (keptAfter < incAfter * 0.1) findings.push({ id: 'alert:squeeze', source: 'Home', severity: 'act', scream: true, impact: incAfter * 0.1 - keptAfter,
-      title: `After settlement you'd keep about ${money(keptAfter)} a month (${pct(keptAfter / incAfter)})`,
-      detail: `At recent spending of ${money(usual)} a month, swapping ${money(rentNow)} of rent for about ${money(housingAfterCost)} of repayment and house bills leaves ${money(keptAfter)} of ${money(incAfter)}. That's below Babylon's tenth (${money(incAfter * 0.1)}).` +
-        (overlapRent ? ` While rent and mortgage overlap it would be ${money(keptAfter - overlapRent)} a month.` : '') + ' The What if page shows which changes close the gap.' });
-  }
+  // ---- Looking ahead: the same forecast as Home, Property and the money meeting, so every page tells one story.
+  // Only from the latest complete month on: older reviews stay about their own month.
+  if (month >= (complete.at(-1) ?? month)) findings.push(...aheadFindings(data, month));
 
   // Three rises in a row.
   const three = complete.filter((m) => m <= month).slice(-3).map((m) => (m === month ? summary : summarise(m, data)));

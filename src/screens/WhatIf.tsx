@@ -1,11 +1,13 @@
 import { useMemo, useState } from 'react';
 import { Info, NumberField, PageHeader } from '../components/bits';
-import { average, budgetFor, completeMonths, findRecurring, monthOf, summarise } from '../data/analysis';
+import { average, completeMonths, findRecurring, summarise } from '../data/analysis';
 import { CATEGORY, SPEND_CATEGORIES } from '../data/categories';
 import { useStore } from '../data/store';
 import { expectedIncome } from '../data/wealth';
-import { payoff, yearsMonths } from '../data/whatif';
-import { money, pct } from '../lib/format';
+import { yearsMonths } from '../data/whatif';
+import { homeProperty, runLoan } from '../data/property';
+import { offsetAtStart, useForecast, useLoan } from '../data/useProperties';
+import { money, monthName, pct } from '../lib/format';
 
 export function WhatIf() {
   const { data } = useStore();
@@ -18,6 +20,9 @@ export function WhatIf() {
   const subs = recent.length ? findRecurring(data.transactions, recent.at(-1)).filter((x) => x.every === 'month') : [];
   const [targets, setTargets] = useState<Record<string, number>>({});
   const [cancel, setCancel] = useState<Record<string, boolean>>({});
+  const { f, st } = useForecast();
+  const home = homeProperty(s, data.budgets);
+  const base = useLoan(home);
 
   if (!recent.length) return <div><PageHeader title="What if" /><p className="muted">Needs at least one complete month of statements.</p></div>;
 
@@ -25,18 +30,13 @@ export function WhatIf() {
   const subSaving = subs.filter((x) => cancel[x.merchant]).reduce((a, x) => a + x.monthly, 0);
   const extra = cutSaving + subSaving;
 
-  const h = s.home;
-  const hasHome = !!h.settlement && h.loan > 0;
-  const settle = hasHome ? monthOf(h.settlement) : recent.at(-1)!;
-  const income = expectedIncome(s, settle);
-  const usual = average(sums.map((x) => x.spend - x.oneOffs.reduce((a, t) => a - t.amount, 0)));
-  const last = recent.at(-1)!;
-  const houseBills = ['council-rates', 'water', 'home-insurance'].reduce((a, c) => a + budgetFor(data.budgets, c, settle), 0);
-  const spendAfter = hasHome ? usual - budgetFor(data.budgets, 'rent', last) - budgetFor(data.budgets, 'water', last) + h.repayment + houseBills : usual;
-  const keptNow = income - spendAfter, keptNew = keptNow + extra;
-  const offsetPlan = budgetFor(data.budgets, 'keep-savings', settle);
-  const base = hasHome ? payoff(h.loan, h.rate, h.repayment, h.offsetStart ?? 0, offsetPlan) : null;
-  const better = hasHome ? payoff(h.loan, h.rate, h.repayment, h.offsetStart ?? 0, offsetPlan + extra) : null;
+  // Life after settlement and the loan come from the same forecast and loan calculator as Property and the money meeting.
+  const after = st.after;
+  const income = after?.pay ?? expectedIncome(s, recent.at(-1)!);
+  const keptNow = after?.kept ?? 0, keptNew = keptNow + extra;
+  const better = home && base ? runLoan(data, home, { offsetStart: offsetAtStart(data, home, st, f.start.cash), changes: extra > 0 ? [{ id: 'cut', month: base.inputs.setup.start, type: 'living', value: base.inputs.setup.living - extra }] : [] }) : null;
+  const hasHome = !!(home && base && after);
+  const gone = (v: NonNullable<typeof base>) => yearsMonths(v.now.paidMonth);
 
   return (
     <div className="whatif">
@@ -75,7 +75,7 @@ export function WhatIf() {
         </div>
         <div className="whatif-sticky" aria-hidden="true">
           <span><b>{money(extra)}</b> a month freed</span>
-          {hasHome && base && better && <span>{extra > 0 ? <>loan <b>{yearsMonths(base.months - better.months)}</b> sooner</> : <>keep <b>{pct(keptNew / income)}</b> after settlement</>}</span>}
+          {hasHome && base && better && <span>{extra > 0 ? <>loan <b>{yearsMonths(base.now.paidMonth - better.now.paidMonth)}</b> sooner</> : <>keep <b>{pct(keptNew / income)}</b> after settlement</>}</span>}
         </div>
         <aside className="panel whatif-result" aria-live="polite">
           <p className="kicker">This frees up</p>
@@ -84,11 +84,11 @@ export function WhatIf() {
           {hasHome && (
             <>
               <hr />
-              <p>After settlement you'd keep <b>{money(keptNew)}</b> a month ({pct(keptNew / income)}), {keptNew >= income * 0.1 ? 'above' : 'below'} Babylon's tenth of {money(income * 0.1)}.{extra > 0 && <> Without the changes: {money(keptNow)} ({pct(keptNow / income)}).</>}</p>
+              <p>From {monthName(after!.month)} you'd keep <b>{money(keptNew)}</b> a month ({pct(keptNew / income)}), {keptNew >= income * 0.1 ? 'above' : 'below'} Babylon's tenth of {money(income * 0.1)}.{extra > 0 && <> Without the changes: {money(keptNow)} ({pct(keptNow / income)}).</>}</p>
               {base && better && (
-                <p>Putting it all in the offset on top of the planned {money(offsetPlan)} a month, the loan is gone in <b>{yearsMonths(better.months)}</b>
-                  {extra > 0 && <> instead of {yearsMonths(base.months)}: <b>{yearsMonths(base.months - better.months)} sooner</b> and about <b>{money(base.interest - better.interest)}</b> less interest</>}.
-                  <Info>Uses {h.rate}% interest, a {money(h.repayment)} monthly repayment and {money(h.offsetStart ?? 0)} in the offset at the start, the same idea as your Loan Planner. Rates will change, so treat it as a guide.</Info></p>
+                <p>With everything left over going into the offset, {home!.name} is paid off in <b>{gone(better)}</b>
+                  {extra > 0 && <> instead of {gone(base)}: <b>{yearsMonths(base.now.paidMonth - better.now.paidMonth)} sooner</b> and about <b>{money(base.now.totalInterest - better.now.totalInterest)}</b> less interest</>}.
+                  <Info>The same loan calculator as the Property page, with your real pay and spending. Rates will change, so treat it as a guide.</Info></p>
               )}
             </>
           )}

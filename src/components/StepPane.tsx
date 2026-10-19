@@ -8,6 +8,7 @@ export const MEETING_STEPS = [
   { id: 'm-talk', title: 'What to talk about' },
   { id: 'm-areas', title: 'Each area' },
   { id: 'm-targets', title: 'Targets' },
+  { id: 'm-ahead', title: 'Looking ahead' },
   { id: 'm-next', title: 'Plan for next month' },
 ];
 

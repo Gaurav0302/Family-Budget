@@ -14,6 +14,10 @@ import { reviewMonth, type Finding } from '../data/review';
 import { useStore } from '../data/store';
 import type { Data } from '../data/types';
 import { expectedIncome, financialYear, netWorth, payFor, people } from '../data/wealth';
+import { CashChart } from './Property';
+import { outgoings, type Basis } from '../data/forecast';
+import { useForecast } from '../data/useProperties';
+import { keepBudget, totalBudget } from '../data/analysis';
 import { money, monthName, monthOnly, pct } from '../lib/format';
 
 const endOf = (m: string) => { const [y, mo] = m.split('-').map(Number); return `${m}-${String(new Date(Date.UTC(y, mo, 0)).getUTCDate()).padStart(2, '0')}`; };
@@ -93,6 +97,7 @@ function Ring({ done, total }: { done: number; total: number }) {
 
 /** A suggested action for a talking point: concrete where the app knows enough, otherwise a prompt to agree one. */
 function suggestAction(f: Finding, data: Data, nextMonth: string): string {
+  if (f.action) return f.action;
   const [kind, id] = f.id.split(':');
   const name = id && CATEGORY[id] ? CATEGORY[id].label : '';
   const budget = id ? budgetFor(data.budgets, id, nextMonth) : 0;
@@ -114,6 +119,8 @@ function MoneyMeeting() {
   const complete = useMemo(() => completeMonths(data), [data]);
   const [month, setMonth] = useState(complete.at(-1) ?? months.at(-1) ?? '');
   const [text, setText] = useState('');
+  const [basis, setBasis] = useState<Basis>('recent');
+  const { f: fc, st } = useForecast(basis);
   const [openGroups, setOpenGroups] = useState<Set<string>>(new Set());
   const [present, setPresent] = useState<number | null>(null);
   const [active, setActive] = useState('m-month');
@@ -158,7 +165,9 @@ function MoneyMeeting() {
   const prev = addMonths(month, -1);
   const lastActions = actions.filter((a) => a.month === prev);
   const nextActions = actions.filter((a) => a.month === month);
-  const top = r.findings.filter((f) => f.severity === 'act' || f.severity === 'watch').slice(0, 5);
+  // Biggest dollars first, whatever page the issue came from (budget, forecast, uni funds, overspending).
+  const top = r.findings.filter((f) => f.severity === 'act' || f.severity === 'watch')
+    .sort((a, b) => Number(!!b.scream) - Number(!!a.scream) || b.impact - a.impact).slice(0, 6);
   const nextMonth = addMonths(month, 1);
   const nwNow = netWorth(data.settings, endOf(month)).total;
   const before = netWorth(data.settings, endOf(prev));
@@ -193,7 +202,21 @@ function MoneyMeeting() {
     { tone: tone('kept', k, s.complete), short: `Kept ${pct(k)}.`, chip: `Kept ${pct(k)}` },
   ];
   const doneCount = lastActions.filter((a) => a.done).length;
-  const leftToKeep = expectedIncome(data.settings, nextMonth) - tot('next');
+  // The same "left to give a job" as the Budget page: expected pay less everything budgeted, spending and keeping.
+  const payNext = expectedIncome(data.settings, nextMonth);
+  const spendNext = totalBudget(data.budgets, nextMonth), keepNext = keepBudget(data.budgets, nextMonth);
+  const unassigned = payNext - spendNext - keepNext;
+  const squeeze = st.squeezes.find((q) => q.from > nextMonth);
+  /** Change one month's budget only: the month after keeps its old amount. */
+  const setForMonth = async (cat: string, m: string, amount: number) => {
+    const after = addMonths(m, 1);
+    if (!data.budgets.some((b) => b.category === cat && b.from === after)) await setBudget(cat, after, budgetFor(data.budgets, cat, after));
+    await setBudget(cat, m, amount);
+  };
+  const giveJob = async (cat: string, text: string) => {
+    await setForMonth(cat, nextMonth, budgetFor(data.budgets, cat, nextMonth) + unassigned);
+    addAction(text);
+  };
 
   const steps: Step[] = [
     { id: 'm-month', title: 'The month', body: (
@@ -280,13 +303,44 @@ function MoneyMeeting() {
         </div>
       </>
     ) },
+    { id: 'm-ahead', title: 'Looking ahead', body: (
+      <>
+        <div className={`meet-keep st-text-${st.verdict === 'yes' ? 'good' : st.verdict === 'tight' ? 'warn' : 'bad'}`}>
+          <b className="meet-keep-num">{st.headline}</b>
+          {st.lines.map((l) => <span key={l}>{l}</span>)}
+        </div>
+        <div className="ahead-head no-print">
+          <Tabs value={basis} onChange={setBasis} items={[{ id: 'recent', label: 'At our recent spending' }, { id: 'budget', label: 'On our budget' }]} />
+          <Info>{fc.basis === 'recent' ? `Day-to-day spending of ${money(fc.living.amount)} a month, the average of ${fc.living.from.map((m) => monthOnly(m)).join(', ')} without housing and one-offs. Rent, loan repayments and property costs are added month by month.` : 'Everything the budget plans to spend. Money budgeted to keep stays in the bank.'} Cash starts from your latest bank balances. Property details are on the Property page.</Info>
+        </div>
+        <CashChart basis={basis} />
+        <div className="table-wrap">
+          <table className="score compact">
+            <thead><tr><th>Month</th><th>Pay in</th><th>Going out</th><th className="hide-sm">Buying costs</th><th>Kept</th><th>Cash</th></tr></thead>
+            <tbody>{fc.months.map((x) => (
+              <tr key={x.month}><th scope="row">{monthName(x.month, 'short')}{x.part ? '*' : ''}</th><td>{money(x.pay + x.rentIn)}</td><td>{money(outgoings(x))}</td>
+                <td className="hide-sm">{x.oneOffs.length ? money(x.oneOffs.reduce((a, o) => a + o.amount, 0)) : '–'}</td>
+                <td className={x.kept < 0 ? 'st-text-bad' : ''}>{money(x.kept, { sign: true })}</td><td>{money(x.cash)}</td></tr>
+            ))}</tbody>
+          </table>
+        </div>
+        {fc.months[0]?.part ? <p className="fine">* The rest of {monthOnly(fc.months[0].month)}, from the latest balances.</p> : null}
+      </>
+    ) },
     { id: 'm-next', title: `Plan for ${monthOnly(nextMonth)}`, body: (
       <>
-        {tot('next') > 0 && s.income > 0 && (
-          <div className={`meet-keep st-text-${tone('kept', leftToKeep / Math.max(1, expectedIncome(data.settings, nextMonth)))}`}>
-            <span>The targets add up to <b>{money(tot('next'))}</b>, leaving about</span>
-            <b className="meet-keep-num">{money(leftToKeep)}</b>
-            <span>of expected pay to keep in {monthOnly(nextMonth)} ({pct(leftToKeep / Math.max(1, expectedIncome(data.settings, nextMonth)))}).</span>
+        {payNext > 0 && (
+          <div className={`meet-keep st-text-${Math.abs(unassigned) < 1 ? 'good' : unassigned > 0 ? 'warn' : 'bad'}`}>
+            <span>{monthOnly(nextMonth)}: <b>{money(payNext)}</b> of pay, <b>{money(spendNext)}</b> to spend and <b>{money(keepNext)}</b> to keep.</span>
+            <b className="meet-keep-num">{Math.abs(unassigned) < 1 ? 'Every dollar has a job' : unassigned > 0 ? `${money(unassigned)} without a job` : `${money(-unassigned)} more than comes in`}</b>
+            {unassigned >= 1 && (
+              <span className="job-btns no-print">
+                {squeeze && <button className="btn small primary" onClick={() => giveJob('keep-savings', `Keep ${monthOnly(nextMonth)}'s ${money(unassigned)} for ${monthOnly(squeeze.from)}–${monthOnly(squeeze.to)}`)}>Keep it for {monthOnly(squeeze.from)}–{monthOnly(squeeze.to)}</button>}
+                <button className="btn small" onClick={() => giveJob('keep-savings', `Put ${monthOnly(nextMonth)}'s ${money(unassigned)} into savings`)}>Into savings</button>
+                {(data.settings.uniFunds ?? []).length > 0 && <button className="btn small" onClick={() => giveJob('keep-uni', `Put ${money(unassigned)} into the uni funds`)}>Into the uni funds</button>}
+              </span>
+            )}
+            {unassigned <= -1 && <span>Trim the targets in step 5, or agree to draw it from savings.</span>}
           </div>
         )}
         <ul className="checklist">

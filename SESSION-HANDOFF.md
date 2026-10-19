@@ -1,6 +1,9 @@
 # SESSION-HANDOFF.md
 
-## Current status (19 Oct 2026, evening)
+## Current status (19 Oct 2026, night)
+Latest: one forward plan (D28). Property page (the home first; adding an investment is one form), the Loan Planner calculator and dashboard on real figures, a cash forecast to June 2027 used by Home, Goals, What if, Property and the money meeting's new "Looking ahead" step, Uni funds page. Private file 'Family Purse - property 19 Oct 2026' carries the property (price, deposit paid 10 Oct, stamp duty estimate $62,157.50 at the general rate, $3,500 fees estimate, rates/water/insurance, loan). Numbers on the user's data: about $140,092 cash before settlement, $74,435 after, lowest $68,616 in March 2027 (4.1 months of spending); Dec–Mar about $1,455 a month drawn from savings; from April about $1,326 kept (7%). Loan paid off Feb 2047 at real spending (Loan Planner's own defaults gave Jan 2042 with $6,000 living).
+
+## Earlier status (19 Oct 2026, evening)
 Latest: Statements page with month checks (D27). Private file 'Family Purse - statement balances 19 Oct 2026' carries each statement's opening/closing balance (all tie to the cent). Feb–June are missing Reeti's two accounts and the card (before 22 June); July is fully checked; Aug/Sep only need payments sorted.
 Also pushed since: theme-independent meaning colours (D24), 50/30/20 green-within colours (D25), money meeting agenda with Present mode (D26).
 
@@ -13,6 +16,7 @@ Fifth build pushed: no reload on returning, 54 themes (light and dark, per perso
 - 19 Oct 2026: Payees (built automatically from existing transactions the first time the app loads; all start as "to check"). Drill-downs on Home, Review, Budget, money meeting. Accounts page. Wealth owned-since and line chart. Update file "Family Purse - update 19 Oct 2026" (private): account last 4 digits and banks, house and loan from settlement, 25 month-end balances worked back from statements so the chart starts June 2026. `prepare-import` now does that back-calculation itself.
 
 ## Next
+0. User: Add statements → "Family Purse - property 19 Oct 2026" → Apply update. Then Property → the home → Buying: replace stamp duty and fees with the conveyancer's figures when they arrive.
 0. User: download PayPal activity (1 Feb–30 Jun 2026, CSV) and add it on Add statements; split the $6,176.40 (15 Jun) if it covered several things. Pick a theme in Settings → Look.
 0. User: Categories & payees → check the new Government area; move Home Affairs / VFS payees to "Visa, PR & citizenship" if needed. Sort PayPal Australia (in Other).
 1. User: Add statements → the 19 Oct update file → Apply update.

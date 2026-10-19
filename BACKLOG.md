@@ -86,6 +86,17 @@ Status: ✅ done · ⬜ to do · 🔄 in progress · ❌ blocked · 🚫 dropped
 - ⬜ Reeti's statements before July and the card before 22 June, if they can be downloaded, to complete Feb–June
 - ⬜ Font loading is from Google Fonts; consider self-hosting fonts if offline use matters
 
+## Phase 6f — One plan: property, loan, forecast, uni funds (approved 19 Oct 2026)
+- ✅ 19 Oct 2026 — Loan Planner calculator brought in with its tests (src/loan), fed by real figures
+- ✅ 19 Oct 2026 — Property page: list of properties; Overview (loan dashboard), Buying, Loan, Costs & rent, Scenarios; Add a property (home or investment)
+- ✅ 19 Oct 2026 — Forecast to next June from bank balances; same story on Home, Goals, What if, Property and the meeting ("Looking ahead" step)
+- ✅ 19 Oct 2026 — One "left to give a job" everywhere; meeting plan step gives it a job in one tap; Budget months-ahead strip
+- ✅ 19 Oct 2026 — Uni funds page (each fund over time, goal, in the budget month by month); uni and forecast findings in the meeting
+- ⬜ User: Add statements → "Family Purse - property 19 Oct 2026" → Apply update; check the buying costs against the conveyancer's statement when it arrives
+- ⬜ User (optional): Loan Planner → Settings → Save a backup file, send it to bring saved plans across
+- ⬜ After settlement: add the loan and offset accounts, pick them on Property → Loan so real balances drive the payoff date
+- ⬜ Investment properties: tax (negative gearing, depreciation) not modelled yet
+
 ## Phase 7 — Polish
 - ✅ 18 Oct 2026 — Tests (17), phone overflow check on every page, dark mode
 - ⬜ Install-to-home-screen (web app manifest + icons)

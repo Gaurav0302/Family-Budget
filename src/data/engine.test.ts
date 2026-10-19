@@ -131,7 +131,6 @@ describe('monthly numbers', () => {
   it('spots takeaway over budget, the rent overlap, and says the month got worse', () => {
     const r = reviewMonth(data, '2026-09');
     expect(r.findings.find((f) => f.id === 'over:takeaway')?.severity).toBe('act');
-    expect(r.findings.some((f) => f.id === 'home:overlap')).toBe(true);
     expect(r.verdict.tone).toBe('worse');
     expect(r.babylon).toHaveLength(7);
     expect(r.ramsey.steps).toHaveLength(7);

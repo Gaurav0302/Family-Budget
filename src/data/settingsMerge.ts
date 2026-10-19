@@ -33,6 +33,17 @@ export function mergeSettings(current: Settings, incoming: Partial<Settings>): S
         return inc ? { ...fill(w, inc), values: union(w.values, inc.values, (x) => x.date) } : w;
       });
     }
+    else if (k === 'properties') out.properties = union(current.properties, v as Settings['properties'], (p) => p.id).map((p) => {
+      const inc = (v as Settings['properties'])!.find((x) => x.id === p.id);
+      if (!inc || inc === p) return p;
+      const f = fill(p, inc);
+      return { ...f, costs: union(p.costs, inc.costs, (c) => c.id), running: union(p.running, inc.running, (c) => c.id),
+        loan: p.loan && inc.loan ? { ...fill(p.loan, inc.loan), changes: union(p.loan.changes, inc.loan.changes, (c) => c.id), lumps: union(p.loan.lumps, inc.loan.lumps, (c) => c.id) } : (p.loan ?? inc.loan) };
+    });
+    else if (k === 'uniFunds') out.uniFunds = union(current.uniFunds, v, (f) => f.name).map((f) => {
+      const inc = (v as Settings['uniFunds']).find((x) => x.name === f.name);
+      return inc ? fill(f, inc) : f;
+    });
     else if (k === 'bills') out.bills = union(current.bills, v, (b) => b.id);
     else if (k === 'actions') out.actions = union(current.actions, v, (a) => a.id);
     else if (k === 'customCategories') out.customCategories = union(current.customCategories, v, (c) => c.id);

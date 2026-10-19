@@ -68,7 +68,7 @@ function bar(x: number, y: number, w: number, h: number, r = 4) {
   return `M${x},${y + h}V${y + rr}Q${x},${y} ${x + rr},${y}H${x + w - rr}Q${x + w},${y} ${x + w},${y + rr}V${y + h}Z`;
 }
 
-export interface Series { id: string; label: string; values: number[]; color?: string }
+export interface Series { id: string; label: string; values: number[]; color?: string; /** Drawn dashed (a comparison, like the bank's schedule). */ dashed?: boolean }
 
 export interface ChartProps {
   /** Every month there is data for, oldest first; `values` line up with it. */
@@ -77,6 +77,8 @@ export interface ChartProps {
   kind?: 'bars' | 'lines' | 'stacked';
   /** Budget for each month (drawn as a dashed line). */
   budget?: number[];
+  /** Moments to mark with a thin upright line and a label (settlement, a lease ending). */
+  marks?: { month: string; label: string }[];
   /** A fixed goal line, e.g. Babylon's tenth. */
   target?: { value: number; label: string };
   /** Show the average of the visible months as a dotted line (single series only). */
@@ -167,7 +169,7 @@ export function Chart(p: ChartProps) {
       )}
       {(ser.length > 1 || bud || p.target || avg !== null) && !compact && (
         <div className="chart-legend" aria-hidden>
-          {ser.length > 1 && ser.map((s) => <span key={s.id}><i className={kind === 'lines' ? 'key-line' : 'key-box'} style={{ background: s.color }} />{s.label}</span>)}
+          {ser.length > 1 && ser.map((s) => <span key={s.id}><i className={kind === 'lines' ? `key-line ${s.dashed ? 'key-dashed' : ''}` : 'key-box'} style={kind === 'lines' && s.dashed ? { borderColor: s.color } : { background: s.color }} />{s.label}</span>)}
           {bud && <span><i className="key-line key-budget" />Budget</span>}
           {avg !== null && <span><i className="key-line key-avg" />Average {format(avg)}</span>}
           {p.target && <span><i className="key-line key-budget" />{p.target.label}</span>}
@@ -212,7 +214,7 @@ export function Chart(p: ChartProps) {
           })}
           {kind === 'lines' && ser.map((s) => (
             <g key={s.id}>
-              <path d={s.vals.map((v, i) => `${i ? 'L' : 'M'}${cx(i).toFixed(1)},${y(v).toFixed(1)}`).join('')} className="ch-line" stroke={s.color} />
+              <path d={s.vals.map((v, i) => `${i ? 'L' : 'M'}${cx(i).toFixed(1)},${y(v).toFixed(1)}`).join('')} className={`ch-line ${s.dashed ? 'ch-dashed' : ''}`} stroke={s.color} />
               {n <= 14 && s.vals.map((v, i) => <circle key={i} cx={cx(i)} cy={y(v)} r={4} fill={s.color} className="ch-dot" />)}
             </g>
           ))}
@@ -220,9 +222,19 @@ export function Chart(p: ChartProps) {
           {bud && <path d={bud.map((v, i) => `M${(cx(i) - band / 2 + 2).toFixed(1)},${y(v).toFixed(1)}H${(cx(i) + band / 2 - 2).toFixed(1)}`).join('')} className="ch-budget" />}
           {avg !== null && <line x1={pad.l} x2={width - pad.r} y1={y(avg)} y2={y(avg)} className="ch-avg" />}
           {p.target && <line x1={pad.l} x2={width - pad.r} y1={y(p.target.value)} y2={y(p.target.value)} className="ch-budget" />}
+          {p.marks?.map((mk) => { const i = shown.indexOf(mk.month); return i < 0 ? null : (
+            <g key={mk.month + mk.label} className="ch-mark">
+              <line x1={cx(i)} x2={cx(i)} y1={pad.t} y2={pad.t + h} />
+              <text x={cx(i) + 4} y={pad.t + 10}>{mk.label}</text>
+            </g>
+          ); })}
           {hover !== null && kind === 'lines' && ser.map((s) => <circle key={s.id} cx={cx(hover)} cy={y(s.vals[hover])} r={5} fill={s.color} className="ch-focus" />)}
 
-          {shown.map((m, i) => (i % every === 0 || i === n - 1) && !(i !== n - 1 && n - 1 - i < every) ? (
+          {n > 36
+            // Years ahead (a loan, uni funds): label Januaries only, spaced so they don't collide.
+            ? shown.map((m, i) => { const step = Math.max(1, Math.ceil(56 / (band * 12))); const y = Number(m.slice(0, 4)); return m.endsWith('-01') && (y - Number(shown[0].slice(0, 4))) % step === 0 && cx(i) > pad.l + 12 ? (
+              <text key={m} x={cx(i)} y={height - 6} textAnchor="middle" className="ch-axis">{y}</text>) : null; })
+            : shown.map((m, i) => (i % every === 0 || i === n - 1) && !(i !== n - 1 && n - 1 - i < every) ? (
             <text key={m} x={cx(i)} y={height - 6} textAnchor="middle" className={`ch-axis ${m === p.highlight ? 'ch-axis-on' : ''}`}>{xLabel(m) || monthName(m, 'short').slice(0, 3)}</text>
           ) : null)}
         </svg>

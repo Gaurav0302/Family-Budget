@@ -4,17 +4,20 @@ import { Link } from 'react-router-dom';
 import { Badge, Empty, Meter, MonthPicker, PurseBar } from '../components/bits';
 import { Chart } from '../components/Chart';
 import { MonthBanner } from '../components/MonthBanner';
+import { useForecast } from '../data/useProperties';
+import { CashChart } from './Property';
 import { useMonthly } from '../data/useMonthly';
 import { drillCategory, drillType, useDrill } from '../components/Drill';
 import { addMonths, allMonths, budgetFor, completeMonths } from '../data/analysis';
 import { CATEGORY } from '../data/categories';
 import { reviewMonth } from '../data/review';
 import { useStore } from '../data/store';
-import { longDate, money, monthName, monthOnly, pct, thisMonth } from '../lib/format';
+import { money, monthName, monthOnly, pct, thisMonth } from '../lib/format';
 
 export function HomeScreen() {
   const { data, updateSettings } = useStore();
   const drill = useDrill();
+  const { st } = useForecast();
   const monthly = useMonthly();
   const months = useMemo(() => allMonths(data.transactions), [data.transactions]);
   const complete = useMemo(() => completeMonths(data), [data]);
@@ -38,8 +41,6 @@ export function HomeScreen() {
   const now = thisMonth();
   const plan = actions.filter((a) => a.month === addMonths(now, -1));
   const lastMonth = addMonths(now, -1);
-  const h = data.settings.home;
-  const daysToSettle = Math.ceil((new Date(h.settlement).getTime() - Date.now()) / 864e5);
 
   return (
     <div className="home">
@@ -119,12 +120,11 @@ export function HomeScreen() {
         </section>
 
         <section className="panel coming" aria-labelledby="up">
-          <div className="panel-head"><h2 id="up">Coming up</h2><Link to="/goals">Goals</Link></div>
-          <ul className="timeline">
-            {h.settlement && daysToSettle > 0 && <li><b>{longDate(h.settlement)}</b><span>Settlement on {h.name || 'the house'}, in {daysToSettle} days. Repayments of about {money(h.repayment)} a month begin.</span></li>}
-            {h.settlement && h.leaseEnds > h.settlement && <li><b>{longDate(h.leaseEnds)}</b><span>The current lease ends. Until then rent of {money(budgetFor(data.budgets, 'rent', month))} a month may overlap with the mortgage.</span></li>}
-            <li><b>Each month</b><span>Add the new statements and read the review. Last complete month: {complete.length ? monthName(complete.at(-1)!) : 'none yet'}.</span></li>
-          </ul>
+          <div className="panel-head"><h2 id="up">Looking ahead</h2><Link to="/reports?step=m-ahead">In the money meeting</Link></div>
+          <p className={`ahead-verdict st-text-${st.verdict === 'yes' ? 'good' : st.verdict === 'tight' ? 'warn' : 'bad'}`}><b>{st.headline}</b></p>
+          <ul className="ahead-lines">{st.lines.map((l) => <li key={l}>{l}</li>)}</ul>
+          <CashChart height={150} />
+          <p className="fine">Last complete month: {complete.length ? monthName(complete.at(-1)!) : 'none yet'}. Property details on <Link to="/property">Property</Link>.</p>
         </section>
       </div>
     </div>

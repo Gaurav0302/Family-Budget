@@ -1,3 +1,4 @@
+import type { Change, Lump } from '../loan/types';
 /** What a transaction does to the family's money. */
 export type Kind =
   | 'spend'     // money going out to buy something (refunds come back as positive spend rows)
@@ -109,7 +110,82 @@ export interface Account {
 
 export interface Balance { account: string; date: string; amount: number }
 
-export interface UniFund { name: string; target: number; monthly: number; saved: number; year: number }
+export interface UniFund {
+  name: string;
+  /** Goal for when uni starts (0 = no goal yet). */
+  target: number;
+  monthly: number;
+  /** Saved so far, as at `savedOn` (money put aside under "University funds" after that date is added on). */
+  saved: number;
+  savedOn?: string;
+  /** Year uni starts. */
+  year: number;
+  /** Month saving starts (YYYY-MM). Defaults to the first month the budget gives the funds money. */
+  start?: string;
+  /** Kept in the offset, where it earns the loan rate by cancelling interest (default yes). */
+  inOffset?: boolean;
+}
+
+/** Money paid to buy a property: deposit, stamp duty, legal fees… */
+export interface PropertyCost {
+  id: string;
+  label: string;
+  amount: number;
+  /** When it was paid or is due (YYYY-MM-DD). */
+  date: string;
+  /** Account it comes from, if known: tells the forecast whether bank balances already include it. */
+  account?: string;
+}
+
+/** A regular cost of owning a property (rates, water, insurance, strata, agent fees, repairs). */
+export interface RunningCost { id: string; label: string; amount: number; every: Every }
+
+export interface PropertyLoan {
+  amount: number;
+  /** Interest rate when the loan starts, in percent. */
+  rate: number;
+  /** Years. */
+  term: number;
+  /** Month of the first repayment (YYYY-MM). */
+  firstRepayment: string;
+  /** The bank's monthly repayment, when known. Otherwise worked out from the amount, rate and term. */
+  repayment?: number;
+  /** Money in the offset on day one. Blank: whatever the forecast says is left after settlement. */
+  offsetStart?: number;
+  /** Put everything left over each month into the offset (default yes). */
+  sweep?: boolean;
+  /** A fixed extra into the offset each month, when not sweeping. */
+  extra?: number;
+  /** Accounts that hold the loan and its offset, so real balances replace the projection. */
+  loanAccount?: string;
+  offsetAccount?: string;
+  /** Things that happened or are planned: rate changes (with what the bank did), lump sums. Loan Planner format. */
+  changes?: Change[];
+  lumps?: Lump[];
+}
+
+/** A property the family owns or is buying: everything about it lives here, and every page reads it from here. */
+export interface Property {
+  id: string;
+  name: string;
+  use: 'home' | 'investment';
+  owners?: string[];
+  price: number;
+  contractDate?: string;
+  /** Settlement date (YYYY-MM-DD): from then it's owned, the loan starts, and its costs begin. */
+  settlement: string;
+  /** Latest estimate of what it's worth (history lives in net worth). */
+  value?: number;
+  costs: PropertyCost[];
+  loan?: PropertyLoan;
+  running: RunningCost[];
+  /** Rent received (investment): per week, from a date, less a few weeks empty a year. */
+  rent?: { weekly: number; from: string; emptyWeeks?: number };
+  /** Area holding this property's own categories (investment), so its costs aren't counted twice. */
+  area?: string;
+  /** Sold on (YYYY-MM-DD). */
+  soldOn?: string;
+}
 
 export interface Settings {
   household: string;
@@ -134,6 +210,8 @@ export interface Settings {
     /** Money expected in the offset on day one (from the Loan Planner). */
     offsetStart?: number;
   };
+  /** Properties owned or being bought. When empty, the old `home` details stand in for the family home. */
+  properties?: Property[];
   babySteps: Record<string, boolean>;
   /** Super going in each month for both of you (employer + salary sacrifice). */
   superMonthly: number;

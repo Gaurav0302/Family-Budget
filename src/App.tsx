@@ -1,4 +1,6 @@
 import { HashRouter, Route, Routes } from 'react-router-dom';
+import { PropertyScreen } from './screens/Property';
+import { Uni } from './screens/Uni';
 import { Shell } from './components/Shell';
 import { StoreProvider, useStore } from './data/store';
 import { useLook } from './theme/useLook';
@@ -48,6 +50,9 @@ function Gate() {
         <Route path="/statements" element={<Statements />} />
         <Route path="/what-if" element={<WhatIf />} />
         <Route path="/wealth" element={<Wealth />} />
+        <Route path="/property" element={<PropertyScreen />} />
+        <Route path="/property/:id" element={<PropertyScreen />} />
+        <Route path="/uni" element={<Uni />} />
         <Route path="/more" element={<More />} />
         <Route path="/import" element={<Import />} />
         <Route path="/settings" element={<SettingsScreen />} />

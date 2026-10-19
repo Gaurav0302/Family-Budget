@@ -1,4 +1,4 @@
-import { CalendarClock, FileText, Home, LayoutGrid, Loader2, Mountain, ReceiptText, Scale, Settings, Sparkles, Upload, Wallet, Landmark, Tags, CreditCard, TrendingUp, ClipboardCheck } from 'lucide-react';
+import { Building2, GraduationCap, CalendarClock, FileText, Home, LayoutGrid, Loader2, Mountain, ReceiptText, Scale, Settings, Sparkles, Upload, Wallet, Landmark, Tags, CreditCard, TrendingUp, ClipboardCheck } from 'lucide-react';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { useStore } from '../data/store';
@@ -19,7 +19,9 @@ export const NAV = [
     { to: '/trends', label: 'Trends', Icon: TrendingUp, hint: 'Any area or category over time' },
   ] },
   { section: 'Looking ahead', items: [
-    { to: '/goals', label: 'Goals', Icon: Mountain, hint: 'Baby steps, funds, the house' },
+    { to: '/goals', label: 'Goals', Icon: Mountain, hint: 'Baby steps and cash on hand' },
+    { to: '/property', label: 'Property', Icon: Building2, hint: 'Each property: buying, loan, costs, scenarios' },
+    { to: '/uni', label: 'Uni funds', Icon: GraduationCap, hint: 'Each child’s fund over time' },
     { to: '/what-if', label: 'What if', Icon: Sparkles, hint: 'Try cuts, see the effect' },
     { to: '/wealth', label: 'Wealth', Icon: Landmark, hint: 'Net worth, income and super' },
   ] },
