@@ -2,10 +2,10 @@ import { Check, ChevronLeft, ChevronRight, Maximize2, Minimize2, Play, Printer, 
 import { Chart, inRange, RangePicker, seriesColor, type Range } from '../components/Chart';
 import { budgetOf, spendOf, useMonthly } from '../data/useMonthly';
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { createPortal } from 'react-dom';
 import { useSearchParams } from 'react-router-dom';
 import { Badge, Info, MonthPicker, NumberField, PageHeader, PurseBar, Spark, Tabs } from '../components/bits';
 import { tone, type Tone } from '../data/guide';
+import { usePane } from '../components/StepPane';
 import { DrillLink, drillCategory, drillGroup, drillType, useDrill } from '../components/Drill';
 import { addMonths, allMonths, budgetFor, completeMonths, monthOf, summarise } from '../data/analysis';
 import { CATEGORIES, CATEGORY, GROUPS } from '../data/categories';
@@ -117,14 +117,24 @@ function MoneyMeeting() {
   const [present, setPresent] = useState<number | null>(null);
   const [active, setActive] = useState('m-month');
   const drill = useDrill();
-  const [sideSlot, setSideSlot] = useState<HTMLElement | null>(null);
+  // On a computer the steps live in the pane beside the menu; on smaller screens they're a strip at the top of the page.
+  const [wide, setWide] = useState(() => matchMedia('(min-width: 960px)').matches);
   useEffect(() => {
     const mq = matchMedia('(min-width: 960px)');
-    const pick = () => setSideSlot(mq.matches ? document.getElementById('side-panel') : null);
-    pick();
-    mq.addEventListener('change', pick);
-    return () => mq.removeEventListener('change', pick);
+    const on = () => setWide(mq.matches);
+    mq.addEventListener('change', on);
+    return () => mq.removeEventListener('change', on);
   }, []);
+  const { setInfo } = usePane();
+  const [params, setParams] = useSearchParams();
+  // Steps chosen in the side pane arrive as ?step=…; Present as ?present=1.
+  useEffect(() => {
+    const step = params.get('step'), pres = params.get('present');
+    if (!step && !pres) return;
+    if (pres) setPresent(0);
+    if (step) requestAnimationFrame(() => document.getElementById(step)?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
+    setParams({}, { replace: true });
+  }, [params]);
 
   // Highlight the agenda step that's on screen.
   useEffect(() => {
@@ -133,6 +143,9 @@ function MoneyMeeting() {
     els.forEach((e) => io.observe(e));
     return () => io.disconnect();
   }, [month]);
+
+  // Tell the side pane which step is on screen and which month this is.
+  useEffect(() => { if (month) setInfo({ active, month: monthName(month), next: `Plan for ${monthOnly(addMonths(month, 1))}` }); }, [active, month]);
 
   // On a phone the agenda is a strip: keep the current step in view.
   useEffect(() => { document.querySelector(`.agenda a[href="#${active}"]`)?.scrollIntoView({ block: 'nearest', inline: 'nearest' }); }, [active]);
@@ -289,9 +302,8 @@ function MoneyMeeting() {
     ) },
   ];
 
-  const agenda = (
-    <nav className={`agenda no-print ${sideSlot ? 'in-side' : ''}`} aria-label="Meeting agenda">
-      {sideSlot && <div className="panel-title"><b>Money meeting</b><small>{monthName(month)}</small></div>}
+  const agenda = wide ? null : (
+    <nav className="agenda no-print" aria-label="Meeting agenda">
       <ol>
         {steps.map((st, i) => (
           <li key={st.id}><a href={`#${st.id}`} className={active === st.id ? 'on' : ''} onClick={(e) => { e.preventDefault(); document.getElementById(st.id)?.scrollIntoView({ behavior: 'smooth', block: 'start' }); }}>
@@ -303,8 +315,8 @@ function MoneyMeeting() {
   );
 
   return (
-    <div className={`meeting-wrap ${sideSlot ? 'agenda-in-side' : ''}`}>
-      {sideSlot ? createPortal(agenda, sideSlot) : agenda}
+    <div className={`meeting-wrap ${wide ? 'agenda-in-side' : ''}`}>
+      {agenda}
       <div className="report meeting-body">
         <div className="report-tools no-print">
           <MonthPicker months={months} value={month} onChange={setMonth} />

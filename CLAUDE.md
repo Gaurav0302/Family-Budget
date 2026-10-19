@@ -36,7 +36,7 @@ React 18 + Vite + TypeScript, HashRouter, Supabase (supabase-js, email + passwor
 - PayPal: `src/data/paypal.ts` reads PayPal's activity CSV and pairs purchases with bank debits (same amount, ±6 days).
 - Areas: `GROUPS` (names) and `GROUP_KEYS` are live lists; a category's `groupKey` is the stable key, `group` its display name. Family changes live in settings `customGroups`, `groupNames`, `categoryEdits`.
 - Actions go behind `Menu` (⋯) from `components/Menu.tsx`; month totals for charts come from `useMonthly()` in `data/useMonthly.ts`.
-- Second panel: a page can portal content into `#side-panel` (Shell); while it has content the menu becomes an icon rail (CSS `:has`). Used by the money meeting's steps.
+- Steps pane: `components/StepPane.tsx` (Shell shows it on hover over Reports, docks it on click). The meeting tells it the current step via `usePane().setInfo`; the pane sends steps as `/reports?step=…` and Present as `?present=1`.
 - Drill-downs: `DrillLink` with `drillCategory/drillType/drillGroup` from `components/Drill.tsx` opens the payments behind any figure.
 - Keep pages uncluttered: explanations go behind the small `Info` button, not in paragraphs.
 - Super cap and tax-rate tables in `wealth.ts` need updating each July (ATO key super rates and thresholds).

@@ -909,28 +909,26 @@ h1, h2, h3, h4 { font-weight: var(--display-weight, 700); }
   .present { display: none !important; }
 }
 @media (max-width: 559px) { .present-btn .pb-text { display: none; } .present-btn { padding: 8px 12px; } }
-/* A second panel beside the menu (the money meeting's steps). While it's open the menu shrinks to an icon rail. */
-.side-panel { display: none; }
+/* The steps pane beside the menu (money meeting). Hovering Reports shows it floating over the page;
+   clicking Reports or a step docks it as its own column, so it stays while you work. The menu never changes. */
+.step-pane { display: none; }
 @media (min-width: 960px) {
-  .shell:has(.side-panel:not(:empty)) { grid-template-columns: 76px 236px minmax(0, 1fr); }
-  .side-panel:not(:empty) { display: block; position: sticky; top: 0; height: 100vh; overflow-y: auto; padding: 22px 12px; background: var(--card); border-right: 1px solid var(--line); }
-  .shell:has(.side-panel:not(:empty)) .side { padding: 22px 10px; align-items: center; }
-  .shell:has(.side-panel:not(:empty)) .side .brand > div,
-  .shell:has(.side-panel:not(:empty)) .nav-section,
-  .shell:has(.side-panel:not(:empty)) .demo-note,
-  .shell:has(.side-panel:not(:empty)) .nav-item > span { display: none; }
-  .shell:has(.side-panel:not(:empty)) .side .brand { padding: 0; justify-content: center; }
-  .shell:has(.side-panel:not(:empty)) .nav-item { position: relative; justify-content: center; width: 48px; height: 44px; padding: 0; }
-  .shell:has(.side-panel:not(:empty)) .nav-item .count { position: absolute; top: 2px; right: 0; margin: 0; }
-  .shell:has(.side-panel:not(:empty)) .side nav + nav { border-top: 1px solid var(--line); padding-top: 8px; }
+  .shell.has-pane { grid-template-columns: 240px 236px minmax(0, 1fr); }
+  .step-pane { display: flex; flex-direction: column; gap: 4px; width: 236px; height: 100vh; padding: 22px 12px; background: var(--card); border-right: 1px solid var(--line); overflow-y: auto; }
+  .step-pane.is-pinned { position: sticky; top: 0; }
+  .step-pane.is-peek { position: fixed; top: 0; left: 240px; z-index: 70; box-shadow: 12px 0 32px rgba(0, 0, 0, 0.18); animation: peek 0.14s ease-out; }
 }
+@keyframes peek { from { opacity: 0; transform: translateX(-8px); } }
+@media (prefers-reduced-motion: reduce) { .step-pane.is-peek { animation: none; } }
+.step-pane-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; padding: 2px 6px 12px; }
+.step-pane-head b { display: block; font-family: var(--display); font-size: 1.1rem; }
+.step-pane-head small { color: var(--muted); }
+.step-pane-hint { color: var(--muted); padding-top: 4px; }
+.step-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+.step-list button { display: flex; align-items: center; gap: 10px; width: 100%; padding: 8px; border: 0; background: none; border-radius: var(--r-md); font: inherit; font-size: 0.92rem; font-weight: 600; color: var(--ink-2); text-align: left; cursor: pointer; }
+.step-list button:hover { background: var(--card-2); color: var(--ink); }
+.step-list button.on { background: var(--card-2); color: var(--ink); }
+.step-list button.on .agenda-n { background: var(--euc); color: var(--euc-ink); border-color: var(--euc); }
+.step-pane .present-btn { margin-top: 14px; width: 100%; }
+@media print { .step-pane { display: none !important; } .shell { display: block !important; } }
 .meeting-wrap.agenda-in-side { grid-template-columns: minmax(0, 1fr); }
-.agenda.in-side { position: static; padding: 0; background: none; }
-.agenda.in-side .panel-title { display: grid; padding: 4px 8px 14px; }
-.agenda.in-side .panel-title b { font-family: var(--display); font-size: 1.1rem; }
-.agenda.in-side .panel-title small { color: var(--muted); }
-.agenda.in-side ol { flex-direction: column; gap: 2px; overflow: visible; }
-.agenda.in-side a { padding: 8px 8px; font-size: 0.92rem; font-weight: 600; white-space: normal; box-shadow: none; }
-.agenda.in-side a.on { background: var(--card-2); color: var(--ink); }
-.agenda.in-side .present-btn { width: 100%; margin-top: 14px; }
-@media print { .side-panel { display: none !important; } .shell { display: block !important; } }

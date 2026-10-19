@@ -1,8 +1,9 @@
 import { CalendarClock, FileText, Home, LayoutGrid, Loader2, Mountain, ReceiptText, Scale, Settings, Sparkles, Upload, Wallet, Landmark, Tags, CreditCard, TrendingUp } from 'lucide-react';
-import type { ReactNode } from 'react';
-import { NavLink } from 'react-router-dom';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { useStore } from '../data/store';
 import { DrillProvider } from './Drill';
+import { PaneProvider, StepPane } from './StepPane';
 
 export const NAV = [
   { section: '', items: [
@@ -41,11 +42,26 @@ function Purse() {
 }
 
 export function Shell({ children }: { children: ReactNode }) {
+  return <PaneProvider><ShellInner>{children}</ShellInner></PaneProvider>;
+}
+
+function ShellInner({ children }: { children: ReactNode }) {
   const { data, saving, mode } = useStore();
+  const { pathname } = useLocation();
+  const navigate = useNavigate();
+  const onReports = pathname === '/reports';
+  // The steps pane: hovering Reports previews it; clicking Reports or a step keeps it open until something else in the menu is clicked.
+  const [pinned, setPinned] = useState(onReports);
+  const [peek, setPeek] = useState(false);
+  const timer = useRef<number | undefined>(undefined);
+  useEffect(() => { if (!onReports) setPinned(false); }, [onReports]);
+  const enter = () => { window.clearTimeout(timer.current); setPeek(true); };
+  const leave = () => { window.clearTimeout(timer.current); timer.current = window.setTimeout(() => setPeek(false), 250); };
+  const openStep = (id: string) => { setPinned(true); setPeek(false); navigate(`/reports?step=${id}`); };
   const toSort = data.transactions.filter((t) => t.needsReview).length;
   const badge = (to: string) => (to === '/transactions' && toSort > 0 ? <em className="count" aria-label={`${toSort} to sort`}>{toSort}</em> : null);
   return (
-    <div className="shell">
+    <div className={`shell ${pinned ? 'has-pane' : ''}`}>
       <a className="skip" href="#main">Skip to content</a>
       <aside className="side">
         <div className="brand"><Purse /><div><strong>Family Purse</strong><span>{data.settings.household}</span></div></div>
@@ -53,16 +69,19 @@ export function Shell({ children }: { children: ReactNode }) {
           <nav key={g.section || 'main'} aria-label={g.section || 'Main'} className={g.section === 'Tools' ? 'nav-extra' : ''}>
             {g.section && g.section !== 'Tools' && <p className="nav-section">{g.section}</p>}
             {g.items.map(({ to, label, Icon }) => (
-              <NavLink key={to} to={to} end={to === '/'} className="nav-item" title={label}><Icon size={19} aria-hidden /><span>{label}</span>{badge(to)}</NavLink>
+              <NavLink key={to} to={to} end={to === '/'} className="nav-item"
+                {...(to === '/reports'
+                  ? { onMouseEnter: enter, onMouseLeave: leave, onClick: () => { setPinned(true); setPeek(false); }, 'aria-haspopup': true }
+                  : { onClick: () => { setPinned(false); setPeek(false); } })}>
+                <Icon size={19} aria-hidden /><span>{label}</span>{badge(to)}</NavLink>
             ))}
           </nav>
         ))}
         {mode === 'local' && <p className="demo-note">Demo mode: data stays in this browser.</p>}
       </aside>
 
-      {/* A second panel beside the menu, filled by pages that have sections of their own (the money meeting).
-          While it has something in it, the menu shrinks to icons, like a design tool's side rail. */}
-      <aside id="side-panel" className="side-panel" />
+      {(pinned || peek) && <StepPane pinned={pinned} here={onReports} onStep={openStep} onEnter={enter} onLeave={leave}
+        onPresent={() => { setPinned(true); setPeek(false); navigate('/reports?present=1'); }} onClose={() => { setPinned(false); setPeek(false); }} />}
 
       <header className="topbar">
         <div className="brand"><Purse /><strong>Family Purse</strong></div>
