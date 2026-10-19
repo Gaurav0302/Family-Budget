@@ -1254,3 +1254,47 @@ ul.tx-list > li > .tx { width: 100%; }
 .meet-notes { margin-top: 22px; border-top: 1px solid var(--line-2); padding-top: 14px; display: grid; gap: 10px; justify-items: start; }
 .meet-notes textarea { width: 100%; margin: 8px 0; }
 .trend-intro, .whatif-intro { margin: 0 0 14px; }
+/* Home: to-do list */
+.todo { background: var(--card); border: 1px solid var(--line-2); border-radius: var(--r-lg); padding: 12px 16px; margin-bottom: 18px; box-shadow: var(--shadow); }
+.todo h2 { font-size: 1rem; margin: 0 0 6px; }
+.todo ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+.todo li { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 8px 0 8px 12px; border-left: 3px solid var(--info); }
+.todo li + li { border-top: 1px solid var(--line-2); }
+.todo li.todo-bad { border-left-color: var(--bad); } .todo li.todo-warn { border-left-color: var(--warn); }
+.cat-sort { color: var(--warn); font-weight: 700; margin-left: 6px; }
+.meet-held { margin-top: 14px; } .meet-held p { display: flex; align-items: center; gap: 6px; margin: 0; font-weight: 600; }
+/* Transactions: month headings, sorting several at once */
+.result-bar { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; margin: 4px 0 10px; }
+.result-bar .result-line { margin: 0; }
+.result-tools { display: flex; gap: 8px; flex-wrap: wrap; }
+.bulk-bar { position: sticky; top: 8px; z-index: 6; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 10px 12px; margin-bottom: 10px;
+  background: var(--card); border: 1px solid var(--euc); border-radius: var(--r-md); box-shadow: var(--shadow); }
+.bulk-bar select { max-width: 260px; }
+ul.tx-list > li.tx-month { padding: 12px 10px 4px; }
+ul.tx-list > li.tx-month h2 { margin: 0; font-size: 0.95rem; color: var(--ink-2); }
+ul.tx-list > li.is-picking { display: flex; align-items: center; gap: 6px; }
+ul.tx-list > li.is-picking > .tx { flex: 1; min-width: 0; }
+.tx-pick { width: 20px; height: 20px; margin-left: 6px; flex: none; }
+.budget-tools { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin: 18px 0 8px; }
+.budget-group-head .grp-toggle { font: inherit; }
+.budget-group.is-folded .budget-group-head { margin-bottom: 0; }
+.bill-when-group h3 { font-size: 0.9rem; color: var(--ink-2); margin: 12px 0 4px; display: flex; justify-content: space-between; } .bill-when-group h3 small { font-weight: 600; }
+/* Goals: own goals and debts */
+.own-goals, .debt-list { list-style: none; margin: 0 0 10px; padding: 0; display: grid; gap: 14px; }
+.own-head { display: flex; justify-content: space-between; align-items: center; }
+.own-line { display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin: 6px 0 0; font-size: 0.92rem; align-items: center; }
+.debt-list li { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 10px; align-items: center; padding: 8px 10px; border-radius: var(--r-md); border: 1px solid var(--line-2); }
+.debt-list li small { display: block; color: var(--muted); }
+.debt-list li.is-next { border-color: var(--euc); background: var(--euc-soft); }
+.debt-list li.is-paid { opacity: 0.7; }
+.cat-search { margin-left: auto; min-width: 220px; }
+.look-details > summary { cursor: pointer; font-weight: 700; color: var(--euc); margin-bottom: 10px; }
+/* First run */
+.setup { max-width: 760px; }
+.setup h1 { margin-top: 8px; }
+.setup-steps { list-style: none; padding: 0; margin: 20px 0 0; display: grid; gap: 10px; }
+.setup-steps li { display: grid; grid-template-columns: 34px minmax(0, 1fr) auto; gap: 12px; align-items: center; background: var(--card); border: 1px solid var(--line-2); border-radius: var(--r-lg); padding: 14px 16px; }
+.setup-steps li p { margin: 2px 0 0; color: var(--ink-2); font-size: 0.92rem; }
+.setup-steps li.is-done .step-n { background: var(--good); border-color: var(--good); color: var(--card); }
+.setup-steps li.is-done b { color: var(--ink-2); }
+.filters select[aria-label="Order"] { flex: 0 1 220px; }

@@ -349,9 +349,9 @@ export function reviewMonth(data: Data, month: string): ReviewResult {
           : `Money in the offset saves ${h.rate}% on the loan. Add the offset account on Accounts and pick it on Property so the app can see it working.`
         : `From settlement, savings moved into the offset save ${h.rate}% on the loan. Until then, keep them in the best-paying savings accounts.` },
     { title: 'Guard thy treasures from loss', rule: 'Protect what you have: emergency money and insurance.',
-      status: monthsCovered >= 3 && insured.length >= 2 ? 'good' : 'watch',
+      status: Math.min(monthsCovered, lowCover ?? Infinity) >= 3 && insured.length >= 2 ? 'good' : 'watch',
       detail: cash.asOf
-        ? `Cash on hand of ${money(cash.total)} covers about ${monthsCovered.toFixed(1)} months of spending. Insurance seen: ${insured.map((c) => CATEGORY[c].label.toLowerCase()).join(', ') || 'none'}.`
+        ? `Cash on hand of ${money(cash.total)} covers about ${monthsCovered.toFixed(1)} months of spending${lowCover !== null && ahead?.st.low ? `, about ${lowCover.toFixed(1)} at the lowest point coming up (${fmtMonth(ahead.st.low.month)})` : ''}. Insurance seen: ${insured.map((c) => CATEGORY[c].label.toLowerCase()).join(', ') || 'none'}.`
         : 'Add your savings balances on the Goals page to check your emergency cover.' },
     { title: 'Make of thy dwelling a profitable investment', rule: 'Own your home rather than rent it.',
       status: month >= settleMonth ? 'good' : 'info',
@@ -374,8 +374,11 @@ export function reviewMonth(data: Data, month: string): ReviewResult {
   const steps: { n: number; title: string; rule: string; done: boolean; detail: string }[] = [
     { n: 1, title: 'Starter emergency fund', rule: 'Save $1,000 for emergencies.', done: cash.total >= 1000 || !!s.babySteps['1'],
       detail: cash.asOf ? `${money(cash.total)} in cash.` : 'Add your balances on the Goals page.' },
-    { n: 2, title: 'Pay off all debt except the house', rule: 'Clear credit cards, car and personal loans smallest first.', done: !!s.babySteps['2'],
-      detail: s.babySteps['2'] ? 'Marked as done.' : 'Tick this on the Goals page if the credit card is paid in full every month and there are no other loans.' },
+    { n: 2, title: 'Pay off all debt except the house', rule: 'Clear credit cards, car and personal loans smallest first.',
+      done: !!s.babySteps['2'] || (!!s.debts?.length && s.debts.every((d) => d.balance <= 0)),
+      detail: s.debts?.some((d) => d.balance > 0)
+        ? (() => { const open = s.debts!.filter((d) => d.balance > 0).sort((a, b) => a.balance - b.balance); return `${open.length} debt${open.length > 1 ? 's' : ''}, ${money(open.reduce((a, d) => a + d.balance, 0))} owed. Pay ${open[0].name} first.`; })()
+        : s.babySteps['2'] ? 'Marked as done.' : 'Add any debts on the Goals page, or tick this if the credit card is paid in full every month and there are no other loans.' },
     { n: 3, title: '3–6 months of expenses saved', rule: 'A full emergency fund.', done: Math.min(monthsCovered, lowCover ?? Infinity) >= 3 || !!s.babySteps['3'],
       detail: !cash.asOf ? 'Add your balances on the Goals page.'
         : lowCover !== null && ahead?.st.low ? `About ${monthsCovered.toFixed(1)} months today; at the lowest point coming up (${fmtMonth(ahead.st.low.month)}), about ${lowCover.toFixed(1)} months.`

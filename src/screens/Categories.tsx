@@ -212,6 +212,11 @@ function CategoriesTab() {
   const [adding, setAdding] = useState<'cat' | 'area' | null>(null);
   const [areaName, setAreaName] = useState('');
   const [allChips, setAllChips] = useState<Set<string>>(new Set());
+  const [q, setQ] = useState('');
+  const needle = q.trim().toLowerCase();
+  // Searching finds a category by its own name, its area's name, or any payee sorted into it.
+  const matches = (c: Category, area: string) => !needle || c.label.toLowerCase().includes(needle) || area.toLowerCase().includes(needle)
+    || (payeesBy.get(c.id) ?? []).some((p) => p.name.toLowerCase().includes(needle));
   const used = useMemo(() => new Set(data.transactions.map((t) => t.category)), [data.transactions]);
 
   const isCustomArea = (k: string) => (s.customGroups ?? []).some((g) => g.id === k);
@@ -228,6 +233,7 @@ function CategoriesTab() {
       <div className="btn-row cat-add">
         <button className="btn small" onClick={() => setAdding(adding === 'cat' ? null : 'cat')}><Plus size={16} aria-hidden /> New category</button>
         <button className="btn small" onClick={() => setAdding(adding === 'area' ? null : 'area')}><Plus size={16} aria-hidden /> New area</button>
+        <input type="search" className="cat-search" placeholder="Find a category or payee" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Find a category or payee" />
       </div>
       {adding === 'cat' && <section className="panel"><NewCategory onDone={() => setAdding(null)} /></section>}
       {adding === 'area' && (
@@ -247,29 +253,31 @@ function CategoriesTab() {
       <div className="cat-areas">
       {GROUP_KEYS.map((key, gi) => {
         const name = GROUPS[gi];
-        const cats = CATEGORIES.filter((c) => c.groupKey === key && !c.system);
-        const allHidden = cats.length > 0 && cats.every((c) => hidden.includes(c.id));
-        if (!cats.length && !isCustomArea(key)) return null;
+        const inArea = CATEGORIES.filter((c) => c.groupKey === key && !c.system);
+        const cats = inArea.filter((c) => matches(c, name));
+        const allHidden = inArea.length > 0 && inArea.every((c) => hidden.includes(c.id));
+        if (needle && !cats.length) return null;
+        if (!inArea.length && !isCustomArea(key)) return null;
         return (
           <section key={key} className={`panel cat-panel ${allHidden ? 'is-hidden' : ''}`}>
             <div className="cat-panel-head">
               {editing?.kind === 'area' && editing.id === key
                 ? <RenameBox value={name} label="Area name" onSave={(v) => { renameArea(key, v); setEditing(null); }} onCancel={() => setEditing(null)} />
-                : <h2>{name} <small>{cats.length} categor{cats.length === 1 ? 'y' : 'ies'}{allHidden ? ', hidden' : ''}</small></h2>}
+                : <h2>{name} <small>{inArea.length} categor{inArea.length === 1 ? 'y' : 'ies'}{allHidden ? ', hidden' : ''}</small></h2>}
               <Menu label={`${name} options`} items={[
                 { label: 'Rename area', onClick: () => setEditing({ kind: 'area', id: key }) },
                 { label: 'Add a category here', onClick: () => setEditing({ kind: 'add', id: key }) },
-                cats.length > 0 && { label: allHidden ? 'Show all its categories' : 'Hide all its categories', onClick: () => setHidden(cats.map((c) => c.id), !allHidden) },
-                isCustomArea(key) && !cats.length && { label: 'Delete area', danger: true, onClick: () => updateSettings({ customGroups: (s.customGroups ?? []).filter((g) => g.id !== key) }) },
+                inArea.length > 0 && { label: allHidden ? 'Show all its categories' : 'Hide all its categories', onClick: () => setHidden(inArea.map((c) => c.id), !allHidden) },
+                isCustomArea(key) && !inArea.length && { label: 'Delete area', danger: true, onClick: () => updateSettings({ customGroups: (s.customGroups ?? []).filter((g) => g.id !== key) }) },
               ]} />
             </div>
             {editing?.kind === 'add' && editing.id === key && <NewCategory areaKey={key} onDone={() => setEditing(null)} />}
-            {!cats.length && editing?.id !== key && <p className="muted">No categories yet. Use ⋯ → Add a category here, or move one in.</p>}
+            {!inArea.length && editing?.id !== key && <p className="muted">No categories yet. Use ⋯ → Add a category here, or move one in.</p>}
             <ul className="cat-rows">
               {cats.map((c) => {
                 const ps = (payeesBy.get(c.id) ?? []).sort((a, b) => a.name.localeCompare(b.name));
                 const isHidden = hidden.includes(c.id);
-                const many = ps.length > 5 && !allChips.has(c.id);
+                const many = ps.length > 5 && !allChips.has(c.id) && !needle;
                 return (
                   <li key={c.id} className={isHidden ? 'is-hidden' : ''}>
                     <div className="cat-line">

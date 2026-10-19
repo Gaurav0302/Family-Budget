@@ -51,5 +51,6 @@ React 18 + Vite + TypeScript, HashRouter, Supabase (supabase-js, email + passwor
 - Pop-up panels: put `<FocusTrap onClose={...} />` first inside the `sheet-wrap` (focus in, Tab kept inside, Escape closes, focus returns). Scrolling tables: `table-wrap` with `tabIndex={0} role="region"` and a unique `aria-label`.
 - Privacy check: scans every file `git ls-files -co --exclude-standard` lists; on GitHub it reads the PRIVACY_WORDS secret.
 - Dev only: localStorage `fb:today` = `YYYY-MM` pretends the current month (`thisMonth()`), to test Record and check-ins before settlement.
+- Home's To do: `data/todos.ts` (`todosFor`). Settings also hold `meetings[month]` (meeting held), `goals` (own goals), `debts` (non-house debts, snowball), and each property's `checklist`. Own goals and debts are `screens/GoalsParts.tsx`. Password reset: store `resetPassword`/`changePassword`; Supabase's PASSWORD_RECOVERY event sets `recovering` and Gate shows `SetPassword`.
 - Keep pages uncluttered: explanations go behind the small `Info` button, not in paragraphs.
 - Super cap and tax-rate tables in `wealth.ts` need updating each July (ATO key super rates and thresholds).

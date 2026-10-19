@@ -1,7 +1,7 @@
 import { AlertTriangle } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Badge, Empty, Meter, MonthPicker, PurseBar } from '../components/bits';
+import { Badge, Meter, MonthPicker, PurseBar } from '../components/bits';
 import { Chart } from '../components/Chart';
 import { MonthBanner } from '../components/MonthBanner';
 import { useForecast } from '../data/useProperties';
@@ -12,6 +12,8 @@ import { drillCategory, drillType, useDrill } from '../components/Drill';
 import { addMonths, allMonths, budgetFor, completeMonths } from '../data/analysis';
 import { CATEGORY } from '../data/categories';
 import { reviewFor } from '../data/reviewCache';
+import { todosFor } from '../data/todos';
+import { useAudits } from '../data/useAudit';
 import { useStore } from '../data/store';
 import { money, monthName, monthOnly, pct, thisMonth } from '../lib/format';
 
@@ -20,17 +22,38 @@ export function HomeScreen() {
   const drill = useDrill();
   const { st } = useForecast();
   const monthly = useMonthly();
+  const { audits } = useAudits();
   const months = useMemo(() => allMonths(data.transactions), [data.transactions]);
   const complete = useMemo(() => completeMonths(data), [data]);
   const completeSet = useMemo(() => new Set(complete), [complete]);
   const [month, setMonth] = useState<string>(() => complete.at(-1) ?? months.at(-1) ?? '');
 
-  if (!data.transactions.length) return (
-    <Empty title="Nothing here yet">
-      <p>Add your first statements to see where the money goes.</p>
-      <Link className="btn primary" to="/statements?tab=add">Add statements</Link>
-    </Empty>
-  );
+  if (!data.transactions.length) {
+    // First run: a short setup, each step ticking itself off as it's done.
+    const s0 = data.settings;
+    const steps = [
+      { done: s0.household !== 'Our family', text: 'Name your household', why: 'It shows at the top of the menu.', to: '/settings', go: 'Settings' },
+      { done: s0.accounts.length > 0, text: 'Add your bank accounts and cards', why: 'With the last 4 digits, so each statement lands in the right place.', to: '/accounts', go: 'Accounts' },
+      { done: (s0.pay ?? []).length > 0, text: "Add each person's pay", why: 'Take-home pay sets the budget and the Babylon tenth.', to: '/wealth?tab=income', go: 'Income & super' },
+      { done: false, text: 'Add three months of statements', why: 'A bank CSV, or a data file Claude prepares from PDF statements. The app sorts every payment.', to: '/statements?tab=add', go: 'Add statements' },
+      { done: false, text: 'Set the budget', why: "Once statements are in, each line shows your average spending with a 'use' button.", to: '/budget', go: 'Budget' },
+    ];
+    return (
+      <div className="setup">
+                <h1>Let's set up your family purse</h1>
+        <p className="lead">Five steps, about half an hour with your statements to hand. Each one ticks itself off.</p>
+        <ol className="setup-steps">
+          {steps.map((x, i) => (
+            <li key={x.text} className={x.done ? 'is-done' : ''}>
+              <span className="step-n">{x.done ? '✓' : i + 1}</span>
+              <div><b>{x.text}</b><p>{x.why}</p></div>
+              {!x.done && <Link className={`btn small ${steps.findIndex((y) => !y.done) === i ? 'primary' : ''}`} to={x.to}>{x.go}</Link>}
+            </li>
+          ))}
+        </ol>
+      </div>
+    );
+  }
 
   const review = reviewFor(data, month);
   const s = review.summary;
@@ -41,16 +64,22 @@ export function HomeScreen() {
   const actions = data.settings.actions ?? [];
   const now = thisMonth();
   const plan = actions.filter((a) => a.month === addMonths(now, -1));
-  const lastMonth = addMonths(now, -1);
+  const todos = todosFor(data, audits);
 
   return (
     <div className="home">
       <div className="home-head">
         <MonthPicker months={months} value={month} onChange={setMonth} completeSet={completeSet} />
       </div>
-      {/* Last month still missing statements: a to-do at the top until it's done. Then the month being viewed, if it isn't complete. */}
-      {lastMonth !== month && <MonthBanner month={lastMonth} nudge />}
-      <MonthBanner month={month} />
+      {/* What to do next, as one short list (last month's statements, sorting, the meeting, loan check-ins). */}
+      {todos.length > 0 && (
+        <section className="todo no-print" aria-labelledby="todo-h">
+          <h2 id="todo-h">To do</h2>
+          <ul>{todos.map((t) => <li key={t.id} className={`todo-${t.tone}`}><span>{t.text}</span><Link className="btn small" to={t.to}>{t.action}</Link></li>)}</ul>
+        </section>
+      )}
+      {/* The month being viewed, if its statements aren't all in (its numbers are a draft). */}
+      {(audits.get(month)?.state === 'missing' || audits.get(month)?.state === 'in-progress') && <MonthBanner month={month} />}
 
       {scream.length > 0 && (
         <section className="scream" aria-label="Needs attention now">
@@ -101,7 +130,7 @@ export function HomeScreen() {
               return (
                 <li key={cat}>
                   <button type="button" onClick={() => drill(drillCategory(month, cat))} className="cat-row">
-                    <span className="cat-name">{CATEGORY[cat]?.label ?? cat}</span>
+                    <span className="cat-name">{CATEGORY[cat]?.label ?? cat}{cat === 'other' && <small className="cat-sort"> sort these</small>}</span>
                     <span className="cat-num">{money(v)}<small>{b ? ` of ${money(meterLimit(data, cat, month, v))}${freqOf(data.settings, cat).every !== 'month' ? ` (${EVERY_UNIT[freqOf(data.settings, cat).every]})` : ''}` : ' no budget'}</small></span>
                     <Meter actual={v} budget={b ? meterLimit(data, cat, month, v) : 0} />
                   </button>

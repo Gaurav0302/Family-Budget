@@ -23,7 +23,7 @@ import { outgoings, type Basis } from '../data/forecast';
 import { useForecast } from '../data/useProperties';
 import { EVERY_UNIT, freqOf, meterLimit, monthlyOf, perTime } from '../data/frequency';
 import { keepBudget, totalBudget } from '../data/analysis';
-import { dayName, money, monthName, monthOnly, pct } from '../lib/format';
+import { dayName, longDate, money, monthName, monthOnly, pct, today } from '../lib/format';
 
 const endOf = (m: string) => { const [y, mo] = m.split('-').map(Number); return `${m}-${String(new Date(Date.UTC(y, mo, 0)).getUTCDate()).padStart(2, '0')}`; };
 
@@ -233,6 +233,9 @@ function MoneyMeeting() {
     { tone: tone('kept', k, s.complete), short: `Kept ${pct(k)}.`, chip: `Kept ${pct(k)}` },
   ];
   const doneCount = lastActions.filter((a) => a.done).length;
+  // Last month's actions not done and not already in next month's plan.
+  const carry = lastActions.filter((a) => !a.done && !nextActions.some((x) => x.text === a.text));
+  const held = data.settings.meetings?.[month];
   // The same "left to give a job" as the Budget page: expected pay less everything budgeted, spending and keeping.
   const payNext = expectedIncome(data.settings, nextMonth);
   const spendNext = totalBudget(data.budgets, nextMonth), keepNext = keepBudget(data.budgets, nextMonth);
@@ -277,6 +280,8 @@ function MoneyMeeting() {
               <li key={a.id}><label className="check"><input type="checkbox" checked={a.done} onChange={(e) => setActions(actions.map((x) => (x.id === a.id ? { ...x, done: e.target.checked } : x)))} /><span>{a.text}</span></label></li>
             ))}
           </ul>
+          {carry.length > 0 && <button className="btn small no-print" onClick={() => setActions([...actions, ...carry.map((a, i) => ({ id: `a${Date.now().toString(36)}${i}`, month, text: a.text, done: false }))])}>
+            Carry {carry.length === 1 ? 'it' : `the ${carry.length} not done`} into {monthOnly(nextMonth)}’s plan</button>}
         </div>
       </div>
     ) : <p className="muted">No plan was set for {monthOnly(month)}. The plan you make in step 6 shows up here next month.</p> },
@@ -402,6 +407,10 @@ function MoneyMeeting() {
           <button className="btn small">Add</button>
         </form>
         <p className="fine no-print">Next month's meeting starts by asking whether these got done.</p>
+        <div className="meet-held no-print">
+          {held ? <p className="st-text-good"><Check size={16} aria-hidden /> Meeting held on {longDate(held.heldOn)}{held.by ? `, marked by ${held.by}` : ''}.</p>
+            : <button className="btn primary" onClick={() => updateSettings({ meetings: { ...(data.settings.meetings ?? {}), [month]: { heldOn: today(), by: email ?? undefined } } })}>We’ve had this meeting</button>}
+        </div>
         <div className="meet-notes">
           <h3>Notes for {monthOnly(month)}</h3>
           {notes.length ? notes.map((n) => (

@@ -1,5 +1,8 @@
 # SESSION-HANDOFF.md
 
+## Current status (20 Oct 2026, morning)
+Audit blocks 1–3 built and published (D31 fixes, D32 new layout, D33 page clean-ups). The user dropped the history rewrite and will make the repository private (GitHub Pages on a free plan needs a public repo: check the site still publishes). Accessibility check: 0 failures on 16 pages, desktop and phone, light and dark. Next: block 4 features (51–62), then the launch track and code items. Password reset is untested against Supabase from here.
+
 ## Current status (19 Oct 2026, around midnight)
 Audit block 1 built (D31), checked on the real data and published. Waiting on the user for: approving the force-push that removes the family member's name from the public history (rewrite done locally in /home/claude/family-budget before publishing was reset; redo with `git filter-repo --replace-text` 'regex:(?i)<name>==>Person B' on a fresh clone, then force-push), and adding the PRIVACY_WORDS secret on GitHub. Next: block 2 (new structure) after the user's go-ahead on its details.
 

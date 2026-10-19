@@ -2,7 +2,9 @@ import { useState } from 'react';
 import { useStore } from '../data/store';
 
 export function Login() {
-  const { signIn } = useStore();
+  const { signIn, resetPassword } = useStore();
+  const [forgot, setForgot] = useState(false);
+  const [sent, setSent] = useState<string | null>(null);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -28,7 +30,37 @@ export function Login() {
         <label>Password<input type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} required /></label>
         {error && <p className="form-error" role="alert">{error}</p>}
         <button className="btn primary wide" disabled={busy}>{busy ? 'Signing in…' : 'Sign in'}</button>
-        <p className="fine">Forgot your password? Sign in to supabase.com, open Authentication → Users and reset it there.</p>
+        {forgot ? (
+          <div className="forgot">
+            <p className="fine">Type your email above, then send the link. It lets you set a new password.</p>
+            <button type="button" className="btn wide" disabled={!email} onClick={async () => { const err = await resetPassword(email); setSent(err ? `Couldn't send it: ${err}` : `Sent. Check ${email} for a link to set a new password.`); }}>Email me a link</button>
+            {sent && <p role="status" className="fine">{sent}</p>}
+          </div>
+        ) : <button type="button" className="link" onClick={() => setForgot(true)}>Forgot your password?</button>}
+      </form>
+    </div>
+  );
+}
+
+/** After following a "set a new password" email: choose the new password, then carry on into the app. */
+export function SetPassword() {
+  const { changePassword, finishRecovery } = useStore();
+  const [a, setA] = useState(''), [b, setB] = useState('');
+  const [msg, setMsg] = useState<string | null>(null);
+  return (
+    <div className="login">
+      <form className="login-card" onSubmit={async (e) => {
+        e.preventDefault();
+        if (a.length < 8) return setMsg('Use at least 8 characters.');
+        if (a !== b) return setMsg("The two passwords don't match.");
+        const err = await changePassword(a);
+        if (err) setMsg(`Not changed: ${err}`); else finishRecovery();
+      }}>
+        <h1>Set a new password</h1>
+        <label>New password<input type="password" autoComplete="new-password" value={a} onChange={(e) => setA(e.target.value)} required /></label>
+        <label>Type it again<input type="password" autoComplete="new-password" value={b} onChange={(e) => setB(e.target.value)} required /></label>
+        {msg && <p className="form-error" role="alert">{msg}</p>}
+        <button className="btn primary wide">Save and open the app</button>
       </form>
     </div>
   );

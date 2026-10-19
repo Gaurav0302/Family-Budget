@@ -25,6 +25,18 @@ const TABS: { id: Tab; label: string }[] = [
   { id: 'buying', label: 'Buying' }, { id: 'costs', label: 'Costs & rent' },
 ];
 const EVERY: Every[] = ['week', 'fortnight', 'month', 'term', 'quarter', 'year'];
+/** Steps around settlement that are easy to forget (Australia). */
+const SETTLE_STEPS = [
+  { id: 'loan-docs', text: 'Loan documents signed and returned to the lender' },
+  { id: 'insurance', text: 'Home and contents insurance starts on settlement day', hint: 'Many contracts put the risk on the buyer from settlement.' },
+  { id: 'statement', text: "The conveyancer's settlement statement received", hint: 'Put the final stamp duty and fees in the costs below.' },
+  { id: 'inspection', text: 'Final inspection done before settlement' },
+  { id: 'offset', text: 'Offset account open and savings moved into it', hint: 'Then add it on Accounts and pick it in Edit plan → Loan.' },
+  { id: 'utilities', text: 'Electricity, gas, water and internet connected at the new address' },
+  { id: 'lease', text: 'Lease end date confirmed with the rental agent' },
+  { id: 'address', text: 'Change of address: banks, ATO, Medicare, electoral roll, licences and rego, schools' },
+  { id: 'keys', text: 'Keys collected' },
+];
 const yrs = (months: number) => { const y = Math.floor(Math.abs(months) / 12), m = Math.abs(months) % 12; return [y && `${y} year${y > 1 ? 's' : ''}`, m && `${m} month${m > 1 ? 's' : ''}`].filter(Boolean).join(' ') || '0 months'; };
 const idxName = (i: number) => monthName(toYM(i));
 const newId = () => Math.random().toString(36).slice(2, 8);
@@ -275,8 +287,22 @@ function Buying({ p, set }: { p: Property; set: (x: Partial<Property>) => void }
   const today = todayLocal();
   const paid = p.costs.filter((c) => c.date <= today).reduce((a, c) => a + c.amount, 0);
   const settle = st.settlements.find((x) => x.property === p.name);
+  // Until a month after settlement, the steps that usually get forgotten.
+  const showList = addMonths(monthOf(p.settlement), 1) >= monthOf(today);
+  const done = SETTLE_STEPS.filter((x) => p.checklist?.[x.id]).length;
   return (
     <>
+      {showList && (
+        <section className="panel" aria-labelledby="settle-list">
+          <div className="panel-head"><h2 id="settle-list">Before and after settlement</h2><span className="muted small">{done} of {SETTLE_STEPS.length} done</span></div>
+          <ul className="checklist settle-list">
+            {SETTLE_STEPS.map((x) => (
+              <li key={x.id}><label className="check"><input type="checkbox" checked={!!p.checklist?.[x.id]} onChange={(e) => set({ checklist: { ...(p.checklist ?? {}), [x.id]: e.target.checked } })} />
+                <span>{x.text}{x.hint && <small>{x.hint}</small>}</span></label></li>
+            ))}
+          </ul>
+        </section>
+      )}
       <section className="panel">
         <div className="field-grid">
           <label>Name<input defaultValue={p.name} onBlur={(e) => e.target.value.trim() && e.target.value !== p.name && set({ name: e.target.value.trim() })} /></label>

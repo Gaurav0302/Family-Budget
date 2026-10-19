@@ -26,8 +26,17 @@ interface Store {
   dismissSaveError(): void;
   signIn(email: string, password: string): Promise<string | null>;
   signOut(): Promise<void>;
+  /** Change the signed-in person's password. Returns an error message, or null when it worked. */
+  changePassword(password: string): Promise<string | null>;
+  /** Email a link to set a new password (from the sign-in page). Returns an error message, or null. */
+  resetPassword(email: string): Promise<string | null>;
+  /** Arrived from a "set a new password" email: the app asks for the new password first. */
+  recovering: boolean;
+  finishRecovery(): void;
   reload(): Promise<void>;
   updateTransaction(id: string, patch: Partial<Transaction>): Promise<void>;
+  /** The same change to several transactions at once (sorting many in one go), saved together. */
+  updateTransactions(ids: string[], patch: Partial<Transaction>): Promise<void>;
   /** Sort every matching transaction the same way from now on. */
   addRule(rule: Omit<Rule, 'id' | 'user'>): Promise<number>;
   deleteRule(id: string): Promise<void>;
@@ -74,6 +83,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [email, setEmail] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [recovering, setRecovering] = useState(false);
   const dataRef = useRef(data);
   dataRef.current = data;
   applyCustomCategories(data.settings.customCategories, data.settings.hiddenCategories, data.settings);
@@ -173,7 +183,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     let user: string | null = null;
     let loadedAt = 0;
     sb.auth.getSession().then(({ data: { session } }) => onSession(session));
-    const { data: sub } = sb.auth.onAuthStateChange((_e, session) => { if (!first) onSession(session); });
+    const { data: sub } = sb.auth.onAuthStateChange((e, session) => { if (e === 'PASSWORD_RECOVERY') setRecovering(true); if (!first) onSession(session); });
     // Supabase announces "signed in" again whenever the tab comes back into view and when it renews the login.
     // Only a different person (or signing in after signing out) shows the loading screen. For the same person,
     // after a long break the data is refreshed quietly in the background, so the other person's changes appear.
@@ -219,6 +229,17 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       failed.current = []; setSaveError(null);
       if (adapter.kind === 'supabase') { await supabase().auth.signOut(); setData(empty); }
     },
+    async changePassword(password) {
+      if (adapter.kind !== 'supabase') return 'Passwords only apply when signed in to the family database.';
+      const { error } = await supabase().auth.updateUser({ password });
+      return error ? error.message : null;
+    },
+    async resetPassword(e) {
+      const { error } = await supabase().auth.resetPasswordForEmail(e.trim(), { redirectTo: window.location.origin + window.location.pathname });
+      return error ? error.message : null;
+    },
+    recovering,
+    finishRecovery() { setRecovering(false); },
     saveError,
     async retrySave() {
       const list = failed.current;
@@ -234,6 +255,15 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       const next = { ...cur, ...patch, manual: patch.category || patch.kind ? true : cur.manual, needsReview: patch.category || patch.kind ? false : (patch.needsReview ?? cur.needsReview) };
       setData((d) => ({ ...d, transactions: d.transactions.map((t) => (t.id === id ? next : t)) }));
       await guard(() => adapter.upsertTransactions([next]));
+    },
+    async updateTransactions(ids, patch) {
+      const set = new Set(ids);
+      const sorting = !!(patch.category || patch.kind);
+      const changed = dataRef.current.transactions.filter((t) => set.has(t.id))
+        .map((t) => ({ ...t, ...patch, manual: sorting ? true : t.manual, needsReview: sorting ? false : (patch.needsReview ?? t.needsReview) }));
+      const byId = new Map(changed.map((t) => [t.id, t]));
+      setData((d) => ({ ...d, transactions: d.transactions.map((t) => byId.get(t.id) ?? t) }));
+      await guard(() => adapter.upsertTransactions(changed));
     },
     async addRule(rule) {
       const full: Rule = { ...rule, id: `user:${Date.now().toString(36)}`, user: true };
@@ -380,7 +410,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       clearLocal();
       await load();
     },
-  }), [data, status, error, adapter, email, saving, saveError, guard, load, payeeIdx]);
+  }), [data, status, error, adapter, email, saving, saveError, recovering, guard, load, payeeIdx]);
 
   return <Ctx.Provider value={store}>{children}</Ctx.Provider>;
 }

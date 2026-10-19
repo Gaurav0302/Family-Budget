@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
-import { Meter, MonthPicker, PageHeader } from '../components/bits';
+import { Meter, MonthPicker, PageHeader, Tabs } from '../components/bits';
+import { ChevronRight } from 'lucide-react';
 import { addMonths, allMonths, average, budgetFor, completeMonths, keepBudget, summarise, totalBudget } from '../data/analysis';
 import { GROUPS, KEEP_CATEGORIES, SPEND_CATEGORIES } from '../data/categories';
 import { useStore } from '../data/store';
@@ -42,6 +43,11 @@ export function Budget() {
   }, [data.transactions]);
   const complete = useMemo(() => completeMonths(data), [data]);
   const [month, setMonth] = useState(() => (complete.at(-1) && complete.at(-1)! >= thisMonth() ? complete.at(-1)! : thisMonth()));
+  // How this person likes the page: areas folded, and only lines in use. Kept in this browser only.
+  const readPref = <T,>(key: string, fallback: T, parse: (v: string) => T): T => { try { const v = localStorage.getItem(key); return v === null ? fallback : parse(v); } catch { return fallback; } };
+  const [folded, setFolded] = useState<Set<string>>(() => readPref('fb:budget-folded', new Set<string>(), (v) => new Set(JSON.parse(v) as string[])));
+  const [onlyUsed, setOnlyUsed] = useState<boolean>(() => readPref('fb:budget-used', true, (v) => v === '1'));
+  const keepPref = <T,>(set: (v: T) => void, key: string, v: T) => { set(v); try { localStorage.setItem(key, v instanceof Set ? JSON.stringify([...v]) : v ? '1' : '0'); } catch { /* storage off */ } };
   const s = summarise(month, data);
   const base = complete.filter((m) => m < month).slice(-3).map((m) => summarise(m, data));
   const keep = keepBudget(data.budgets, month);
@@ -119,17 +125,29 @@ export function Budget() {
         </div>
       </section>
 
+      <div className="budget-tools no-print">
+        <Tabs value={onlyUsed ? 'used' : 'all'} onChange={(v) => keepPref(setOnlyUsed, 'fb:budget-used', v === 'used')} items={[{ id: 'used', label: 'Lines in use' }, { id: 'all', label: 'Every line' }]} />
+        <button className="link" onClick={() => keepPref(setFolded, 'fb:budget-folded', folded.size ? new Set<string>() : new Set(GROUPS))}>{folded.size ? 'Open every area' : 'Fold every area'}</button>
+      </div>
+
       {GROUPS.map((g) => {
-        const cats = SPEND_CATEGORIES.filter((c) => c.group === g);
+        const all = SPEND_CATEGORIES.filter((c) => c.group === g);
+        // "Lines in use": a budget, spending this month or on average, or a change planned later.
+        const used = (id: string) => budgetFor(data.budgets, id, month) || (s.byCategory[id] ?? 0) || average(base.map((x) => x.byCategoryUsual[id] ?? 0)) >= 1 || data.budgets.some((x) => x.category === id && x.from > month && x.amount);
+        const cats = onlyUsed ? all.filter((c) => used(c.id)) : all;
+        if (!cats.length) return null;
         const groupBudget = cats.reduce((a, c) => a + budgetFor(data.budgets, c.id, month), 0);
         const groupSpent = cats.reduce((a, c) => a + (s.byCategory[c.id] ?? 0), 0);
+        const isFolded = folded.has(g);
+        const over = groupBudget > 0 && groupSpent > groupBudget * 1.05;
         return (
-          <section key={g} className="budget-group" aria-labelledby={`g-${g}`}>
+          <section key={g} className={`budget-group ${isFolded ? 'is-folded' : ''}`} aria-labelledby={`g-${g}`}>
             <div className="budget-group-head">
-              <h2 id={`g-${g}`}>{g}</h2>
-              <span>{money(groupSpent)} of {money(groupBudget)}</span>
+              <h2 id={`g-${g}`}><button className="grp-toggle" aria-expanded={!isFolded} onClick={() => keepPref(setFolded, 'fb:budget-folded', (() => { const n = new Set(folded); if (n.has(g)) n.delete(g); else n.add(g); return n; })())}>
+                <ChevronRight size={16} aria-hidden className={isFolded ? '' : 'rot'} />{g}</button></h2>
+              <span className={over ? 'st-text-bad' : ''}>{money(groupSpent)} of {money(groupBudget)}{isFolded ? ` · ${cats.length} line${cats.length === 1 ? '' : 's'}` : ''}</span>
             </div>
-            <div className="budget-rows">
+            {!isFolded && <div className="budget-rows">
               {cats.map((c) => {
                 const b = budgetFor(data.budgets, c.id, month);
                 const spent = s.byCategory[c.id] ?? 0;
@@ -175,7 +193,7 @@ export function Budget() {
                   </div>
                 );
               })}
-            </div>
+            </div>}
           </section>
         );
       })}

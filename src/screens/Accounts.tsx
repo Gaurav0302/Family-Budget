@@ -1,6 +1,9 @@
 import { Trash2 } from 'lucide-react';
 import { useState } from 'react';
 import { Info, PageHeader } from '../components/bits';
+import { Link } from 'react-router-dom';
+import { addMonths, monthOf } from '../data/analysis';
+import { propertiesOf } from '../data/property';
 import { Menu } from '../components/Menu';
 import { useStore } from '../data/store';
 import type { Account, Settings } from '../data/types';
@@ -134,6 +137,12 @@ export function Accounts() {
       <PageHeader title="Accounts">
         <Info>Your bank accounts, cards and loans. Tap a balance to update it; ⋯ for details, history or closing. The last 4 digits tie statements to the right account. When savings move to an offset, close the old account and say where the money went: its history stays.</Info>
       </PageHeader>
+      {/* Around settlement: the loan and offset accounts are what let real balances drive the loan plan. */}
+      {propertiesOf(data.settings, data.budgets).filter((p) => p.loan && !p.soldOn && (!p.loan.loanAccount || !p.loan.offsetAccount) && addMonths(monthOf(p.settlement), -1) <= monthOf(today())).map((p) => (
+        <p key={p.id} className="month-banner tone-info"><span>{p.name} settles {longDate(p.settlement)}. Once the accounts exist, add the home loan and the offset here (with their last 4 digits), then pick them on <Link to={`/property/${p.id}?tab=edit`}>{p.name} → Edit plan → Loan</Link> so statements drive the loan.</span></p>
+      ))}
+      {data.settings.accounts.some((a) => a.type === 'card' && !a.closedOn && !data.settings.balances.some((b) => b.account === a.key)) &&
+        <p className="month-banner tone-info"><span>Add each credit card's balance from its latest statement (tap Add balance): it counts as money owed in net worth.</span></p>}
       <div className="acct-totals">
         {totals.map((t) => <div key={t.k} className={`kind-${t.k}`}><span>{KIND_LABEL[t.k]}</span><b>{money(t.sum)}</b></div>)}
       </div>

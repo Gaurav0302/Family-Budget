@@ -229,6 +229,8 @@ export interface Property {
   soldOn?: string;
   /** Net worth items this property replaces (its value and loan were added by hand before properties existed). */
   wealthIds?: string[];
+  /** Settlement checklist: which steps are done (by step id). */
+  checklist?: Record<string, boolean>;
 }
 
 export interface Settings {
@@ -281,6 +283,12 @@ export interface Settings {
   bills?: Bill[];
   /** Actions agreed at the monthly money meeting. */
   actions?: Action[];
+  /** The family's own savings goals (a car, a holiday, a trip): target, saved so far, and when it's wanted by (YYYY-MM). */
+  goals?: { id: string; name: string; target: number; saved: number; by?: string }[];
+  /** Debts other than the home loan, for baby step 2 (paid smallest first). Balance owed, yearly rate %, minimum a month. */
+  debts?: { id: string; name: string; balance: number; rate?: number; minimum?: number }[];
+  /** Money meetings held, by the month they reviewed (YYYY-MM): when, and who pressed "We've had this meeting". */
+  meetings?: Record<string, { heldOn: string; by?: string }>;
   customCategories?: Category[];
   hiddenCategories?: string[];
   /** The family's own areas (groups of categories). */

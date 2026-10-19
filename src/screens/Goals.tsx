@@ -3,10 +3,12 @@ import { Link } from 'react-router-dom';
 import { Badge, PageHeader } from '../components/bits';
 import { cashOnHand, completeMonths } from '../data/analysis';
 import { reviewFor } from '../data/reviewCache';
-import { propertiesOf } from '../data/property';
+import { homeProperty, propertiesOf, uniPlanOf, uniStart } from '../data/property';
+import { latestBalance, monthlyAt, uniPath } from '../data/uni';
+import { Debts, OwnGoals } from './GoalsParts';
 import { useForecast } from '../data/useProperties';
 import { useStore } from '../data/store';
-import { longDate, money, monthName } from '../lib/format';
+import { longDate, money, monthName, thisMonth } from '../lib/format';
 import { today as todayLocal } from '../lib/format';
 
 export function Goals() {
@@ -20,6 +22,8 @@ export function Goals() {
   // Payments made after the latest statements (a deposit): the forecast takes them off; say so here so the figures agree.
   const pending = f.months.filter((x) => x.part).flatMap((x) => x.oneOffs.filter((o) => !o.settles));
   const props = propertiesOf(s, data.budgets);
+  const home = homeProperty(s, data.budgets);
+  const uniRate = uniPlanOf(s).inOffset && home?.loan ? home.loan.rate : uniPlanOf(s).returnPct;
   const [acct, setAcct] = useState(s.accounts.find((a) => a.type === 'savings')?.key ?? s.accounts[0]?.key);
   const [amt, setAmt] = useState('');
   const today = todayLocal();
@@ -77,8 +81,16 @@ export function Goals() {
 
         <section className="panel" aria-labelledby="uni">
           <div className="panel-head"><h2 id="uni">University funds</h2><Link to="/uni">Uni funds</Link></div>
-          <ul className="balances">{s.uniFunds.map((f) => <li key={f.name}><span>{f.name}, uni {f.year}</span><span>{money(f.monthly)} a month<small>{money(f.saved)} saved</small></span></li>)}</ul>
+          <ul className="balances">{s.uniFunds.map((f) => {
+            // The same path as the Uni funds page: saved so far, and what it reaches when uni starts.
+            const path = uniPath(f, uniStart(f, data.budgets, thisMonth()), uniRate, uniPlanOf(s).years, `${f.year}-01`);
+            const atUni = path.find((x) => x.month === `${f.year}-01`)?.value ?? latestBalance(f).amount;
+            return <li key={f.name}><span>{f.name}, uni {f.year}</span><span>{money(atUni)} by then{f.target ? ` of ${money(f.target)}` : ''}<small>{money(latestBalance(f).amount)} saved, {money(monthlyAt(f, thisMonth()))} a month</small></span></li>;
+          })}</ul>
         </section>
+
+        <OwnGoals />
+        <Debts />
 
         <section className="panel" aria-labelledby="house">
           <div className="panel-head"><h2 id="house">Property</h2><Link to="/property">Property</Link></div>

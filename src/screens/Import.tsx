@@ -1,5 +1,5 @@
 import { FileUp } from 'lucide-react';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { PageHeader } from '../components/bits';
 import { applyRules } from '../data/rules';
@@ -42,6 +42,20 @@ export function Import({ embedded = false }: { embedded?: boolean } = {}) {
     const dates = parsed.transactions.map((t) => t.date).sort();
     return { fresh: fresh.length, duplicates, unsure: fresh.filter((t) => t.needsReview).length, from: dates[0], to: dates.at(-1)! };
   })() : null;
+
+  // Every file added so far, newest first: which accounts and dates it covered.
+  const history = useMemo(() => {
+    const by = new Map<string, { source: string; count: number; from: string; to: string; accounts: Set<string> }>();
+    for (const t of data.transactions) {
+      const k = t.source || 'Added by hand';
+      const h = by.get(k) ?? { source: k, count: 0, from: t.date, to: t.date, accounts: new Set<string>() };
+      h.count++; if (t.date < h.from) h.from = t.date; if (t.date > h.to) h.to = t.date;
+      h.accounts.add(data.settings.accounts.find((a) => a.key === t.account)?.name.replace(/ \(.*\)$/, '') ?? t.account);
+      by.set(k, h);
+    }
+    return [...by.values()].map((h) => ({ ...h, accounts: [...h.accounts] })).sort((a, b) => b.to.localeCompare(a.to));
+  }, [data.transactions, data.settings.accounts]);
+  const [showAll, setShowAll] = useState(false);
 
   return (
     <div className="import">
@@ -151,6 +165,17 @@ export function Import({ embedded = false }: { embedded?: boolean } = {}) {
             <li>Sort anything under “Needs your input”, then read the review.</li>
           </ol>
         </section>
+        {history.length > 0 && (
+          <section className="panel">
+            <h2>Added so far</h2>
+            <ul className="value-list import-history">
+              {history.slice(0, showAll ? undefined : 8).map((h) => (
+                <li key={h.source}><span><b>{h.source}</b><small>{h.accounts.join(', ')}: {longDate(h.from)} to {longDate(h.to)}</small></span><span>{h.count}<small>payments</small></span></li>
+              ))}
+            </ul>
+            {history.length > 8 && <button className="link" onClick={() => setShowAll(!showAll)}>{showAll ? 'Show fewer' : `Show all ${history.length}`}</button>}
+          </section>
+        )}
         <section className="panel">
           <h2>Backup</h2>
           <p>The free database has no automatic backups. Download one each month and keep it somewhere safe. Adding the file here restores everything.</p>

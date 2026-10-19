@@ -1,4 +1,4 @@
-import { addMonths, completeMonths, lastDay, monthOf, withSplits } from '../data/analysis';
+import { addMonths, budgetFor, completeMonths, lastDay, monthOf, withSplits } from '../data/analysis';
 import { reviewFor } from '../data/reviewCache';
 import { Link } from 'react-router-dom';
 import { homeProperty, propertiesOf, repaymentOf } from '../data/property';
@@ -16,6 +16,12 @@ const monthsFrom = (a: string, b: string) => (Number(b.slice(0, 4)) - Number(a.s
 /** The next monthly date on or after today, keeping the day of the month (clamped to short months). */
 const rollMonthly = (first: string, today: string) => { let k = 1, d = addEvery(first, 'month', k); while (d < today) d = addEvery(first, 'month', ++k); return d; };
 
+const WHEN = [
+  { label: 'This week', test: (d: number) => d <= 7 },
+  { label: 'Next week', test: (d: number) => d > 7 && d <= 14 },
+  { label: 'Later', test: (d: number) => d > 14 },
+];
+
 const EVERY: Record<Every, string> = { week: 'Weekly', fortnight: 'Fortnightly', month: 'Monthly', term: 'Each school term', quarter: 'Quarterly', year: 'Yearly' };
 
 export function Bills() {
@@ -31,7 +37,9 @@ export function Bills() {
     const first = `${fm}-${String(Math.min(Number(p.settlement.slice(8, 10)), Number(lastDay(fm).slice(8, 10)))).padStart(2, '0')}`;
     const next = first >= today ? first : rollMonthly(first, today);
     const amount = Math.round(repaymentOf(p.loan!));
-    return { key: `loan|${p.id}`, name: `${p.name} loan repayment`, category: 'mortgage', every: 'month', amount, varies: false, last: '', next, yearly: amount * 12, fromPlan: true } as FoundBill & { fromPlan: boolean };
+    // Repayments that start later only count the months of the next 12 they fall in.
+    const months = Math.max(0, Math.min(12, 12 - monthsFrom(monthOf(today), monthOf(next)) + (next.slice(8) <= today.slice(8) ? 1 : 0)));
+    return { key: `loan|${p.id}`, name: `${p.name} loan repayment`, category: 'mortgage', every: 'month', amount, varies: false, last: '', next, yearly: amount * months, fromPlan: true, partYear: months < 12 } as FoundBill & { fromPlan: boolean; partYear: boolean };
   });
   // A bill whose budget drops to $0 later (rent once the lease ends) stops then; its yearly cost counts only the months left.
   const stops = (cat: string) => data.budgets.filter((b) => b.category === cat && b.from > monthOf(today) && b.amount === 0).map((b) => b.from).sort()[0];
@@ -41,7 +49,10 @@ export function Bills() {
     const left = Math.max(0, Math.min(12, monthsFrom(monthOf(today), stop)));
     return { ...b, stopsAfter: addMonths(stop, -1), yearly: (b.yearly / 12) * left };
   }).sort((a, b) => a.next.localeCompare(b.next));
-  const soon = all.filter((b) => (new Date(b.next).getTime() - new Date(today).getTime()) / 864e5 <= 31);
+  const daysTo = (d: string) => Math.round((new Date(d + 'T00:00:00').getTime() - new Date(today + 'T00:00:00').getTime()) / 864e5);
+  const soon = all.filter((b) => daysTo(b.next) <= 31);
+  // Yearly bills renewing within six weeks: time to compare prices before they roll over.
+  const renewing = all.filter((b) => b.every === 'year' && daysTo(b.next) >= 0 && daysTo(b.next) <= 42);
   const rises = found.filter((b) => b.rise);
   const yearly = all.reduce((a, b) => a + b.yearly, 0);
   // Subscriptions: the same list the monthly review uses (with "you have two of these" notes), as of the last complete month.
@@ -82,6 +93,13 @@ export function Bills() {
         </section>
       )}
 
+      {renewing.length > 0 && (
+        <section className="panel rise-panel" aria-labelledby="renew">
+          <h2 id="renew">Renewing soon: worth comparing prices</h2>
+          <ul className="value-list">{renewing.map((b) => <li key={b.key}><span><b>{b.name}</b><small>Renews {dayName(b.next)}, in {daysTo(b.next)} days</small></span><span>{money(b.amount)}<small>last time</small></span></li>)}</ul>
+        </section>
+      )}
+
       {subs.length > 0 && (
         <section className="panel" aria-labelledby="subs">
           <div className="panel-head"><h2 id="subs">Subscriptions and memberships</h2>{home && <Link to={`/property/${home.id}?tab=whatif`}>Try cancelling some</Link>}</div>
@@ -100,15 +118,23 @@ export function Bills() {
       <div className="wealth-grid">
         <section className="panel">
           <h2>Coming up</h2>
-          {soon.length ? <ul className="bill-list">{soon.map(row)}</ul> : <p className="muted">Nothing due in the next month.</p>}
+          {soon.length ? WHEN.map((w) => {
+            const list = soon.filter((b) => w.test(daysTo(b.next)));
+            return list.length ? (
+              <div key={w.label} className="bill-when-group">
+                <h3>{w.label} <small>{money(list.reduce((a, b) => a + b.amount, 0))}</small></h3>
+                <ul className="bill-list">{list.map(row)}</ul>
+              </div>
+            ) : null;
+          }) : <p className="muted">Nothing due in the next month.</p>}
         </section>
         <section className="panel">
           <h2>All regular bills</h2>
           <ul className="bill-list">
             {all.map((b) => (
               <li key={b.key}>
-                <span className="bill-what"><b>{b.name}</b><small>{EVERY[b.every]}, {label(b.category).toLowerCase()}{(b as any).stopsAfter ? `, stops after ${monthName((b as any).stopsAfter)}` : ''}{(b as any).fromPlan ? ', from Property' : ''}</small></span>
-                <span className="bill-amt">{money(b.yearly)}<small>{(b as any).stopsAfter ? 'in the next 12 months' : 'a year'}</small></span>
+                <span className="bill-what"><b>{b.name}</b><small>{EVERY[b.every]}, {label(b.category).toLowerCase()}{(() => { const bud = budgetFor(data.budgets, b.category, monthOf(today)); return bud ? `, budget ${money(bud)} a month` : ', no budget yet'; })()}{(b as any).stopsAfter ? `, stops after ${monthName((b as any).stopsAfter)}` : ''}{(b as any).fromPlan ? `, from Property, starts ${monthName(monthOf(b.next))}` : ''}</small></span>
+                <span className="bill-amt">{money(b.yearly)}<small>{(b as any).stopsAfter || (b as any).partYear ? 'in the next 12 months' : 'a year'}</small></span>
                 {b.manual && <button className="icon-btn" aria-label={`Remove ${b.name}`} onClick={() => updateSettings({ bills: (data.settings.bills ?? []).filter((x) => `manual|${x.id}` !== b.key) })}><Trash2 size={16} /></button>}
               </li>
             ))}

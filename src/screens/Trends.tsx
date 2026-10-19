@@ -84,7 +84,7 @@ export function Trends({ embedded = false }: { embedded?: boolean } = {}) {
       <section className="panel">
         {series.length ? (
           <Chart noRange range={range} kind={view} height={300} label={`Spending by ${level === 'areas' ? 'area' : 'category'}`} months={m.months} series={series} partial={m.partial}
-            budget={picked.length === 1 && view === 'lines' ? budgetOf(data.budgets, m.months, ids) : undefined}
+            budget={picked.length === 1 && view === 'lines' ? budgetOf(data.budgets, m.months, ids) : undefined} average={picked.length === 1 && view === 'lines'}
             onPick={(month) => drill(drillCats(month, picked.length === 1 ? picked[0].o!.label : `${picked.length} ${level}`, ids))} />
         ) : <p className="muted">Pick something above to see its trend.</p>}
         <button className="btn small ghost" onClick={() => setTable(!table)}>{table ? 'Hide the table' : 'Show as a table'}</button>

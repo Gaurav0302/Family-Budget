@@ -85,8 +85,17 @@ function Editor({ tx, onClose }: { tx: Transaction; onClose: () => void }) {
   );
 }
 
+type Sort = 'new' | 'old' | 'out' | 'in';
+const SORTS: { id: Sort; label: string }[] = [{ id: 'new', label: 'Newest first' }, { id: 'old', label: 'Oldest first' }, { id: 'out', label: 'Biggest payments out' }, { id: 'in', label: 'Biggest money in' }];
+
+/** The rows as a CSV file a spreadsheet opens (one line each, quotes around text). */
+function toCsv(rows: { date: string; payee: string; description: string; account: string; category: string; amount: number; note: string }[]) {
+  const q = (v: string | number) => (typeof v === 'number' ? v.toFixed(2) : `"${v.replace(/"/g, '""')}"`);
+  return ['Date,Payee,Description,Account,Category,Amount,Note', ...rows.map((r) => [r.date, q(r.payee), q(r.description), q(r.account), q(r.category), q(r.amount), q(r.note)].join(','))].join('\n');
+}
+
 export function Transactions() {
-  const { data, payeeIdx } = useStore();
+  const { data, payeeIdx, updateTransactions } = useStore();
   const [params, setParams] = useSearchParams();
   const month = params.get('month') ?? 'all';
   const category = params.get('category') ?? 'all';
@@ -95,6 +104,12 @@ export function Transactions() {
   const [q, setQ] = useState('');
   const [limit, setLimit] = useState(150);
   const [editing, setEditing] = useState<Transaction | null>(null);
+  const sort = (params.get('sort') as Sort) ?? 'new';
+  // Sorting several at once: tick them, pick a category, apply.
+  const [picking, setPicking] = useState(false);
+  const [picked, setPicked] = useState<Set<string>>(new Set());
+  const [bulkCat, setBulkCat] = useState('groceries');
+  const [bulkDone, setBulkDone] = useState<string | null>(null);
   const months = useMemo(() => allMonths(data.transactions).reverse(), [data.transactions]);
   const set = (k: string, v: string) => { const p = new URLSearchParams(params); if (v === 'all' || !v) p.delete(k); else p.set(k, v); setParams(p, { replace: true }); };
   useEffect(() => setLimit(150), [month, category, account, onlyReview, q]);
@@ -106,16 +121,34 @@ export function Transactions() {
       (category === 'all' || t.category === category || (data.settings.splits?.[t.id] ?? []).some((p) => p.category === category)) &&
       (account === 'all' || t.account === account) &&
       (!onlyReview || t.needsReview) &&
-      (!needle || t.description.toLowerCase().includes(needle) || (t.note ?? '').toLowerCase().includes(needle) || merchantOf(t.description).toLowerCase().includes(needle)));
-  }, [data.transactions, data.settings.splits, month, category, account, onlyReview, q]);
+      (!needle || t.description.toLowerCase().includes(needle) || (t.note ?? '').toLowerCase().includes(needle) || merchantOf(t.description).toLowerCase().includes(needle)))
+      .sort((a, b) => sort === 'old' ? a.date.localeCompare(b.date) : sort === 'out' ? a.amount - b.amount : sort === 'in' ? b.amount - a.amount : b.date.localeCompare(a.date));
+  }, [data.transactions, data.settings.splits, month, category, account, onlyReview, q, sort]);
 
-  const out = withSplits(rows, data.settings.splits).filter((t) => t.kind === 'spend' && (category === 'all' || t.category === category)).reduce((s, t) => s - t.amount, 0);
+  const parts = withSplits(rows, data.settings.splits).filter((t) => category === 'all' || t.category === category);
+  const out = parts.filter((t) => t.kind === 'spend').reduce((s, t) => s - t.amount, 0);
+  const cameIn = parts.filter((t) => t.kind === 'income').reduce((s, t) => s + t.amount, 0);
+  const exportCsv = () => {
+    const csv = toCsv(rows.map((t) => ({ date: t.date, payee: findPayee(t, payeeIdx)?.name ?? merchantOf(t.description), description: t.description, account: accountName(t.account), category: label(t.category), amount: t.amount, note: t.note ?? '' })));
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
+    a.download = `transactions-${month === 'all' ? 'all' : month}.csv`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  };
+  const applyBulk = async () => {
+    const ids = [...picked];
+    await updateTransactions(ids, { category: bulkCat, kind: kindForCategory(bulkCat) });
+    setBulkDone(`${ids.length} payment${ids.length === 1 ? '' : 's'} moved to ${label(bulkCat)}.`);
+    setPicked(new Set());
+  };
+  const toggle = (id: string) => setPicked((s) => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n; });
   const toSort = data.transactions.filter((t) => t.needsReview).length;
   const accountName = (k: string) => data.settings.accounts.find((a) => a.key === k)?.name.replace(/ \(.*\)$/, '') ?? k;
 
   return (
     <div>
-      <PageHeader title="Spending"><Info>Tap a transaction to change its category, add a note, or mark it as a one-off so it doesn't skew your trends.</Info></PageHeader>
+      <PageHeader title="Transactions"><Info>Every payment in and out. Tap one to change its category, add a note, split it, or mark it as a one-off so it doesn't skew your trends. "Sort several" lets you move many at once.</Info></PageHeader>
       <div className="filters">
         <select value={month} onChange={(e) => set('month', e.target.value)} aria-label="Month">
           <option value="all">All months</option>
@@ -130,17 +163,40 @@ export function Transactions() {
           {data.settings.accounts.map((a) => <option key={a.key} value={a.key}>{a.name}</option>)}
         </select>
         <input type="search" placeholder="Search" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search descriptions and notes" />
+        <select value={sort} onChange={(e) => set('sort', e.target.value === 'new' ? '' : e.target.value)} aria-label="Order">
+          {SORTS.map((x) => <option key={x.id} value={x.id}>{x.label}</option>)}
+        </select>
         <button className={`chip ${onlyReview ? 'on' : ''}`} onClick={() => set('review', onlyReview ? '' : '1')} aria-pressed={onlyReview}>
           Needs your input <b>{toSort}</b>
         </button>
       </div>
-      <p className="result-line">{rows.length} transactions{category !== 'all' && CATEGORY[category] ? ` in ${CATEGORY[category].label}` : ''}. Spending in this view: <b>{money(out)}</b>.</p>
+      <div className="result-bar">
+        <p className="result-line">{rows.length} transaction{rows.length === 1 ? '' : 's'}{category !== 'all' && CATEGORY[category] ? ` in ${CATEGORY[category].label}` : ''}: <b>{money(out)}</b> spent{cameIn ? <>, <b>{money(cameIn)}</b> came in</> : ''}.</p>
+        <span className="result-tools">
+          <button className={`btn small ${picking ? 'primary' : ''}`} aria-pressed={picking} onClick={() => { setPicking(!picking); setPicked(new Set()); setBulkDone(null); }}>{picking ? 'Done sorting' : 'Sort several'}</button>
+          <button className="btn small" onClick={exportCsv} disabled={!rows.length}>Download as CSV</button>
+        </span>
+      </div>
+      {picking && (
+        <div className="bulk-bar" role="region" aria-label="Sort several payments">
+          {bulkDone ? <span className="st-text-good" role="status">{bulkDone}</span> : <span>{picked.size ? `${picked.size} ticked` : 'Tick the payments to move'}</span>}
+          <CategorySelect id="bulk-cat" value={bulkCat} onChange={setBulkCat} />
+          <button className="btn small primary" disabled={!picked.size} onClick={applyBulk}>Move {picked.size || ''} to this category</button>
+          <button className="link" onClick={() => setPicked(new Set(rows.slice(0, limit).map((t) => t.id)))}>Tick all shown</button>
+        </div>
+      )}
 
       {!rows.length ? <Empty title={onlyReview ? 'All sorted' : 'No transactions match'}><p>{onlyReview ? 'Every transaction has a category.' : 'Try a different month, category or search.'}</p></Empty> : (
         <div className="tx-wrap">
         <ul className="tx-list">
-          {rows.slice(0, limit).map((t) => (
-            <li key={t.id}><button type="button" className={`tx ${t.needsReview ? 'needs' : ''} kind-${t.kind}`} onClick={() => setEditing(t)}>
+          {rows.slice(0, limit).map((t, i, list) => {
+            // Month headings when the list is in date order, with what went out that month.
+            const head = (sort === 'new' || sort === 'old') && (i === 0 || monthOf(list[i - 1].date) !== monthOf(t.date));
+            return [
+            head && <li key={`h${monthOf(t.date)}`} className="tx-month" aria-hidden={false}><h2>{monthName(monthOf(t.date))}</h2></li>,
+            <li key={t.id} className={picking ? 'is-picking' : ''}>
+              {picking && <input type="checkbox" className="tx-pick" checked={picked.has(t.id)} onChange={() => toggle(t.id)} aria-label={`Tick ${findPayee(t, payeeIdx)?.name ?? merchantOf(t.description)} on ${dayName(t.date)}`} />}
+              <button type="button" className={`tx ${t.needsReview ? 'needs' : ''} kind-${t.kind}`} onClick={() => (picking ? toggle(t.id) : setEditing(t))}>
               <span className="tx-date">{dayName(t.date)}</span>
               <span className="tx-what">
                 <b>{findPayee(t, payeeIdx)?.name ?? merchantOf(t.description)}</b>
@@ -151,8 +207,9 @@ export function Transactions() {
                 {t.oneOff && <span className="pill pill-quiet">One-off</span>}
               </span>
               <span className={`tx-amt ${t.amount > 0 ? 'in' : ''}`}>{money(t.amount, { cents: true, sign: true })}</span>
-            </button></li>
-          ))}
+            </button></li>,
+            ];
+          })}
         </ul>
         {rows.length > limit && <button className="btn wide" onClick={() => setLimit(limit + 300)}>Show more ({rows.length - limit} left)</button>}
         </div>

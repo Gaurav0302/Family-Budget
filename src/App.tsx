@@ -6,7 +6,7 @@ import { PageBoundary } from './components/PageBoundary';
 import { StoreProvider, useStore } from './data/store';
 import { useLook } from './theme/useLook';
 import { HomeScreen } from './screens/Home';
-import { Login } from './screens/Login';
+import { Login, SetPassword } from './screens/Login';
 
 // Pages load when first opened, so the app starts faster (Home and sign-in come with the first download).
 const PropertyScreen = lazy(() => import('./screens/Property').then((m) => ({ default: m.PropertyScreen })));
@@ -40,11 +40,12 @@ function WhatIfMoved() {
 }
 
 function Gate() {
-  const { status, error, reload } = useStore();
+  const { status, error, reload, recovering } = useStore();
   const where = useLocation().pathname;
   useLook();
 
   if (status === 'loading') return <div className="center-screen"><div className="loader" aria-label="Loading" /><p>Opening the family purse…</p></div>;
+  if (recovering) return <SetPassword />;
   if (status === 'signed-out') return <Login />;
   if (status === 'error') return (
     <div className="center-screen">

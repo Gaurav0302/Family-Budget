@@ -109,7 +109,8 @@ Status: ✅ done · ⬜ to do · 🔄 in progress · ❌ blocked · 🚫 dropped
 - ✅ 20 Oct 2026 — Public history: user decided to make the repository private instead of rewriting history (note: GitHub Pages on a free plan needs a public repo)
 - ⬜ User (optional): add the PRIVACY_WORDS secret on GitHub so the privacy check also runs when publishing
 - ✅ 20 Oct 2026 — Block 2 (D32): new structure (29–34)
-- ⬜ Block 3: page clean-ups (35–50)
+- ✅ 20 Oct 2026 — Block 3 (D33): page clean-ups (35–50). Left for later: undo a whole import, net worth projection, phone collapse of meeting steps
+- ⬜ User: try "Forgot your password?" once on the live site (Supabase → Authentication → URL configuration must list the site address)
 - ⬜ Block 4: features (51–62): bank feeds (CDR), PDF import in the app, reminders, sinking funds, safe-to-spend, two-person features, tax pack, export, install on phone, assistant
 - ⬜ Launch track (78–86): households and invitations, paid hosting and monitoring, privacy policy, advice rules, security headers, positioning, pricing, brand
 - ⬜ Code (63–73 remaining): split the settings record, data version and upgrades, categories per household, shared fields/sheet, logic out of screens, tests for store and screens, CSS split
