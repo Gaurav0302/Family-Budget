@@ -2,6 +2,7 @@ import { Check, ChevronLeft, ChevronRight, Maximize2, Minimize2, Play, Printer, 
 import { Chart, inRange, RangePicker, seriesColor, type Range } from '../components/Chart';
 import { budgetOf, spendOf, useMonthly } from '../data/useMonthly';
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 import { useSearchParams } from 'react-router-dom';
 import { Badge, Info, MonthPicker, NumberField, PageHeader, PurseBar, Spark, Tabs } from '../components/bits';
 import { tone, type Tone } from '../data/guide';
@@ -116,6 +117,14 @@ function MoneyMeeting() {
   const [present, setPresent] = useState<number | null>(null);
   const [active, setActive] = useState('m-month');
   const drill = useDrill();
+  const [sideSlot, setSideSlot] = useState<HTMLElement | null>(null);
+  useEffect(() => {
+    const mq = matchMedia('(min-width: 960px)');
+    const pick = () => setSideSlot(mq.matches ? document.getElementById('nav-sub-reports') : null);
+    pick();
+    mq.addEventListener('change', pick);
+    return () => mq.removeEventListener('change', pick);
+  }, []);
 
   // Highlight the agenda step that's on screen.
   useEffect(() => {
@@ -280,17 +289,21 @@ function MoneyMeeting() {
     ) },
   ];
 
+  const agenda = (
+    <nav className={`agenda no-print ${sideSlot ? 'in-side' : ''}`} aria-label="Meeting agenda">
+      <ol>
+        {steps.map((st, i) => (
+          <li key={st.id}><a href={`#${st.id}`} className={active === st.id ? 'on' : ''} onClick={(e) => { e.preventDefault(); document.getElementById(st.id)?.scrollIntoView({ behavior: 'smooth', block: 'start' }); }}>
+            <span className="agenda-n">{i + 1}</span><span>{st.title}</span></a></li>
+        ))}
+      </ol>
+      <button className="btn primary present-btn" onClick={() => setPresent(0)} aria-label="Present the meeting, one step at a time"><Play size={16} aria-hidden /><span className="pb-text">Present</span></button>
+    </nav>
+  );
+
   return (
-    <div className="meeting-wrap">
-      <nav className="agenda no-print" aria-label="Meeting agenda">
-        <ol>
-          {steps.map((st, i) => (
-            <li key={st.id}><a href={`#${st.id}`} className={active === st.id ? 'on' : ''} onClick={(e) => { e.preventDefault(); document.getElementById(st.id)?.scrollIntoView({ behavior: 'smooth', block: 'start' }); }}>
-              <span className="agenda-n">{i + 1}</span><span>{st.title}</span></a></li>
-          ))}
-        </ol>
-        <button className="btn primary present-btn" onClick={() => setPresent(0)} aria-label="Present the meeting, one step at a time"><Play size={16} aria-hidden /><span className="pb-text">Present</span></button>
-      </nav>
+    <div className={`meeting-wrap ${sideSlot ? 'agenda-in-side' : ''}`}>
+      {sideSlot ? createPortal(agenda, sideSlot) : agenda}
       <div className="report meeting-body">
         <div className="report-tools no-print">
           <MonthPicker months={months} value={month} onChange={setMonth} />

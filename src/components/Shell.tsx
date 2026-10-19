@@ -1,5 +1,5 @@
 import { CalendarClock, FileText, Home, LayoutGrid, Loader2, Mountain, ReceiptText, Scale, Settings, Sparkles, Upload, Wallet, Landmark, Tags, CreditCard, TrendingUp } from 'lucide-react';
-import type { ReactNode } from 'react';
+import { Fragment, type ReactNode } from 'react';
 import { NavLink } from 'react-router-dom';
 import { useStore } from '../data/store';
 import { DrillProvider } from './Drill';
@@ -53,7 +53,11 @@ export function Shell({ children }: { children: ReactNode }) {
           <nav key={g.section || 'main'} aria-label={g.section || 'Main'} className={g.section === 'Tools' ? 'nav-extra' : ''}>
             {g.section && g.section !== 'Tools' && <p className="nav-section">{g.section}</p>}
             {g.items.map(({ to, label, Icon }) => (
-              <NavLink key={to} to={to} end={to === '/'} className="nav-item"><Icon size={19} aria-hidden /><span>{label}</span>{badge(to)}</NavLink>
+              <Fragment key={to}>
+                <NavLink to={to} end={to === '/'} className="nav-item"><Icon size={19} aria-hidden /><span>{label}</span>{badge(to)}</NavLink>
+                {/* A page can put its own steps here, under its menu entry (the money meeting's agenda). */}
+                <div id={`nav-sub-${to.slice(1) || 'home'}`} className="nav-sub" />
+              </Fragment>
             ))}
           </nav>
         ))}

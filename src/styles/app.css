@@ -909,3 +909,12 @@ h1, h2, h3, h4 { font-weight: var(--display-weight, 700); }
   .present { display: none !important; }
 }
 @media (max-width: 559px) { .present-btn .pb-text { display: none; } .present-btn { padding: 8px 12px; } }
+/* The meeting's steps sit in the left menu, under Reports, so the report itself gets the full width. */
+.meeting-wrap.agenda-in-side { grid-template-columns: minmax(0, 1fr); }
+.nav-sub:empty { display: none; }
+.agenda.in-side { position: static; padding: 4px 0 8px 18px; background: none; border-left: 2px solid var(--line); margin: 4px 0 6px 21px; }
+.agenda.in-side ol { flex-direction: column; gap: 1px; overflow: visible; }
+.agenda.in-side a { padding: 5px 8px; font-size: 0.86rem; font-weight: 600; white-space: normal; box-shadow: none; }
+.agenda.in-side a.on { background: var(--card); color: var(--ink); }
+.agenda.in-side .agenda-n { width: 22px; height: 22px; font-size: 0.74rem; }
+.agenda.in-side .present-btn { width: auto; margin: 8px 0 0 8px; padding: 6px 12px; min-height: 34px; font-size: 0.88rem; }
