@@ -51,6 +51,10 @@ export const perTime = (monthly: number, every: Every) => {
 /** And back: $690 a term → $230 a month. */
 export const monthlyOf = (per: number, every: Every) => Math.round(per * PER_MONTH[every] * 100) / 100;
 
+/** Changing how often a line is paid keeps the amount the family typed: $410 each month becomes $410 each term,
+ *  so the monthly budget changes, not the figure on screen. */
+export const switchEvery = (monthly: number, from: Every, to: Every) => monthlyOf(perTime(monthly, from), to);
+
 /** What a category is planned to cost in the forecast for one month: weekly and monthly lines evenly, lumpy lines in the month they're due. */
 export function scheduled(data: Pick<Data, 'budgets' | 'settings'>, cat: string, month: string): number {
   const f = freqOf(data.settings, cat);

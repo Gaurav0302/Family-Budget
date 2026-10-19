@@ -4,7 +4,7 @@ import { addMonths, allMonths, average, budgetFor, completeMonths, keepBudget, s
 import { GROUPS, KEEP_CATEGORIES, SPEND_CATEGORIES } from '../data/categories';
 import { useStore } from '../data/store';
 import { expectedIncome } from '../data/wealth';
-import { allowance, meterLimit, EVERY_ORDER, EVERY_WORDS, freqOf, lumpy, monthlyOf, nextUnpaid, paidAhead, perTime, suggest, type Suggestion } from '../data/frequency';
+import { allowance, meterLimit, EVERY_ORDER, EVERY_WORDS, freqOf, lumpy, monthlyOf, switchEvery, nextUnpaid, paidAhead, perTime, suggest, type Suggestion } from '../data/frequency';
 import type { Every } from '../data/types';
 import { Link } from 'react-router-dom';
 import { Info } from '../components/bits';
@@ -58,6 +58,14 @@ export function Budget() {
     const next = { ...cur, [cat]: { every, ...(lumpy(every) ? { due: due ?? (prev?.every === every ? prev.due : suggestions.get(cat)?.due) } : {}) } };
     if (every === 'month') delete next[cat];
     return updateSettings({ budgetEvery: next });
+  };
+  /** A new frequency keeps the amount shown: $410 each month → $410 each term. */
+  const changeEvery = async (cat: string, every: Every) => {
+    const from = freqOf(data.settings, cat).every;
+    if (from === every) return;
+    const monthly = budgetFor(data.budgets, cat, month);
+    if (monthly) await setBudget(cat, month, switchEvery(monthly, from, every));
+    await setFreq(cat, every);
   };
   const applySuggestion = async (cat: string, sg: Suggestion) => {
     await setFreq(cat, sg.every, sg.due);
@@ -147,7 +155,7 @@ export function Budget() {
                       {f.every !== 'month' && <small>{money(b)} a month</small>}
                     </div>
                     <div className="fr-every">
-                      <select aria-label={`How often ${c.label} is paid`} value={f.every} onChange={(e) => setFreq(c.id, e.target.value as Every)}>
+                      <select aria-label={`How often ${c.label} is paid`} value={f.every} onChange={(e) => changeEvery(c.id, e.target.value as Every)}>
                         {EVERY_ORDER.map((x) => <option key={x} value={x}>{EVERY_WORDS[x].toLowerCase()}</option>)}
                       </select>
                     </div>
@@ -159,7 +167,7 @@ export function Budget() {
                       <small>
                         {s.count ? (spent ? <DrillLink spec={drillCategory(month, c.id)}>{money(spent)} spent</DrillLink> : `${money(spent)} spent`) : 'No spending loaded'}
                         {lump && (al.due && !early ? `, ${money(per)} due this month` : next ? `, next ${money(per)} due ${monthName(next, 'short')}` : `, pick the month it's due`)}
-                        {!lump && avg > 0 && <>, average {money(avg)}{Math.round(avg) !== Math.round(b) && <button className="link" onClick={() => setBudget(c.id, month, Math.ceil(avg / 10) * 10)}>use</button>}</>}
+                        {!lump && avg > 0 && <>, average {money(avg)} a month{f.every === 'month' && Math.round(avg) !== Math.round(b) && <button className="link" onClick={() => setBudget(c.id, month, Math.ceil(avg / 10) * 10)}>use</button>}</>}
                       </small>
                     </div>
                   </div>

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_SETTINGS } from './defaults';
 import { forecast } from './forecast';
-import { allowance, dueIn, meterLimit, monthlyOf, nextDue, perTime, scheduled, suggest } from './frequency';
+import { allowance, dueIn, meterLimit, monthlyOf, nextDue, perTime, scheduled, suggest, switchEvery } from './frequency';
 import { reviewMonth } from './review';
 import type { BudgetLine, Data, Settings, Transaction } from './types';
 
@@ -37,6 +37,12 @@ describe('frequencies', () => {
     expect(nextDue(f, '2026-11')).toBe('2027-01');
     expect(perTime(200, 'term')).toBeCloseTo(600, 6);
     expect(monthlyOf(110, 'week')).toBeCloseTo(476.67, 2);
+  });
+  it('keeps the amount typed when the frequency changes', () => {
+    const m = switchEvery(410, 'month', 'term');          // $410 each month → $410 each term
+    expect(perTime(m, 'term')).toBe(410);
+    expect(m).toBeCloseTo(136.67, 2);
+    expect(perTime(switchEvery(monthlyOf(39.7, 'fortnight'), 'fortnight', 'week'), 'week')).toBeCloseTo(39.7, 2);
   });
   it('times a yearly line in the month it is due', () => {
     const f = { every: 'year' as const, due: '2027-03' };
